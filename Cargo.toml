@@ -1,0 +1,8 @@
+[package]
+name = "midir"
+version = "0.1.0"
+authors = ["Patrick Reisert"]
+
+[dependencies]
+alsa-sys = "0.0.8"
+libc = "*"
