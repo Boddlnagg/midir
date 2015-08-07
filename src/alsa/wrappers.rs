@@ -99,6 +99,8 @@ pub struct Sequencer {
     p: *mut snd_seq_t
 }
 
+unsafe impl Send for Sequencer {}
+
 impl Sequencer {
     pub fn open(mode: SequencerOpenMode, non_block: bool) -> Result<Sequencer, ()> {
         let mut seq = unsafe { mem::uninitialized() };
