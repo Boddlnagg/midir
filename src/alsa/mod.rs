@@ -72,7 +72,6 @@ const SND_SEQ_PORT_CAP_SUBS_READ: u32 = 1<<5;
 const SND_SEQ_PORT_CAP_SUBS_WRITE: u32 = 1<<6;
 const SND_SEQ_PORT_CAP_NO_EXPORT: u32 = 1<<7;
 
-#[derive(Debug)]
 struct AlsaMidiInData {
     queue: Arc<Mutex<MidiQueue>>,
     message: MidiMessage,
@@ -85,10 +84,16 @@ struct AlsaMidiInData {
     // TODO: turn into read-only pointers?
     seq: Arc<Mutex<Sequencer>>,
     trigger_fds: Arc<Mutex<[i32; 2]>>,
+    callback: Arc<Mutex<Option<Box<FnMut(f64, &Vec<u8>)+Send>>>>
 }
 
 impl AlsaMidiInData {
-    fn new(queue: Arc<Mutex<MidiQueue>>, do_input: Arc<Mutex<bool>>, seq: Arc<Mutex<Sequencer>>, trigger_fds: Arc<Mutex<[i32; 2]>>, ignore_flags: Arc<Mutex<u8>>) -> AlsaMidiInData {
+    fn new(queue: Arc<Mutex<MidiQueue>>,
+            do_input: Arc<Mutex<bool>>,
+            seq: Arc<Mutex<Sequencer>>,
+            trigger_fds: Arc<Mutex<[i32; 2]>>,
+            ignore_flags: Arc<Mutex<u8>>,
+            callback: Arc<Mutex<Option<Box<FnMut(f64, &Vec<u8>)+Send>>>>) -> AlsaMidiInData {
         AlsaMidiInData {
             queue: queue,
             message: MidiMessage::new(),
@@ -100,7 +105,8 @@ impl AlsaMidiInData {
             // default values:
             last_time: 0,
             seq: seq,
-            trigger_fds: trigger_fds
+            trigger_fds: trigger_fds,
+            callback: callback
         }
     }
 }
@@ -113,7 +119,8 @@ struct AlsaMidiData {
     queue_id: i32, // an input queue is needed to get timestamped events
     trigger_fds: Arc<Mutex<[i32; 2]>>,
     do_input: Arc<Mutex<bool>>,
-    ignore_flags: Arc<Mutex<u8>>
+    ignore_flags: Arc<Mutex<u8>>,
+    callback: Arc<Mutex<Option<Box<FnMut(f64, &Vec<u8>)+Send>>>>
 }
 
 fn alsa_midi_handler(mut data: AlsaMidiInData) {
@@ -247,11 +254,7 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
                     // Calculate the time stamp:
                     message.timestamp = 0.0;
 
-                    // Method 1: Use the system time.
-                    //(void)gettimeofday(&tv, (struct timezone *)NULL);
-                    //time = (tv.tv_sec * 1000000) + tv.tv_usec;
-
-                    // Method 2: Use the ALSA sequencer event time data.
+                    // Use the ALSA sequencer event time data.
                     // (thanks to Pedro Lopez-Cabanillas!).
                     let alsa_time = unsafe { &*ev.as_ref().time.time() };
                     time = ( alsa_time.tv_sec as u64 * 1_000_000 ) + ( alsa_time.tv_nsec as u64/1_000 );
@@ -274,14 +277,11 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
 
         drop(ev);
         if message.bytes.len() == 0 || continue_sysex { continue; }
-
-        // TODO!
-        /*if data.usingCallback {
-            
-            //RtMidiIn::RtMidiCallback callback = (RtMidiIn::RtMidiCallback) data->userCallback;
-            //callback( message.timeStamp, &message.bytes, data->userData );
-        }
-        else*/ {
+        
+        let mut callback = data.callback.lock().unwrap();
+        if callback.is_some() {
+            callback.as_mut().unwrap()(message.timestamp, &message.bytes);
+        } else {
             // As long as we haven't reached our queue size limit, push the message.
             let mut queue = data.queue.lock().unwrap();
             if queue.size < queue.ring.len() {
@@ -390,7 +390,8 @@ impl MidiInAlsa {
             trigger_fds: Arc::new(Mutex::new(trigger_fds)),
             queue_id: queue_id,
             do_input: Arc::new(Mutex::new(false)),
-            ignore_flags: Arc::new(Mutex::new(7))
+            ignore_flags: Arc::new(Mutex::new(7)),
+            callback: Arc::new(Mutex::new(None))
         });
         
         let queue = Arc::new(Mutex::new(MidiQueue::new(queue_size_limit)));
@@ -399,7 +400,8 @@ impl MidiInAlsa {
             data.do_input.clone(),
             data.seq.clone(),
             data.trigger_fds.clone(),
-            data.ignore_flags.clone()
+            data.ignore_flags.clone(),
+            data.callback.clone()
         ));
         
         Ok(MidiInAlsa {
@@ -625,8 +627,27 @@ impl MidiInApi for MidiInAlsa {
         MidiInAlsa::initialize(client_name, queue_size_limit)
     }
     
-    //fn set_callback<T>(callback: MidiCallback, &mut T);
-    //fn cancel_callback();
+    fn set_callback<F>(&mut self, callback: F) -> Result<()> where F: FnMut(f64, &Vec<u8>)+Send+'static {
+        let mut previous = self.api_data.callback.lock().unwrap();
+        if previous.is_some() {
+            let error_string = "MidiInApi::setCallback: a callback function is already set!";
+            return Err(Warning(error_string));
+        }
+        
+        *previous = Some(Box::new(callback));
+        Ok(())
+    }
+    
+    fn cancel_callback(&mut self) -> Result<()> {
+        let mut previous = self.api_data.callback.lock().unwrap();
+        if !previous.is_some() {
+            let error_string = "RtMidiIn::cancelCallback: no callback function was set!";
+            return Err(Warning(error_string));
+      }
+      
+      *previous = None;
+      Ok(())
+    }
     
     fn ignore_types(&mut self, sysex: bool /*= true*/, time: bool /*= true*/, active_sense: bool /*= true*/) {
         let mut flags = self.api_data.ignore_flags.lock().unwrap();

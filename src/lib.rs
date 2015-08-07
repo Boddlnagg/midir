@@ -37,8 +37,8 @@ pub trait MidiApi {
 
 pub trait MidiInApi : MidiApi {
     fn new(client_name: &str /*= "RtMidi Input Client"*/, queue_size_limit: usize /*= 100*/) -> Result<Self>;
-    //fn set_callback<T>(callback: MidiCallback, &mut T);
-    //fn cancel_callback();
+    fn set_callback<F>(&mut self, callback: F) -> Result<()> where F: FnMut(f64, &Vec<u8>)+Send;
+    fn cancel_callback(&mut self) -> Result<()>;
     fn ignore_types(&mut self, sysex: bool /*= true*/, time: bool /*= true*/, active_sense: bool /*= true*/);
 
     /// Fill the user-provided vector with the data bytes for the next available
@@ -49,8 +49,7 @@ pub trait MidiInApi : MidiApi {
     /// vector size.  An exception is thrown if an error occurs during
     /// message retrieval or an input connection was not previously
     /// established.
-      fn get_message(&mut self, message: &mut Vec<u8>) -> f64;
-
+    fn get_message(&mut self, message: &mut Vec<u8>) -> f64;
 }
 
 /*pub struct MidiIn<Impl> where Impl: MidiInApi {
