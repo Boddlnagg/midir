@@ -609,7 +609,7 @@ impl MidiApi for MidiInAlsa {
             }
         } 
         
-            // workaround for missing non-lexical borrow
+        // Workaround for missing non-lexical borrow
         if tmp_do_input {
             //if ( !pthread_equal(data.thread, data.dummy_thread_id) )
             //    pthread_join( data.thread, NULL );
@@ -658,17 +658,9 @@ impl MidiInApi for MidiInAlsa {
     }
 
     fn get_message(&mut self, message: &mut Vec<u8>) -> f64 {
+        // If a callback is set, this function will return an empty message
         message.clear();
-
-        // TODO
-        /*if ( inputData_.usingCallback ) {
-            errorString_ = "RtMidiIn::getNextMessage: a user callback is currently set for this port.";
-            error( RtMidiError::WARNING, errorString_ );
-            return 0.0;
-        }*/
-        
         let mut queue = self.queue.lock().unwrap();
-    
         if queue.size == 0 { return 0.0; }
     
         // Copy queued message to the vector pointer argument and then "pop" it.
