@@ -7,7 +7,7 @@ use std::io::{stderr, Write};
 use std::sync::{Arc, Mutex};
 
 use super::Error::*;
-use super::{Result, MidiApi, MidiInApi, MidiQueue, MidiMessage};
+use super::{Result, MidiApi, MidiInApi, MidiOutApi, MidiQueue, MidiMessage};
 
 use alsa_sys::{
     snd_seq_t,
@@ -52,27 +52,19 @@ unsafe fn snd_seq_start_queue(seq: *mut snd_seq_t, q: i32, ev: *mut snd_seq_even
 // Include ALSA wrappers
 mod wrappers;
 use self::wrappers::{Sequencer, SequencerOpenMode, QueueTempo};
-use self::wrappers::{ClientInfo, PortInfo, PortSubscription, EventDecoder};
+use self::wrappers::{ClientInfo, PortInfo, PortSubscription};
+use self::wrappers::{EventDecoder, EventEncoder, Event};
 use self::wrappers::{pollfd, POLLIN, poll};
-
-const SND_SEQ_OPEN_OUTPUT: i32 = 1;
-const SND_SEQ_OPEN_INPUT: i32 = 2;
-const SND_SEQ_OPEN_DUPLEX: i32 = SND_SEQ_OPEN_OUTPUT|SND_SEQ_OPEN_INPUT;
-const SND_SEQ_NONBLOCK: i32 = 0x0001;
 
 const SND_SEQ_PORT_TYPE_MIDI_GENERIC: u32 = 1<<1;
 const SND_SEQ_PORT_TYPE_SYNTH: u32 = 1<<10;
 const SND_SEQ_PORT_TYPE_APPLICATION: u32 = 1<<20;
 const SND_SEQ_PORT_CAP_READ: u32 = 1<<0;
 const SND_SEQ_PORT_CAP_WRITE: u32 = 1<<1;
-const SND_SEQ_PORT_CAP_SYNC_READ: u32 = 1<<2;
-const SND_SEQ_PORT_CAP_SYNC_WRITE: u32 = 1<<3;
-const SND_SEQ_PORT_CAP_DUPLEX: u32 = 1<<4;
 const SND_SEQ_PORT_CAP_SUBS_READ: u32 = 1<<5;
 const SND_SEQ_PORT_CAP_SUBS_WRITE: u32 = 1<<6;
-const SND_SEQ_PORT_CAP_NO_EXPORT: u32 = 1<<7;
 
-struct AlsaMidiInData {
+struct AlsaMidiHandlerData {
     queue: Arc<Mutex<MidiQueue>>,
     message: MidiMessage,
     ignore_flags: Arc<Mutex<u8>>,
@@ -87,31 +79,7 @@ struct AlsaMidiInData {
     callback: Arc<Mutex<Option<Box<FnMut(f64, &Vec<u8>)+Send>>>>
 }
 
-impl AlsaMidiInData {
-    fn new(queue: Arc<Mutex<MidiQueue>>,
-            do_input: Arc<Mutex<bool>>,
-            seq: Arc<Mutex<Sequencer>>,
-            trigger_fds: Arc<Mutex<[i32; 2]>>,
-            ignore_flags: Arc<Mutex<u8>>,
-            callback: Arc<Mutex<Option<Box<FnMut(f64, &Vec<u8>)+Send>>>>) -> AlsaMidiInData {
-        AlsaMidiInData {
-            queue: queue,
-            message: MidiMessage::new(),
-            ignore_flags: ignore_flags,
-            do_input: do_input,
-            first_message: true,
-            using_callback: false,
-            continue_sysex: false,
-            // default values:
-            last_time: 0,
-            seq: seq,
-            trigger_fds: trigger_fds,
-            callback: callback
-        }
-    }
-}
-
-struct AlsaMidiData {
+struct AlsaMidiInData {
     seq: Arc<Mutex<Sequencer>>,
     vport: i32,
     subscription: Option<PortSubscription>,
@@ -123,7 +91,7 @@ struct AlsaMidiData {
     callback: Arc<Mutex<Option<Box<FnMut(f64, &Vec<u8>)+Send>>>>
 }
 
-fn alsa_midi_handler(mut data: AlsaMidiInData) {
+fn alsa_midi_handler(mut data: AlsaMidiHandlerData) {
     let mut time: u64;
     let mut last_time: u64;
     let mut continue_sysex: bool = false;
@@ -236,7 +204,7 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
         };
 
         if do_decode {
-            let nbytes = unsafe { snd_midi_event_decode(coder.as_ptr(), buffer.as_mut_ptr(), buffer.len() as i64, ev.as_ref()) } as usize;
+            let nbytes = unsafe { snd_midi_event_decode(coder.as_ptr(), buffer.as_mut_ptr(), buffer.len() as i64, &**ev.as_ref()) } as usize;
             
             if nbytes > 0 {
                 // The ALSA sequencer has a maximum buffer size for MIDI sysex
@@ -336,10 +304,35 @@ unsafe fn port_info(seq: *const snd_seq_t, pinfo: &mut PortInfo, typ: u32, port_
     None
 }
 
+fn get_port_name(seq: &Sequencer, typ: u32, port_number: i32) -> Result<String> {
+    let mut pinfo = unsafe { PortInfo::allocate() };
+    
+    unsafe {
+        use std::fmt::Write;
+        
+        if port_info(seq.as_ptr(), &mut pinfo, typ, port_number).is_some() {
+            let cnum: i32 = pinfo.get_client();    
+            let cinfo = seq.get_any_client_info(cnum);
+            let mut output = String::new();
+            write!(&mut output, "{} {}:{}", 
+                cinfo.get_name(),
+                pinfo.get_client(), // These lines added to make sure devices are listed
+                pinfo.get_port()    // with full portnames added to ensure individual device names
+            ).unwrap();
+            Ok(output)
+        } else {
+            // If we get here, we didn't find a match.
+            // TODO: get rid of "Warning", use better name 
+            let error_string = "MidiInAlsa::getPortName: error looking for port name!";
+            Err(Warning(error_string))
+        }
+    }
+}
+
 pub struct MidiInAlsa {
-    api_data: Box<AlsaMidiData>, // TODO: should this really be a Box?
+    api_data: Box<AlsaMidiInData>, // TODO: should this really be a Box?
     connected: bool,
-    input_data: Option<AlsaMidiInData>,
+    handler_data: Option<AlsaMidiHandlerData>,
     queue: Arc<Mutex<MidiQueue>>,
 }
 
@@ -355,12 +348,9 @@ impl MidiInAlsa {
             }
         };
         
-        println!("Initialized: {:?}", seq);
-        
         seq.set_client_name(client_name);
         
         let mut trigger_fds = [-1, -1];
-        
         
         if unsafe { ::libc::pipe(trigger_fds.as_mut_ptr()) } == -1 {
             let error_string = "MidiInAlsa::initialize: error creating pipe objects.";
@@ -382,7 +372,7 @@ impl MidiInAlsa {
         }
         
         // Save our api-specific connection information.
-        let data = Box::new(AlsaMidiData {
+        let data = Box::new(AlsaMidiInData {
             seq: Arc::new(Mutex::new(seq)),
             vport: -1,
             subscription: None,
@@ -395,19 +385,26 @@ impl MidiInAlsa {
         });
         
         let queue = Arc::new(Mutex::new(MidiQueue::new(queue_size_limit)));
-        let input_data = Some(AlsaMidiInData::new(
-            queue.clone(),
-            data.do_input.clone(),
-            data.seq.clone(),
-            data.trigger_fds.clone(),
-            data.ignore_flags.clone(),
-            data.callback.clone()
-        ));
+        
+        // TODO: create this only when needed
+        let handler_data = Some(AlsaMidiHandlerData {
+            queue: queue.clone(),
+            message: MidiMessage::new(),
+            ignore_flags: data.ignore_flags.clone(),
+            do_input: data.do_input.clone(),
+            first_message: true,
+            using_callback: false,
+            continue_sysex: false,
+            last_time: 0,
+            seq: data.seq.clone(),
+            trigger_fds: data.trigger_fds.clone(),
+            callback: data.callback.clone()
+        });
         
         Ok(MidiInAlsa {
             api_data: data,
             connected: false,
-            input_data: input_data,
+            handler_data: handler_data,
             queue: queue
         })
     }
@@ -421,8 +418,9 @@ impl Drop for MidiInAlsa {
     
         // Cleanup.
         unsafe {
-            ::libc::close(data.trigger_fds.lock().unwrap()[0]);
-            ::libc::close(data.trigger_fds.lock().unwrap()[1] );
+            let trigger_fds = data.trigger_fds.lock().unwrap();
+            ::libc::close(trigger_fds[0]);
+            ::libc::close(trigger_fds[1]);
         }
         let mut seq = data.seq.lock().unwrap();
         if data.vport >= 0 {
@@ -443,31 +441,7 @@ impl MidiApi for MidiInAlsa {
     }
     
     fn get_port_name(&self, port_number: u32 /*= 0*/) -> Result<String> {
-        let mut pinfo = unsafe { PortInfo::allocate() };
-        
-        let data = &self.api_data; 
-        unsafe {
-            use std::fmt::Write;
-            
-            let seq = data.seq.lock().unwrap();
-            
-            if port_info(seq.as_ptr(), &mut pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32).is_some() {
-                let cnum: i32 = pinfo.get_client();    
-                let cinfo = seq.get_any_client_info(cnum);
-                let mut output = String::new();
-                write!(&mut output, "{} {}:{}", 
-                    cinfo.get_name(),
-                    pinfo.get_client(), // These lines added to make sure devices are listed
-                    pinfo.get_port()    // with full portnames added to ensure individual device names
-                ).unwrap();
-                Ok(output)
-            } else {
-                // If we get here, we didn't find a match.
-                // TODO: get rid of "Warning", use better name 
-                let error_string = "MidiInAlsa::getPortName: error looking for port name!";
-                Err(Warning(error_string))
-            }
-        }
+        get_port_name(&*self.api_data.seq.lock().unwrap(), SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32) 
     }
     
     fn open_port(&mut self, port_number: u32 /*= 0*/, port_name: &str /*= "RtMidi"*/) -> Result<()> {
@@ -553,7 +527,7 @@ impl MidiApi for MidiInAlsa {
             // Start our MIDI input thread.
             *data.do_input.lock().unwrap() = true;
             
-            let input_data = self.input_data.take().unwrap();
+            let input_data = self.handler_data.take().unwrap();
             
             let threadbuilder = Builder::new();
             //pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
@@ -673,5 +647,174 @@ impl MidiInApi for MidiInAlsa {
         }
     
         delta_time
+    }
+}
+
+pub struct MidiOutAlsa {
+    connected: bool,
+    seq: Sequencer,
+    port_num: i32,
+    vport: i32,
+    coder: EventEncoder,
+    subscription: Option<PortSubscription>
+}
+
+impl MidiOutAlsa {
+    fn initialize(client_name: &str) -> Result<MidiOutAlsa> {
+        // Set up the ALSA sequencer client.
+        let mut seq = match Sequencer::open(SequencerOpenMode::Output, true) {
+            Ok(s) => s,
+            Err(_) => {
+                let error_string = "MidiOutAlsa::initialize: error creating ALSA sequencer client object.";
+                return Err(DriverError(error_string));
+            }
+        };
+        
+        // Set client name.
+        seq.set_client_name(client_name);
+        
+        let init_buffer_size = 32;
+        let coder = EventEncoder::new(init_buffer_size);
+        
+        Ok(MidiOutAlsa {
+            connected: false, // TODO: remove this, checking subscription should be enough
+            seq: seq,
+            port_num: -1,
+            vport: -1,
+            coder: coder,
+            subscription: None 
+        })
+    }
+}
+
+impl MidiApi for MidiOutAlsa {
+    fn get_port_count(&self) -> u32 {
+        unsafe {
+            let mut pinfo = PortInfo::allocate();
+            port_info(self.seq.as_ptr(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, -1).unwrap() as u32
+        }
+    }
+    
+    fn get_port_name(&self, port_number: u32 /*= 0*/) -> Result<String> {
+        get_port_name(&self.seq, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, port_number as i32)
+    }
+    
+    fn open_port(&mut self, port_number: u32 /*= 0*/, port_name: &str /*= "RtMidi"*/) -> Result<()> {
+        if self.connected {
+            let error_string = "MidiOutAlsa::openPort: a valid connection already exists!";
+            return Err(Warning(error_string));
+        }
+        
+        // this is inefficient, since we request the port infos below anyway
+        /*let nsrc = self.get_port_count();
+        if nsrc < 1 {
+            let error_string = "MidiOutAlsa::openPort: no MIDI output sources found!";
+            return Err(NoDevicesFound(errorString));
+        }*/
+        
+        let mut pinfo = unsafe { PortInfo::allocate() };
+        
+        if unsafe { port_info(self.seq.as_ptr(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, port_number as i32).is_none() } {
+            use std::fmt::Write; 
+            let mut error_string = String::new();
+            let _ = write!(error_string, "MidiOutAlsa::openPort: the 'portNumber' argument ({}) is invalid.", port_number); 
+            return Err(InvalidParameter(error_string));
+        }
+        
+        let receiver = snd_seq_addr_t {
+            client: pinfo.get_client() as u8,
+            port: pinfo.get_port() as u8
+        };
+        
+        if self.vport < 0 {
+            self.vport = match self.seq.create_simple_port(port_name,
+                                SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ,
+                                SND_SEQ_PORT_TYPE_MIDI_GENERIC|SND_SEQ_PORT_TYPE_APPLICATION) {
+                Ok(vport) => vport,
+                Err(_) => {
+                    let error_string = "MidiOutAlsa::openPort: ALSA error creating output port.";
+                    return Err(DriverError(error_string));
+                }
+            };
+        }
+        
+        let sender = snd_seq_addr_t {
+            client: self.seq.get_client_id() as u8,
+            port: self.vport as u8
+        };
+        
+        // Make subscription
+        let mut sub = unsafe { PortSubscription::allocate() };
+        sub.set_sender(&sender);
+        sub.set_dest(&receiver);
+        sub.set_time_update(true);
+        sub.set_time_real(true);
+        if unsafe { snd_seq_subscribe_port(self.seq.as_mut_ptr(), sub.as_ptr()) } != 0 {
+            let error_string = "MidiOutAlsa::openPort: ALSA error making port connection.";
+            return Err(DriverError(error_string));
+        }
+        self.subscription = Some(sub);
+        self.connected = true;
+        Ok(())
+    }
+    
+    //fn open_virtual_port(port_name: &str/*= "RtMidi"*/);
+    
+    fn close_port(&mut self) {
+        if self.connected {
+            unsafe { snd_seq_unsubscribe_port(self.seq.as_mut_ptr(), self.subscription.as_mut().unwrap().as_ptr()) };
+            self.subscription = None;
+            self.connected = false;
+        }
+    }
+    
+    fn is_port_open(&self) -> bool {
+        false
+    }
+}
+
+impl MidiOutApi for MidiOutAlsa {
+    fn new(client_name: &str /*= "RtMidi Output Client"*/) -> Result<Self> {
+        MidiOutAlsa::initialize(client_name)
+    }
+    
+    fn send_message(&mut self, message: &[u8]) -> Result<()> {
+        let nbytes = message.len();
+        
+        if self.coder.resize_buffer(nbytes).is_err() {
+            let error_string = "MidiOutAlsa::sendMessage: ALSA error resizing MIDI event buffer.";
+            return Err(DriverError(error_string));
+        }
+        
+        let mut ev = Event::new();
+        ev.set_source(self.vport as u8);
+        ev.set_subs();
+        ev.set_direct();
+        
+        if self.coder.encode(message, &mut ev).is_err() {
+            let error_string = "MidiOutAlsa::sendMessage: event parsing error!";
+            return Err(Warning(error_string));
+        }
+        
+        // Send the event.
+        if self.seq.event_output(&ev).is_err() {
+            let error_string = "MidiOutAlsa::sendMessage: error sending MIDI message to port.";
+            return Err(Warning(error_string));
+        }
+        
+        self.seq.drain_output();
+        Ok(())
+    }
+}
+
+impl Drop for MidiOutAlsa {
+    fn drop(&mut self) {
+        // Close a connection if it exists.
+        self.close_port();
+        
+        // Cleanup.
+        if self.vport >= 0 {
+            unsafe { snd_seq_delete_port(self.seq.as_mut_ptr(), self.vport ) };
+        }
     }
 }

@@ -8,7 +8,7 @@ use midir::alsa::MidiInAlsa;
 fn main() {
     let mut midi = MidiInAlsa::new("My Test", 100).unwrap();
     let count = midi.get_port_count();
-    println!("Device count: {}", count);
+    println!("Number of input devices: {}", count);
     for i in 0..count {
         println!("{}: {}", i, midi.get_port_name(i).unwrap());
     }
@@ -21,8 +21,8 @@ fn main() {
     for i in 0..500 {
           // switch to using a callback (and back)
         if i == 150 {
-            midi.set_callback(|ts, vec| {
-                println!("Callback: {} - {:?}", ts, vec);
+            midi.set_callback(|stamp, message| {
+                println!("{}: {:?} (from callback)", stamp, message);
             });
         } else if i == 350 {
             midi.cancel_callback();

@@ -24,12 +24,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 pub trait MidiApi {
     fn open_port(&mut self, port_number: u32 /*= 0*/, port_name: &str /*= "RtMidi"*/) -> Result<()>;
-      //fn open_virtual_port(port_name: &str/*= "RtMidi"*/);
+    //fn open_virtual_port(port_name: &str/*= "RtMidi"*/);
     fn get_port_count(&self) -> u32;
     fn get_port_name(&self, port_number: u32 /*= 0*/) -> Result<String>;
     fn close_port(&mut self);
     fn is_port_open(&self) -> bool;
-    //fn set_error_callback(...);
 }
 
 // TODO: create helper function that creates an instance (trait object)
@@ -98,7 +97,10 @@ impl MidiQueue {
 }
 
 
-// TODO: MidiOut
+pub trait MidiOutApi : MidiApi {
+    fn new(client_name: &str /*= "RtMidi Output Client"*/) -> Result<Self>;
+    fn send_message(&mut self, message: &[u8]) -> Result<()>;
+}
 
 // TODO: include ALSA only if compiling for Linux (and ALSA feature is selected)
 pub mod alsa;

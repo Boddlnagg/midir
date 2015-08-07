@@ -1,12 +1,12 @@
-#![allow(raw_pointer_derive)]
-
 use std::{mem, str};
 use std::ffi::{CString, CStr};
+use std::ops::{Deref, DerefMut};
 use alsa_sys::{
     snd_seq_t,
     snd_seq_open,
     snd_seq_close,
     snd_seq_create_port,
+    snd_seq_create_simple_port,
     snd_seq_set_client_name,
     snd_seq_get_any_client_info,
     snd_seq_poll_descriptors_count,
@@ -38,20 +38,27 @@ use alsa_sys::{
     snd_seq_port_subscribe_free,
     snd_seq_port_subscribe_set_sender,
     snd_seq_port_subscribe_set_dest,
+    snd_seq_port_subscribe_set_time_update,
+    snd_seq_port_subscribe_set_time_real,
     snd_seq_addr_t,
     snd_midi_event_t,
     snd_midi_event_no_status,
     snd_midi_event_new,
     snd_midi_event_free,
     snd_midi_event_decode,
+    snd_midi_event_encode,
+    snd_midi_event_resize_buffer,
     snd_seq_event_t,
-    snd_seq_event_input,
     snd_seq_free_event,
+    snd_seq_event_input,
+    snd_seq_event_output,
+    snd_seq_drain_output,
     snd_seq_queue_tempo_t,
     snd_seq_queue_tempo_malloc,
     snd_seq_queue_tempo_free,
     snd_seq_queue_tempo_set_tempo,
     snd_seq_queue_tempo_set_ppq,
+    snd_seq_timestamp_t
 };
 
 
@@ -59,10 +66,12 @@ const SND_SEQ_OPEN_OUTPUT: i32 = 1;
 const SND_SEQ_OPEN_INPUT: i32 = 2;
 const SND_SEQ_OPEN_DUPLEX: i32 = SND_SEQ_OPEN_OUTPUT|SND_SEQ_OPEN_INPUT;
 const SND_SEQ_NONBLOCK: i32 = 0x0001;
+const SND_SEQ_ADDRESS_SUBSCRIBERS: u8 = 254;
+const SND_SEQ_ADDRESS_UNKNOWN: u8 = 253;
+const SND_SEQ_QUEUE_DIRECT: u8 = 253;
 
-// TODO: make sure that all pointers are directly initialized, then mark all wrapped pointers as non-zero
-// TODO: use std::ptr::Unique
-// TODO: m2ake get/set methods unsafe or make sure that pointer has actually been initialized
+// TODO: try to make sure that wrapped pointers are directly initialized,
+//       then mark them as non-zero and use std::ptr::Unique where appropriate 
 
 // Define some bindings and types which are not available from alsa-sys or libc
 extern {
@@ -94,7 +103,6 @@ pub enum SequencerOpenMode {
     Duplex = SND_SEQ_OPEN_DUPLEX
 }
 
-#[derive(Debug)]
 pub struct Sequencer {
     p: *mut snd_seq_t
 }
@@ -138,6 +146,16 @@ impl Sequencer {
         }
     }
     
+    pub fn create_simple_port(&mut self, port_name: &str, caps: u32, typ: u32) -> Result<i32, i32> {
+        let c_name = CString::new(port_name).ok().expect("port_name must not contain null bytes");
+        let result = unsafe { snd_seq_create_simple_port(self.p, c_name.as_ptr(), caps, typ) };
+        if result < 0 {
+            Err(result)
+        } else {
+            Ok(result)
+        }
+    }
+    
     pub fn poll_descriptors_count(&self, events: i16) -> i32 {
         unsafe { snd_seq_poll_descriptors_count(self.p, events) }
     }
@@ -146,14 +164,27 @@ impl Sequencer {
         unsafe { snd_seq_poll_descriptors(self.p, pollfds.as_mut_ptr(), pollfds.len() as u32, events) };   
     }
     
-    pub fn event_input(&mut self) -> Result<(Event, i32), i32> {
+    pub fn event_input(&mut self) -> Result<(EventBox, i32), i32> {
         let mut ev = unsafe { mem::uninitialized() };
-        let res = unsafe { snd_seq_event_input(self.p, &mut ev) };
-        if res < 0 {
-            Err(res)
+        let result = unsafe { snd_seq_event_input(self.p, &mut ev) };
+        if result < 0 {
+            Err(result)
         } else {
-            Ok((Event { p: ev }, res))
+            Ok((EventBox { p: ev }, result))
         }
+    }
+    
+    pub fn event_output(&mut self, ev: &Event) -> Result<i32, i32> {
+        let result = unsafe { snd_seq_event_output(self.p, (&ev.ev as *const _) as *mut _) };
+        if result < 0 {
+            Err(result)
+        } else {
+            Ok(result)
+        }
+    }
+    
+    pub fn drain_output(&mut self) {
+        unsafe { snd_seq_drain_output(self.p) };
     }
     
     pub fn as_ptr(&self) -> *const snd_seq_t {
@@ -171,7 +202,6 @@ impl Drop for Sequencer {
     }
 }
 
-#[derive(Debug)]
 pub struct ClientInfo {
     p: *mut snd_seq_client_info_t
 }
@@ -208,7 +238,7 @@ impl Drop for ClientInfo {
     }
 }
 
-#[derive(Debug)]
+
 pub struct PortInfo {
     p: *mut snd_seq_port_info_t
 }
@@ -285,7 +315,6 @@ impl Drop for PortInfo {
     }
 }
 
-#[derive(Debug)]
 pub struct PortSubscription {
     p: *mut snd_seq_port_subscribe_t
 }
@@ -309,6 +338,14 @@ impl PortSubscription {
     pub fn set_dest(&mut self, addr: *const snd_seq_addr_t) {
         unsafe { snd_seq_port_subscribe_set_dest(self.p, addr) }
     }
+    
+    pub fn set_time_update(&mut self, enable: bool) {
+        unsafe { snd_seq_port_subscribe_set_time_update(self.p, enable as i32) }; 
+    }
+    
+    pub fn set_time_real(&mut self, enable: bool) {
+        unsafe { snd_seq_port_subscribe_set_time_real(self.p, enable as i32) }; 
+    }
 }
 
 impl Drop for PortSubscription {
@@ -317,7 +354,6 @@ impl Drop for PortSubscription {
     }
 }
 
-#[derive(Debug)]
 pub struct EventDecoder {
     p: *mut snd_midi_event_t
 }
@@ -339,9 +375,9 @@ impl EventDecoder {
         self.p
     }
     
-    pub fn decode(&mut self, buffer: &mut [u8], ev: Event) -> usize {
+    pub fn decode(&mut self, buffer: &mut [u8], ev: &mut Event) -> usize {
         unsafe {
-            snd_midi_event_decode(self.p, buffer.as_mut_ptr(), buffer.len() as i64, ev.p) as usize
+            snd_midi_event_decode(self.p, buffer.as_mut_ptr(), buffer.len() as i64, &ev.ev) as usize
         }
     }
 }
@@ -352,18 +388,125 @@ impl Drop for EventDecoder {
     }
 }
 
-#[derive(Debug)]
+pub struct EventEncoder {
+    p: *mut snd_midi_event_t,
+    buffer: Box<[u8]>
+}
+
+impl EventEncoder {
+    pub fn new(buffer_size: usize) -> EventEncoder {
+        let mut coder;
+        unsafe {
+            coder = mem::uninitialized();
+            // this could only fail with "Out of memory", which we ignore
+            snd_midi_event_new(buffer_size as u64, &mut coder);
+            //snd_midi_event_init(data.coder);
+        }
+        let mut vec = Vec::with_capacity(buffer_size);
+        unsafe { vec.set_len(buffer_size) };
+        EventEncoder { p: coder, buffer: vec.into_boxed_slice() }
+    }
+    
+    pub fn as_ptr(&mut self) -> *mut snd_midi_event_t {
+        self.p
+    }
+    
+    pub fn resize_buffer(&mut self, new_size: usize) -> Result<bool, ()> {
+        if new_size > self.buffer.len() {
+            let result = unsafe { snd_midi_event_resize_buffer(self.p, new_size as u64) };
+            if result != 0 {
+                return Err(());
+            }
+            
+            let mut vec = Vec::with_capacity(new_size);
+            unsafe { vec.set_len(new_size) };
+            self.buffer = vec.into_boxed_slice();
+            
+            Ok(true)
+        } else {
+            Ok(false) // no resize required
+        }
+    }
+    
+    pub fn encode(&mut self, message: &[u8], ev: &mut Event) -> Result<(), ()> {
+        for i in 0..message.len() {
+            self.buffer[i] = message[i];
+        }
+        let result = unsafe { snd_midi_event_encode(self.p, self.buffer.as_ptr(), message.len() as i64, &mut ev.ev) };
+        if result < message.len() as i64 {
+            Err(())   
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl Drop for EventEncoder {
+    fn drop(&mut self) {
+        unsafe { snd_midi_event_free(self.p) };
+    }
+}
+
 pub struct Event {
-    p: *const snd_seq_event_t
+    ev: snd_seq_event_t
 }
 
 impl Event {
-    pub fn as_ref(&mut self) -> &mut snd_seq_event_t {
-        unsafe { &mut *(self.p as *mut _) }
-    } 
+    pub fn new() -> Event {
+        // initialize everything with zero
+        Event { ev: snd_seq_event_t {
+            _type: 0,
+            flags: 0,
+            tag: 0,
+            queue: 0,
+            time: snd_seq_timestamp_t { data: [0; 2] },
+            source: snd_seq_addr_t { client: 0, port: 0 },
+            dest: snd_seq_addr_t  { client: 0, port: 0 },
+            data: ::alsa_sys::Union_Unnamed10 { data: [0; 3] },
+        }}
+    }
+    
+    #[inline(always)]
+    pub fn set_source(&mut self, p: u8) {
+        self.source.port = p;
+    }
+    
+    #[inline(always)]
+    pub fn set_subs(&mut self) {
+        self.dest.client = SND_SEQ_ADDRESS_SUBSCRIBERS;
+        self.dest.port = SND_SEQ_ADDRESS_UNKNOWN;
+    }
+    
+    #[inline(always)]
+    pub fn set_direct(&mut self) {
+        self.queue = SND_SEQ_QUEUE_DIRECT;
+    }
 }
 
-impl Drop for Event {
+impl Deref for Event {
+    type Target = snd_seq_event_t;
+    fn deref(&self) -> &Self::Target {
+        &self.ev
+    }
+}
+
+impl DerefMut for Event {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.ev
+    }
+}
+
+pub struct EventBox {
+    p: *const snd_seq_event_t
+}
+
+impl EventBox {
+    pub fn as_ref(&mut self) -> &mut Event {
+        unsafe { &mut *(self.p as *mut _) }
+    }
+}
+
+impl Drop for EventBox {
     fn drop(&mut self) {
         unsafe { snd_seq_free_event(self.p as *mut _) };
     }
