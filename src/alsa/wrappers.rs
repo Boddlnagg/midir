@@ -390,7 +390,7 @@ impl Drop for EventDecoder {
 
 pub struct EventEncoder {
     p: *mut snd_midi_event_t,
-    buffer: Box<[u8]>
+    buffer_size: usize
 }
 
 impl EventEncoder {
@@ -402,42 +402,25 @@ impl EventEncoder {
             snd_midi_event_new(buffer_size as u64, &mut coder);
             //snd_midi_event_init(data.coder);
         }
-        let mut vec = Vec::with_capacity(buffer_size);
-        unsafe { vec.set_len(buffer_size) };
-        EventEncoder { p: coder, buffer: vec.into_boxed_slice() }
+        EventEncoder { p: coder, buffer_size: buffer_size }
     }
     
     pub fn as_ptr(&mut self) -> *mut snd_midi_event_t {
         self.p
     }
     
-    pub fn resize_buffer(&mut self, new_size: usize) -> Result<bool, ()> {
-        if new_size > self.buffer.len() {
-            let result = unsafe { snd_midi_event_resize_buffer(self.p, new_size as u64) };
-            if result != 0 {
-                return Err(());
-            }
-            
-            let mut vec = Vec::with_capacity(new_size);
-            unsafe { vec.set_len(new_size) };
-            self.buffer = vec.into_boxed_slice();
-            
-            Ok(true)
-        } else {
-            Ok(false) // no resize required
-        }
+    pub fn get_buffer_size(&self) -> usize {
+        self.buffer_size
+    }
+    
+    pub fn resize_buffer(&mut self, new_size: usize) -> Result<(), ()> {
+        let result = unsafe { snd_midi_event_resize_buffer(self.p, new_size as u64) };
+        if result != 0 { Err(()) } else { Ok(()) }
     }
     
     pub fn encode(&mut self, message: &[u8], ev: &mut Event) -> Result<(), ()> {
-        for i in 0..message.len() {
-            self.buffer[i] = message[i];
-        }
-        let result = unsafe { snd_midi_event_encode(self.p, self.buffer.as_ptr(), message.len() as i64, &mut ev.ev) };
-        if result < message.len() as i64 {
-            Err(())   
-        } else {
-            Ok(())
-        }
+        let result = unsafe { snd_midi_event_encode(self.p, message.as_ptr(), message.len() as i64, &mut ev.ev) };
+        if result < message.len() as i64 { Err(()) } else { Ok(()) }
     }
 }
 

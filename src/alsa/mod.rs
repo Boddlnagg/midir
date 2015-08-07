@@ -768,9 +768,11 @@ impl MidiOutApi for MidiOutAlsa {
     fn send_message(&mut self, message: &[u8]) -> Result<()> {
         let nbytes = message.len();
         
-        if self.coder.resize_buffer(nbytes).is_err() {
-            let error_string = "MidiOutAlsa::sendMessage: ALSA error resizing MIDI event buffer.";
-            return Err(DriverError(error_string));
+        if nbytes > self.coder.get_buffer_size() {
+            if self.coder.resize_buffer(nbytes).is_err() {
+                let error_string = "MidiOutAlsa::sendMessage: ALSA error resizing MIDI event buffer.";
+                return Err(DriverError(error_string));
+            }
         }
         
         let mut ev = Event::new();
