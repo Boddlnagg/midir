@@ -165,7 +165,6 @@ impl Sequencer {
 
 impl Drop for Sequencer {
     fn drop(&mut self) {
-        println!("Closing sequencer");
         unsafe { snd_seq_close(self.p) };
     }
 }
