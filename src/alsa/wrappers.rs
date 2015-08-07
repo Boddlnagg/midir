@@ -46,7 +46,12 @@ use alsa_sys::{
     snd_midi_event_decode,
     snd_seq_event_t,
     snd_seq_event_input,
-    snd_seq_free_event
+    snd_seq_free_event,
+    snd_seq_queue_tempo_t,
+    snd_seq_queue_tempo_malloc,
+    snd_seq_queue_tempo_free,
+    snd_seq_queue_tempo_set_tempo,
+    snd_seq_queue_tempo_set_ppq,
 };
 
 
@@ -285,9 +290,9 @@ pub struct PortSubscription {
 }
 
 impl PortSubscription {
-    pub fn allocate() -> PortSubscription {
-        let mut psub: *mut snd_seq_port_subscribe_t = unsafe { mem::uninitialized() };
-        unsafe { snd_seq_port_subscribe_malloc(&mut psub) };
+    pub unsafe fn allocate() -> PortSubscription {
+        let mut psub: *mut snd_seq_port_subscribe_t = mem::uninitialized();
+        snd_seq_port_subscribe_malloc(&mut psub);
         // TODO: check return value?
         PortSubscription { p: psub }
     }
@@ -360,5 +365,36 @@ impl Event {
 impl Drop for Event {
     fn drop(&mut self) {
         unsafe { snd_seq_free_event(self.p as *mut _) };
+    }
+}
+
+pub struct QueueTempo {
+    p: *mut snd_seq_queue_tempo_t
+}
+
+impl QueueTempo {
+    pub unsafe fn allocate() -> QueueTempo {
+        let mut psub: *mut snd_seq_queue_tempo_t = mem::uninitialized();
+        snd_seq_queue_tempo_malloc(&mut psub);
+        // TODO: check return value?
+        QueueTempo { p: psub }
+    }
+    
+    pub fn as_ptr(&mut self) -> *mut snd_seq_queue_tempo_t {
+        self.p
+    }
+    
+    pub fn set_tempo(&mut self, tempo: u32) {
+        unsafe { snd_seq_queue_tempo_set_tempo(self.p, tempo) };
+    }
+    
+    pub fn set_ppq(&mut self, ppq: i32) {
+        unsafe { snd_seq_queue_tempo_set_ppq(self.p, ppq) };
+    }
+}
+
+impl Drop for QueueTempo {
+    fn drop(&mut self) {
+        unsafe { snd_seq_queue_tempo_free(self.p) }
     }
 }

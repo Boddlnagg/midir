@@ -22,11 +22,6 @@ use alsa_sys::{
   snd_midi_event_decode,
   snd_seq_drain_output,
   snd_seq_alloc_named_queue,
-  snd_seq_queue_tempo_t,
-  snd_seq_queue_tempo_malloc,
-  snd_seq_queue_tempo_free,
-  snd_seq_queue_tempo_set_tempo,
-  snd_seq_queue_tempo_set_ppq,
   snd_seq_set_queue_tempo,
   snd_seq_free_queue, // TODO: wrap
   snd_seq_control_queue
@@ -56,7 +51,7 @@ unsafe fn snd_seq_start_queue(seq: *mut snd_seq_t, q: i32, ev: *mut snd_seq_even
 
 // Include ALSA wrappers
 mod wrappers;
-use self::wrappers::{Sequencer, SequencerOpenMode};
+use self::wrappers::{Sequencer, SequencerOpenMode, QueueTempo};
 use self::wrappers::{ClientInfo, PortInfo, PortSubscription, EventDecoder};
 use self::wrappers::{pollfd, POLLIN, poll};
 
@@ -353,7 +348,7 @@ pub struct MidiInAlsa {
 
 impl MidiInAlsa {
   // TODO: first initialize MessageQueue (backend agnostic), then pass initialized queue
-  unsafe fn initialize(client_name: &str, queue_size_limit: usize) -> Result<MidiInAlsa> {
+  fn initialize(client_name: &str, queue_size_limit: usize) -> Result<MidiInAlsa> {
     // Set up the ALSA sequencer client.
     let mut seq = match Sequencer::open(SequencerOpenMode::Duplex, true) {
       Ok(s) => s,
@@ -370,7 +365,7 @@ impl MidiInAlsa {
     let mut trigger_fds = [-1, -1];
     
     
-    if ::libc::pipe(trigger_fds.as_mut_ptr()) == -1  {
+    if unsafe { ::libc::pipe(trigger_fds.as_mut_ptr()) } == -1  {
       let error_string = "MidiInAlsa::initialize: error creating pipe objects.";
       return Err(DriverError(error_string));
     }
@@ -378,15 +373,15 @@ impl MidiInAlsa {
     let mut queue_id = 0;  
     // Create the input queue
     if !cfg!(feature = "avoid_timestamping") {
-      queue_id = snd_seq_alloc_named_queue(seq.as_mut_ptr(), mem::transmute(b"RtMidi Queue"));
+      queue_id = unsafe { snd_seq_alloc_named_queue(seq.as_mut_ptr(), mem::transmute(b"RtMidi Queue")) };
       // Set arbitrary tempo (mm=100) and resolution (240)
-      let mut qtempo: *mut snd_seq_queue_tempo_t = mem::uninitialized();
-      snd_seq_queue_tempo_malloc(&mut qtempo);
-      snd_seq_queue_tempo_set_tempo(qtempo, 600000);
-      snd_seq_queue_tempo_set_ppq(qtempo, 240);
-      snd_seq_set_queue_tempo(seq.as_mut_ptr(), queue_id, qtempo);
-      snd_seq_queue_tempo_free(qtempo);
-      snd_seq_drain_output(seq.as_mut_ptr());
+      let mut qtempo = unsafe { QueueTempo::allocate() };
+      qtempo.set_tempo(600_000);
+      qtempo.set_ppq(240);
+      unsafe {
+        snd_seq_set_queue_tempo(seq.as_mut_ptr(), queue_id, qtempo.as_ptr());
+        snd_seq_drain_output(seq.as_mut_ptr());
+      }
     }
     
     // Save our api-specific connection information.
@@ -534,7 +529,7 @@ impl MidiApi for MidiInAlsa {
   
     if data.subscription.is_none() {
       // Make subscription
-      let mut sub = PortSubscription::allocate();
+      let mut sub = unsafe { PortSubscription::allocate() };
       sub.set_sender(&sender);
       sub.set_dest(&receiver);
       if unsafe { snd_seq_subscribe_port(data.seq.write().unwrap().as_mut_ptr(), sub.as_ptr()) } != 0 {
@@ -628,10 +623,12 @@ impl MidiApi for MidiInAlsa {
 
 impl MidiInApi for MidiInAlsa {
   fn new(client_name: &str /*= "RtMidi Input Client"*/, queue_size_limit: usize /*= 100*/) -> Result<MidiInAlsa> {
-    unsafe { MidiInAlsa::initialize(client_name, queue_size_limit) }
+    MidiInAlsa::initialize(client_name, queue_size_limit)
   }
+  
 	//fn set_callback<T>(callback: MidiCallback, &mut T);
 	//fn cancel_callback();
+  
 	fn ignore_types(&mut self, sysex: bool /*= true*/, time: bool /*= true*/, active_sense: bool /*= true*/) {
     let mut flags = self.api_data.ignore_flags.write().unwrap();
     *flags = 0;
