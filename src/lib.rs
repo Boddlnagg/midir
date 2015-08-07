@@ -1,23 +1,23 @@
 #![feature(vec_push_all)]
-//#![allow(raw_pointer_derive, unused_must_use)]
 
 extern crate alsa_sys;
 extern crate libc;
 
 // TODO: use Cow<str> instead of String?
+// TODO: get rid of unused error types
 #[derive(Debug)]
 pub enum Error {
-    Warning(&'static str),          // A non-critical error.
-    DebugWarning,     // A non-critical error which might be useful for debugging.
-    Unspecified,      // The default, unspecified error type.
-    NoDevicesFound(&'static str),   // No devices found on system.
-    InvalidDevice,    // An invalid device ID was specified.
-    MemoryError,      // An error occured during memory allocation.
-    InvalidParameter(String), // An invalid parameter was specified to a function.
-    InvalidUse,       // The function was called incorrectly.
-    DriverError(&'static str),      // A system driver error occured.
-    SystemError,      // A system error occured.
-    ThreadError(&'static str)       // A thread error occured.
+    Warning(&'static str),        // A non-critical error.
+    DebugWarning,                 // A non-critical error which might be useful for debugging.
+    Unspecified,                  // The default, unspecified error type.
+    NoDevicesFound(&'static str), // No devices found on system.
+    InvalidDevice,                // An invalid device ID was specified.
+    MemoryError,                  // An error occured during memory allocation.
+    InvalidParameter(String),     // An invalid parameter was specified to a function.
+    InvalidUse,                   // The function was called incorrectly.
+    DriverError(&'static str),    // A system driver error occured.
+    SystemError,                  // A system error occured.
+    ThreadError(&'static str)     // A thread error occured.
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

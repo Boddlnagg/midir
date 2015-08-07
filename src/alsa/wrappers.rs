@@ -500,9 +500,16 @@ pub struct EventBox {
     p: *const snd_seq_event_t
 }
 
-impl EventBox {
-    pub fn as_ref(&mut self) -> &mut Event {
-        unsafe { &mut *(self.p as *mut _) }
+impl Deref for EventBox {
+    type Target = Event;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*(self.p as *const Event) }
+    }
+}
+
+impl DerefMut for EventBox {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *(self.p as *mut Event) }
     }
 }
 

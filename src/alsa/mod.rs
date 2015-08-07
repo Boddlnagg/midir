@@ -151,7 +151,7 @@ fn alsa_midi_handler(mut data: AlsaMidiHandlerData) {
         if !continue_sysex { message.bytes.clear() }
         
         let ignore_flags: u8 = *data.ignore_flags.lock().unwrap();
-        let do_decode = match ev.as_ref()._type as u32 {
+        let do_decode = match ev._type as u32 {
             SND_SEQ_EVENT_PORT_SUBSCRIBED => {
                 if cfg!(debug) { println!("MidiInAlsa::alsaMidiHandler: port connection made!") };
                 false
@@ -159,7 +159,7 @@ fn alsa_midi_handler(mut data: AlsaMidiHandlerData) {
             SND_SEQ_EVENT_PORT_UNSUBSCRIBED => {
                 if cfg!(debug) {
                     let _ = writeln!(stderr(), "MidiInAlsa::alsaMidiHandler: port connection has closed!");
-                    let connect = unsafe { &*ev.as_ref().data.connect() };
+                    let connect = unsafe { &*ev.data.connect() };
                     println!("sender = {}:{}, dest = {}:{}",
                         connect.sender.client,
                         connect.sender.port,
@@ -184,7 +184,7 @@ fn alsa_midi_handler(mut data: AlsaMidiHandlerData) {
             SND_SEQ_EVENT_SYSEX => {
                 if ignore_flags & 0x01 != 0 { false }
                 else {
-                    let data_len = unsafe { (*ev.as_ref().data.ext()).len } as usize;
+                    let data_len = unsafe { (*ev.data.ext()).len } as usize;
                     let buffer_len = buffer.len();
                     if data_len > buffer_len {
                         buffer = unsafe {
@@ -204,7 +204,7 @@ fn alsa_midi_handler(mut data: AlsaMidiHandlerData) {
         };
 
         if do_decode {
-            let nbytes = unsafe { snd_midi_event_decode(coder.as_ptr(), buffer.as_mut_ptr(), buffer.len() as i64, &**ev.as_ref()) } as usize;
+            let nbytes = unsafe { snd_midi_event_decode(coder.as_ptr(), buffer.as_mut_ptr(), buffer.len() as i64, &**ev) } as usize;
             
             if nbytes > 0 {
                 // The ALSA sequencer has a maximum buffer size for MIDI sysex
@@ -214,17 +214,17 @@ fn alsa_midi_handler(mut data: AlsaMidiHandlerData) {
                 // single sysex message if necessary.
                 if !continue_sysex {
                     message.bytes.clear();
-                } 
+                }
                 message.bytes.push_all(&buffer[0..nbytes]);
                 
-                continue_sysex = ( ev.as_ref()._type as u32 == SND_SEQ_EVENT_SYSEX ) && ( *message.bytes.last().unwrap() != 0xF7 );
+                continue_sysex = ( ev._type as u32 == SND_SEQ_EVENT_SYSEX ) && ( *message.bytes.last().unwrap() != 0xF7 );
                 if !continue_sysex {
                     // Calculate the time stamp:
                     message.timestamp = 0.0;
 
                     // Use the ALSA sequencer event time data.
                     // (thanks to Pedro Lopez-Cabanillas!).
-                    let alsa_time = unsafe { &*ev.as_ref().time.time() };
+                    let alsa_time = unsafe { &*ev.time.time() };
                     time = ( alsa_time.tv_sec as u64 * 1_000_000 ) + ( alsa_time.tv_nsec as u64/1_000 );
                     last_time = time;
                     time -= data.last_time;
@@ -334,80 +334,6 @@ pub struct MidiInAlsa {
     connected: bool,
     handler_data: Option<AlsaMidiHandlerData>,
     queue: Arc<Mutex<MidiQueue>>,
-}
-
-impl MidiInAlsa {
-    // TODO: first initialize MessageQueue (backend agnostic), then pass initialized queue
-    fn initialize(client_name: &str, queue_size_limit: usize) -> Result<MidiInAlsa> {
-        // Set up the ALSA sequencer client.
-        let mut seq = match Sequencer::open(SequencerOpenMode::Duplex, true) {
-            Ok(s) => s,
-            Err(_) => {
-                let error_string = "MidiInAlsa::initialize: error creating ALSA sequencer client object.";
-                return Err(DriverError(error_string));
-            }
-        };
-        
-        seq.set_client_name(client_name);
-        
-        let mut trigger_fds = [-1, -1];
-        
-        if unsafe { ::libc::pipe(trigger_fds.as_mut_ptr()) } == -1 {
-            let error_string = "MidiInAlsa::initialize: error creating pipe objects.";
-            return Err(DriverError(error_string));
-        }
-        
-        let mut queue_id = 0;    
-        // Create the input queue
-        if !cfg!(feature = "avoid_timestamping") {
-            queue_id = unsafe { snd_seq_alloc_named_queue(seq.as_mut_ptr(), mem::transmute(b"RtMidi Queue")) };
-            // Set arbitrary tempo (mm=100) and resolution (240)
-            let mut qtempo = unsafe { QueueTempo::allocate() };
-            qtempo.set_tempo(600_000);
-            qtempo.set_ppq(240);
-            unsafe {
-                snd_seq_set_queue_tempo(seq.as_mut_ptr(), queue_id, qtempo.as_ptr());
-                snd_seq_drain_output(seq.as_mut_ptr());
-            }
-        }
-        
-        // Save our api-specific connection information.
-        let data = Box::new(AlsaMidiInData {
-            seq: Arc::new(Mutex::new(seq)),
-            vport: -1,
-            subscription: None,
-            thread: None,
-            trigger_fds: Arc::new(Mutex::new(trigger_fds)),
-            queue_id: queue_id,
-            do_input: Arc::new(Mutex::new(false)),
-            ignore_flags: Arc::new(Mutex::new(7)),
-            callback: Arc::new(Mutex::new(None))
-        });
-        
-        let queue = Arc::new(Mutex::new(MidiQueue::new(queue_size_limit)));
-        
-        // TODO: create this only when needed
-        let handler_data = Some(AlsaMidiHandlerData {
-            queue: queue.clone(),
-            message: MidiMessage::new(),
-            ignore_flags: data.ignore_flags.clone(),
-            do_input: data.do_input.clone(),
-            first_message: true,
-            using_callback: false,
-            continue_sysex: false,
-            last_time: 0,
-            seq: data.seq.clone(),
-            trigger_fds: data.trigger_fds.clone(),
-            callback: data.callback.clone()
-        });
-        
-        Ok(MidiInAlsa {
-            api_data: data,
-            connected: false,
-            handler_data: handler_data,
-            queue: queue
-        })
-    }
 }
 
 impl Drop for MidiInAlsa {
@@ -598,7 +524,74 @@ impl MidiApi for MidiInAlsa {
 
 impl MidiInApi for MidiInAlsa {
     fn new(client_name: &str /*= "RtMidi Input Client"*/, queue_size_limit: usize /*= 100*/) -> Result<MidiInAlsa> {
-        MidiInAlsa::initialize(client_name, queue_size_limit)
+        // Set up the ALSA sequencer client.
+        let mut seq = match Sequencer::open(SequencerOpenMode::Duplex, true) {
+            Ok(s) => s,
+            Err(_) => {
+                let error_string = "MidiInAlsa::initialize: error creating ALSA sequencer client object.";
+                return Err(DriverError(error_string));
+            }
+        };
+        
+        seq.set_client_name(client_name);
+        
+        let mut trigger_fds = [-1, -1];
+        
+        if unsafe { ::libc::pipe(trigger_fds.as_mut_ptr()) } == -1 {
+            let error_string = "MidiInAlsa::initialize: error creating pipe objects.";
+            return Err(DriverError(error_string));
+        }
+        
+        let mut queue_id = 0;    
+        // Create the input queue
+        if !cfg!(feature = "avoid_timestamping") {
+            queue_id = unsafe { snd_seq_alloc_named_queue(seq.as_mut_ptr(), mem::transmute(b"RtMidi Queue")) };
+            // Set arbitrary tempo (mm=100) and resolution (240)
+            let mut qtempo = unsafe { QueueTempo::allocate() };
+            qtempo.set_tempo(600_000);
+            qtempo.set_ppq(240);
+            unsafe {
+                snd_seq_set_queue_tempo(seq.as_mut_ptr(), queue_id, qtempo.as_ptr());
+                snd_seq_drain_output(seq.as_mut_ptr());
+            }
+        }
+        
+        // Save our api-specific connection information.
+        let data = Box::new(AlsaMidiInData {
+            seq: Arc::new(Mutex::new(seq)),
+            vport: -1,
+            subscription: None,
+            thread: None,
+            trigger_fds: Arc::new(Mutex::new(trigger_fds)),
+            queue_id: queue_id,
+            do_input: Arc::new(Mutex::new(false)),
+            ignore_flags: Arc::new(Mutex::new(7)),
+            callback: Arc::new(Mutex::new(None))
+        });
+        
+        let queue = Arc::new(Mutex::new(MidiQueue::new(queue_size_limit)));
+        
+        // TODO: create this only when needed
+        let handler_data = Some(AlsaMidiHandlerData {
+            queue: queue.clone(),
+            message: MidiMessage::new(),
+            ignore_flags: data.ignore_flags.clone(),
+            do_input: data.do_input.clone(),
+            first_message: true,
+            using_callback: false,
+            continue_sysex: false,
+            last_time: 0,
+            seq: data.seq.clone(),
+            trigger_fds: data.trigger_fds.clone(),
+            callback: data.callback.clone()
+        });
+        
+        Ok(MidiInAlsa {
+            api_data: data,
+            connected: false,
+            handler_data: handler_data,
+            queue: queue
+        })
     }
     
     fn set_callback<F>(&mut self, callback: F) -> Result<()> where F: FnMut(f64, &Vec<u8>)+Send+'static {
@@ -657,34 +650,6 @@ pub struct MidiOutAlsa {
     vport: i32,
     coder: EventEncoder,
     subscription: Option<PortSubscription>
-}
-
-impl MidiOutAlsa {
-    fn initialize(client_name: &str) -> Result<MidiOutAlsa> {
-        // Set up the ALSA sequencer client.
-        let mut seq = match Sequencer::open(SequencerOpenMode::Output, true) {
-            Ok(s) => s,
-            Err(_) => {
-                let error_string = "MidiOutAlsa::initialize: error creating ALSA sequencer client object.";
-                return Err(DriverError(error_string));
-            }
-        };
-        
-        // Set client name.
-        seq.set_client_name(client_name);
-        
-        let init_buffer_size = 32;
-        let coder = EventEncoder::new(init_buffer_size);
-        
-        Ok(MidiOutAlsa {
-            connected: false, // TODO: remove this, checking subscription should be enough
-            seq: seq,
-            port_num: -1,
-            vport: -1,
-            coder: coder,
-            subscription: None 
-        })
-    }
 }
 
 impl MidiApi for MidiOutAlsa {
@@ -775,7 +740,29 @@ impl MidiApi for MidiOutAlsa {
 
 impl MidiOutApi for MidiOutAlsa {
     fn new(client_name: &str /*= "RtMidi Output Client"*/) -> Result<Self> {
-        MidiOutAlsa::initialize(client_name)
+        // Set up the ALSA sequencer client.
+        let mut seq = match Sequencer::open(SequencerOpenMode::Output, true) {
+            Ok(s) => s,
+            Err(_) => {
+                let error_string = "MidiOutAlsa::initialize: error creating ALSA sequencer client object.";
+                return Err(DriverError(error_string));
+            }
+        };
+        
+        // Set client name.
+        seq.set_client_name(client_name);
+        
+        let init_buffer_size = 32;
+        let coder = EventEncoder::new(init_buffer_size);
+        
+        Ok(MidiOutAlsa {
+            connected: false, // TODO: remove this, checking subscription should be enough
+            seq: seq,
+            port_num: -1,
+            vport: -1,
+            coder: coder,
+            subscription: None 
+        })
     }
     
     fn send_message(&mut self, message: &[u8]) -> Result<()> {
