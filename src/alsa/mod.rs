@@ -2,7 +2,6 @@
 
 use std::mem;
 use std::ptr;
-use std::ffi::CString;
 use std::thread::{Builder, JoinHandle};
 use std::io::{stderr, Write};
 use std::sync::{Arc, RwLock, Mutex};
@@ -12,28 +11,15 @@ use super::{Result, MidiApi, MidiInApi, MidiQueue, MidiMessage};
 
 use alsa_sys::{
   snd_seq_t,
-  snd_midi_event_t,
-  snd_seq_open,
-  snd_seq_close,
-  snd_seq_set_client_name,
   snd_seq_query_next_client,
   snd_seq_query_next_port,
   snd_seq_get_any_client_info,
   snd_seq_addr_t,
-  snd_seq_create_port,
-  snd_seq_delete_port,
-  snd_seq_client_id,
+  snd_seq_delete_port, // TODO: wrap
   snd_seq_subscribe_port,
   snd_seq_unsubscribe_port,
   snd_seq_event_t,
-  snd_midi_event_new,
-  snd_midi_event_free,
-  snd_midi_event_init,
-  snd_midi_event_no_status,
-  snd_seq_poll_descriptors_count,
   snd_seq_event_input_pending,
-  snd_seq_event_input,
-  snd_seq_free_event,
   snd_midi_event_decode,
   snd_seq_drain_output,
   snd_seq_alloc_named_queue,
@@ -43,7 +29,7 @@ use alsa_sys::{
   snd_seq_queue_tempo_set_tempo,
   snd_seq_queue_tempo_set_ppq,
   snd_seq_set_queue_tempo,
-  snd_seq_free_queue,
+  snd_seq_free_queue, // TODO: wrap
   snd_seq_control_queue
 };
 
@@ -59,15 +45,6 @@ use alsa_sys::{
   SND_SEQ_EVENT_START
 };
 
-// Define some bindings and types which are not available from alsa-sys or libc
-extern {
-  fn snd_seq_poll_descriptors(seq: *mut snd_seq_t,
-    pfds: *mut pollfd,
-    space: u32,
-    events: i16 
-	) -> i32;	
-}
-
 #[inline(always)]
 unsafe fn snd_seq_stop_queue(seq: *mut snd_seq_t, q: i32, ev: *mut snd_seq_event_t) {
    snd_seq_control_queue(seq, q, SND_SEQ_EVENT_STOP as i32, 0, ev);
@@ -78,28 +55,17 @@ unsafe fn snd_seq_start_queue(seq: *mut snd_seq_t, q: i32, ev: *mut snd_seq_even
    snd_seq_control_queue(seq, q, SND_SEQ_EVENT_START as i32, 0, ev);
 }
 
-#[repr(C)]
-struct pollfd {
-    pub fd: i32,
-    pub events: i16,
-    pub revents: i16,
-}
-
-const POLLIN: i16 = 1;
-
-fn poll(fds: &mut [pollfd], timeout: i32) -> i32 {
-    extern { fn poll(fds: *mut pollfd, nfds: u32, timeout: i32) -> i32; }
-    unsafe { poll(fds.as_mut_ptr(), fds.len() as u32, timeout) }
-}
-
 // Include ALSA wrappers
 mod wrappers;
-use self::wrappers::{ClientInfo, PortInfo, PortSubscription};
+use self::wrappers::{Sequencer, SequencerOpenMode};
+use self::wrappers::{ClientInfo, PortInfo, PortSubscription, EventDecoder};
+use self::wrappers::{pollfd, POLLIN, poll};
 
-const	SND_SEQ_OPEN_OUTPUT: i32 = 1;
+const SND_SEQ_OPEN_OUTPUT: i32 = 1;
 const SND_SEQ_OPEN_INPUT: i32 = 2;
-const	SND_SEQ_OPEN_DUPLEX: i32 = SND_SEQ_OPEN_OUTPUT|SND_SEQ_OPEN_INPUT;
+const SND_SEQ_OPEN_DUPLEX: i32 = SND_SEQ_OPEN_OUTPUT|SND_SEQ_OPEN_INPUT;
 const SND_SEQ_NONBLOCK: i32 = 0x0001;
+
 const SND_SEQ_PORT_TYPE_MIDI_GENERIC: u32 = 1<<1;
 const SND_SEQ_PORT_TYPE_SYNTH: u32 = 1<<10;
 const SND_SEQ_PORT_TYPE_APPLICATION: u32 = 1<<20;
@@ -121,19 +87,17 @@ struct AlsaMidiInData {
     first_message: bool,
     using_callback: bool,
     continue_sysex: bool,
-  	coder: *mut snd_midi_event_t,
   	last_time: u64,
     // TODO: turn into read-only pointers?
-  	seq: Arc<RwLock<*mut snd_seq_t>>,
+  	seq: Arc<RwLock<Sequencer>>,
   	trigger_fds: Arc<RwLock<[i32; 2]>>,
-    
 }
 
 // TODO: is this safe?
 unsafe impl Send for AlsaMidiInData {}
 
 impl AlsaMidiInData {
-	fn new(queue: Arc<Mutex<MidiQueue>>, do_input: Arc<RwLock<bool>>, seq: Arc<RwLock<*mut snd_seq_t>>, trigger_fds: Arc<RwLock<[i32; 2]>>, ignore_flags: Arc<RwLock<u8>>) -> AlsaMidiInData {
+	fn new(queue: Arc<Mutex<MidiQueue>>, do_input: Arc<RwLock<bool>>, seq: Arc<RwLock<Sequencer>>, trigger_fds: Arc<RwLock<[i32; 2]>>, ignore_flags: Arc<RwLock<u8>>) -> AlsaMidiInData {
 		AlsaMidiInData {
 			queue: queue,
 			message: MidiMessage::new(),
@@ -143,7 +107,6 @@ impl AlsaMidiInData {
 			using_callback: false,
 			continue_sysex: false,
 			// default values:
-			coder: ptr::null_mut(),
   		last_time: 0,
 			seq: seq,
 			trigger_fds: trigger_fds
@@ -152,7 +115,7 @@ impl AlsaMidiInData {
 }
 
 struct AlsaMidiData {
-  seq: Arc<RwLock<*mut snd_seq_t>>,
+  seq: Arc<RwLock<Sequencer>>,
   vport: i32,
   subscription: Option<PortSubscription>,
   thread: Option<JoinHandle<()>>,
@@ -168,11 +131,6 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
   let mut continue_sysex: bool = false;
   
   let init_buffer_size = 32;
-  let result = unsafe { snd_midi_event_new(0, &mut data.coder) };
-  if result < 0 {
-    write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: error initializing MIDI event parser!\n\n");
-    return;
-  }
   
   let mut buffer = unsafe {
     let mut vec = Vec::with_capacity(init_buffer_size);
@@ -180,23 +138,22 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
     vec.into_boxed_slice()
   };
   
+  let mut coder = EventDecoder::new(false);
+  
   let mut poll_fds: Box<[pollfd]>;
   unsafe {
-    snd_midi_event_init(data.coder);
-    snd_midi_event_no_status(data.coder, 1); // suppress running status messages
-
-    let poll_fd_count = (snd_seq_poll_descriptors_count(*data.seq.read().unwrap(), POLLIN ) + 1) as usize;
+    let poll_fd_count = (data.seq.read().unwrap().poll_descriptors_count(POLLIN) + 1) as usize;
     let mut vec = Vec::with_capacity(poll_fd_count);
     vec.set_len(poll_fd_count);
     poll_fds = vec.into_boxed_slice();
-    snd_seq_poll_descriptors(*data.seq.read().unwrap(), poll_fds.as_mut_ptr().offset(1), poll_fd_count as u32 - 1, POLLIN );
   }
+  data.seq.read().unwrap().poll_descriptors(&mut poll_fds[1..], POLLIN); 
   poll_fds[0].fd = data.trigger_fds.read().unwrap()[0];
   poll_fds[0].events = POLLIN;
   
   while *data.do_input.read().unwrap() {
 
-    if unsafe { snd_seq_event_input_pending(*data.seq.read().unwrap(), 1) } == 0 {
+    if unsafe { snd_seq_event_input_pending(data.seq.write().unwrap().as_mut_ptr(), 1) } == 0 {
       // No data pending
       if poll(&mut poll_fds, -1) >= 0 {
         if poll_fds[0].revents & POLLIN != 0 {
@@ -208,17 +165,18 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
     }
 
     // If here, there should be data.
-    let mut ev: *mut snd_seq_event_t = unsafe { mem::uninitialized() };
-    let result = unsafe { snd_seq_event_input(*data.seq.read().unwrap(), &mut ev ) };
-    if result == -::libc::consts::os::posix88::ENOSPC {
-      write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: MIDI input buffer overrun!\n\n");
-      continue;
-    }
-    else if result <= 0 {
-      write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: unknown MIDI input error!\n");
-      //perror("System reports");
-      continue;
-    }
+    let mut ev = match data.seq.write().unwrap().event_input() {
+      Ok(e) => e,
+      Err(e) if e == -::libc::consts::os::posix88::ENOSPC => {
+        write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: MIDI input buffer overrun!\n\n");
+        continue;
+      },
+      Err(_) => {
+        write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: unknown MIDI input error!\n");
+        //perror("System reports");
+        continue;
+      }
+    };
     
     let mut message = MidiMessage::new();
 
@@ -226,10 +184,8 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
     // event (back) into MIDI bytes.  We'll ignore non-MIDI types.
     if !continue_sysex { message.bytes.clear() }
     
-    let mut ev = unsafe { &mut *ev };
-    
     let ignore_flags: u8 = *data.ignore_flags.read().unwrap();
-    let do_decode = match ev._type as u32 {
+    let do_decode = match ev.as_ref()._type as u32 {
       SND_SEQ_EVENT_PORT_SUBSCRIBED => {
         if cfg!(debug) { println!("MidiInAlsa::alsaMidiHandler: port connection made!") };
         false
@@ -237,7 +193,7 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
       SND_SEQ_EVENT_PORT_UNSUBSCRIBED => {
         if cfg!(debug) {
           writeln!(stderr(), "MidiInAlsa::alsaMidiHandler: port connection has closed!");
-          let connect = unsafe { &*ev.data.connect() };
+          let connect = unsafe { &*ev.as_ref().data.connect() };
           println!("sender = {}:{}, dest = {}:{}",
             connect.sender.client,
             connect.sender.port,
@@ -262,7 +218,7 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
       SND_SEQ_EVENT_SYSEX => {
         if ignore_flags & 0x01 != 0 { false }
         else {
-          let data_len = unsafe { (*ev.data.ext()).len } as usize;
+          let data_len = unsafe { (*ev.as_ref().data.ext()).len } as usize;
           let buffer_len = buffer.len();
           if data_len > buffer_len {
             buffer = unsafe {
@@ -282,7 +238,7 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
     };
 
     if do_decode {
-      let nbytes = unsafe { snd_midi_event_decode(data.coder, buffer.as_mut_ptr(), buffer.len() as i64, ev) } as usize;
+      let nbytes = unsafe { snd_midi_event_decode(coder.as_ptr(), buffer.as_mut_ptr(), buffer.len() as i64, ev.as_ref()) } as usize;
       
       if nbytes > 0 {
         // The ALSA sequencer has a maximum buffer size for MIDI sysex
@@ -295,7 +251,7 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
         } 
         message.bytes.push_all(&buffer[0..nbytes]);
         
-        continue_sysex = ( ev._type as u32 == SND_SEQ_EVENT_SYSEX ) && ( *message.bytes.last().unwrap() != 0xF7 );
+        continue_sysex = ( ev.as_ref()._type as u32 == SND_SEQ_EVENT_SYSEX ) && ( *message.bytes.last().unwrap() != 0xF7 );
         if !continue_sysex {
           // Calculate the time stamp:
           message.timestamp = 0.0;
@@ -306,7 +262,7 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
 
           // Method 2: Use the ALSA sequencer event time data.
           // (thanks to Pedro Lopez-Cabanillas!).
-          let alsa_time = unsafe { &*ev.time.time() };
+          let alsa_time = unsafe { &*ev.as_ref().time.time() };
           time = ( alsa_time.tv_sec as u64 * 1_000_000 ) + ( alsa_time.tv_nsec as u64/1_000 );
           last_time = time;
           time -= data.last_time;
@@ -325,7 +281,7 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
       }
     }
 
-    unsafe { snd_seq_free_event( ev ) };
+    drop(ev);
     if message.bytes.len() == 0 || continue_sysex { continue; }
 
     // TODO!
@@ -350,9 +306,6 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
       }
     }
   }
-  
-  unsafe { snd_midi_event_free( data.coder ) }
-  data.coder = ptr::null_mut();
 }
 
 #[inline(always)]
@@ -362,10 +315,11 @@ unsafe fn port_type(pinfo: &PortInfo, bits: u32) -> bool {
 
 /// This function is used to count or get the pinfo structure for a given port number.
 /// TODO: introduce iterator
-unsafe fn port_info(seq: *mut snd_seq_t, pinfo: &mut PortInfo, typ: u32, port_number: i32) -> Option<i32> {
+unsafe fn port_info(seq: *const snd_seq_t, pinfo: &mut PortInfo, typ: u32, port_number: i32) -> Option<i32> {
   let mut client;
   let mut count: i32 = 0;
   let mut cinfo = ClientInfo::allocate();
+  let seq = seq as *mut _;
 
   cinfo.set_client(-1);
   while snd_seq_query_next_client(seq, cinfo.as_ptr()) >= 0 {
@@ -402,17 +356,15 @@ impl MidiInAlsa {
   // TODO: first initialize MessageQueue (backend agnostic), then pass initialized queue
   unsafe fn initialize(client_name: &str, queue_size_limit: usize) -> Result<MidiInAlsa> {
     // Set up the ALSA sequencer client.
-    let mut seq: *mut snd_seq_t = mem::uninitialized(); 
-    let result = snd_seq_open(&mut seq, mem::transmute(b"default"), SND_SEQ_OPEN_DUPLEX, SND_SEQ_NONBLOCK);
-    if result < 0 {
-      let error_string = "MidiInAlsa::initialize: error creating ALSA sequencer client object.";
-      return Err(DriverError(error_string));
-    }
-    debug_assert!(!seq.is_null());
+    let mut seq = match Sequencer::open(SequencerOpenMode::Duplex, true) {
+      Ok(s) => s,
+      Err(_) => {
+        let error_string = "MidiInAlsa::initialize: error creating ALSA sequencer client object.";
+        return Err(DriverError(error_string));
+      }
+    };
     
-    // Set client name.
-    let c_name = CString::new(client_name).ok().expect("client_name must not contain null bytes");
-    snd_seq_set_client_name(seq, c_name.as_ptr());
+    seq.set_client_name(client_name);
     
     let mut trigger_fds = [-1, -1];
     
@@ -425,15 +377,15 @@ impl MidiInAlsa {
     let mut queue_id = 0;  
     // Create the input queue
     if !cfg!(feature = "avoid_timestamping") {
-      queue_id = snd_seq_alloc_named_queue(seq, mem::transmute(b"RtMidi Queue"));
+      queue_id = snd_seq_alloc_named_queue(seq.as_mut_ptr(), mem::transmute(b"RtMidi Queue"));
       // Set arbitrary tempo (mm=100) and resolution (240)
       let mut qtempo: *mut snd_seq_queue_tempo_t = mem::uninitialized();
       snd_seq_queue_tempo_malloc(&mut qtempo);
       snd_seq_queue_tempo_set_tempo(qtempo, 600000);
       snd_seq_queue_tempo_set_ppq(qtempo, 240);
-      snd_seq_set_queue_tempo(seq, queue_id, qtempo);
+      snd_seq_set_queue_tempo(seq.as_mut_ptr(), queue_id, qtempo);
       snd_seq_queue_tempo_free(qtempo);
-      snd_seq_drain_output(seq);
+      snd_seq_drain_output(seq.as_mut_ptr());
     }
     
     // Save our api-specific connection information.
@@ -477,14 +429,13 @@ impl Drop for MidiInAlsa {
       ::libc::close(data.trigger_fds.read().unwrap()[0]);
       ::libc::close(data.trigger_fds.read().unwrap()[1] );
     }
-    let seq = data.seq.write().unwrap();
+    let mut seq = data.seq.write().unwrap();
     if data.vport >= 0 {
-      unsafe {snd_seq_delete_port(*seq, data.vport ) };
+      unsafe { snd_seq_delete_port(seq.as_mut_ptr(), data.vport ) };
     }
     if !cfg!(feature = "avoid_timestamping") {
-      unsafe { snd_seq_free_queue(*seq, data.queue_id ) };
+      unsafe { snd_seq_free_queue(seq.as_mut_ptr(), data.queue_id ) };
     }
-    unsafe { snd_seq_close(*seq) };
   }
 }
 
@@ -493,7 +444,7 @@ impl MidiApi for MidiInAlsa {
     let mut pinfo = PortInfo::allocate();
     
     unsafe {
-      port_info(*self.api_data.seq.read().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, -1).unwrap() as u32
+      port_info(self.api_data.seq.read().unwrap().as_ptr(), &mut pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, -1).unwrap() as u32
     }
   }
   
@@ -505,9 +456,9 @@ impl MidiApi for MidiInAlsa {
     unsafe {
       use std::fmt::Write;
       
-      if port_info(*data.seq.read().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32).is_some() {
+      if port_info(data.seq.read().unwrap().as_ptr(), &mut pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32).is_some() {
         let cnum: i32 = pinfo.get_client();
-        snd_seq_get_any_client_info(*data.seq.read().unwrap(), cnum, cinfo.as_ptr());
+        snd_seq_get_any_client_info(data.seq.write().unwrap().as_mut_ptr(), cnum, cinfo.as_ptr());
         let mut os = String::new();
         write!(&mut os, "{} {}:{}", 
           cinfo.get_name(),
@@ -530,16 +481,17 @@ impl MidiApi for MidiInAlsa {
       return Err(Warning(error_string));
     }
   
-    let nsrc = self.get_port_count();
+    // this is inefficient, since we request the port infos below anyway
+    /*let nsrc = self.get_port_count();
     if nsrc < 1 {
       let error_string = "MidiInAlsa::openPort: no MIDI input sources found!";
       return Err(NoDevicesFound(error_string));
-    }
+    }*/
     
     let mut src_pinfo = PortInfo::allocate();
     let data = &mut *self.api_data;
     
-    if unsafe { port_info(*data.seq.read().unwrap(), &mut src_pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32) }.is_none() {
+    if unsafe { port_info(data.seq.read().unwrap().as_ptr(), &mut src_pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32) }.is_none() {
       use std::fmt::Write; 
       let mut error_string = String::new();
       write!(error_string, "MidiInAlsa::openPort: the 'portNumber' argument ({}) is invalid.", port_number); 
@@ -567,18 +519,17 @@ impl MidiApi for MidiInAlsa {
       }
       
       pinfo.set_name(port_name);
-      let tmp_vport = unsafe { snd_seq_create_port(*data.seq.read().unwrap(), pinfo.as_ptr()) };
-      data.vport = tmp_vport;
-    
-      if data.vport < 0 {
-        let error_string = "MidiInAlsa::openPort: ALSA error creating input port.";
-        return Err(DriverError(error_string));
+      data.vport = match data.seq.write().unwrap().create_port(&mut pinfo) {
+        Ok(_) => pinfo.get_port(),
+        Err(_) => {
+          let error_string = "MidiInAlsa::openPort: ALSA error creating input port.";
+          return Err(DriverError(error_string));
+        }
       }
-      data.vport = pinfo.get_port();
     }
     
     let receiver = snd_seq_addr_t {
-      client: unsafe { snd_seq_client_id(*data.seq.read().unwrap()) } as u8,
+      client: data.seq.read().unwrap().get_client_id() as u8,
       port: data.vport as u8
     };
   
@@ -588,7 +539,7 @@ impl MidiApi for MidiInAlsa {
       let mut sub = PortSubscription::allocate();
       sub.set_sender(&sender);
       sub.set_dest(&receiver);
-      if unsafe { snd_seq_subscribe_port(*data.seq.read().unwrap(), sub.as_ptr()) } != 0 {
+      if unsafe { snd_seq_subscribe_port(data.seq.write().unwrap().as_mut_ptr(), sub.as_ptr()) } != 0 {
         let error_string = "MidiInAlsa::openPort: ALSA error making port connection.";
         return Err(DriverError(error_string));
       }
@@ -598,10 +549,10 @@ impl MidiApi for MidiInAlsa {
     if *data.do_input.read().unwrap() == false {
       // Start the input queue
       if !cfg!(feature = "avoid_timestamping") {
-        let seq = data.seq.write().unwrap();
+        let mut seq = data.seq.write().unwrap();
         unsafe {
-          snd_seq_start_queue(*seq, data.queue_id, ptr::null_mut());
-          snd_seq_drain_output(*seq);
+          snd_seq_start_queue(seq.as_mut_ptr(), data.queue_id, ptr::null_mut());
+          snd_seq_drain_output(seq.as_mut_ptr());
         }
       }
   
@@ -618,7 +569,7 @@ impl MidiApi for MidiInAlsa {
       }) {
         Ok(handle) => Some(handle),
         Err(_) => {
-          unsafe { snd_seq_unsubscribe_port(*data.seq.read().unwrap(), data.subscription.as_ref().unwrap().as_ptr()) };
+          unsafe { snd_seq_unsubscribe_port(data.seq.write().unwrap().as_mut_ptr(), data.subscription.as_mut().unwrap().as_ptr()) };
           data.subscription = None;
           *data.do_input.write().unwrap() = false;
           let error_string = "MidiInAlsa::openPort: error starting MIDI input thread!";
@@ -637,17 +588,17 @@ impl MidiApi for MidiInAlsa {
     let mut data = &mut *self.api_data;
     
     if self.connected {
-      let seq = data.seq.read().unwrap();
+      let mut seq = data.seq.write().unwrap();
       if data.subscription.is_some() {
         // TODO: find out why snd_seq_unsubscribe_port takes a long time if there was not yet any input message
-        unsafe { snd_seq_unsubscribe_port(*seq, data.subscription.as_ref().unwrap().as_ptr()) };
+        unsafe { snd_seq_unsubscribe_port(seq.as_mut_ptr(), data.subscription.as_mut().unwrap().as_ptr()) };
         data.subscription = None;
       }
       // Stop the input queue
       if !cfg!(feature = "avoid_timestamping") {
         unsafe {
-          snd_seq_stop_queue(*seq, data.queue_id, ptr::null_mut());
-          snd_seq_drain_output(*seq );
+          snd_seq_stop_queue(seq.as_mut_ptr(), data.queue_id, ptr::null_mut());
+          snd_seq_drain_output(seq.as_mut_ptr());
         }
       }
       self.connected = false;
