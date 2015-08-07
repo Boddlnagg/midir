@@ -267,27 +267,22 @@ fn alsa_midi_handler(mut data: AlsaMidiHandlerData) {
     }
 }
 
-#[inline(always)]
-unsafe fn port_type(pinfo: &PortInfo, bits: u32) -> bool {
-    (pinfo.get_capability() & bits) == bits
-}
-
 /// This function is used to count or get the pinfo structure for a given port number.
 /// TODO: introduce iterator
-unsafe fn port_info(seq: *const snd_seq_t, pinfo: &mut PortInfo, typ: u32, port_number: i32) -> Option<i32> {
+fn port_info(seq: *const snd_seq_t, pinfo: &mut PortInfo, typ: u32, port_number: i32) -> Option<i32> {
     let mut client;
-    let mut count: i32 = 0;
-    let mut cinfo = ClientInfo::allocate();
+    let mut count = 0;
+    let mut cinfo = unsafe { ClientInfo::allocate() };
     let seq = seq as *mut _;
 
     cinfo.set_client(-1);
-    while snd_seq_query_next_client(seq, cinfo.as_ptr()) >= 0 {
+    while unsafe { snd_seq_query_next_client(seq, cinfo.as_ptr()) } >= 0 {
         client = cinfo.get_client();
         if client == 0 { continue; }
         // Reset query info
         pinfo.set_client(client);
         pinfo.set_port(-1);
-        while snd_seq_query_next_port(seq, pinfo.as_ptr()) >= 0 {
+        while unsafe { snd_seq_query_next_port(seq, pinfo.as_ptr()) } >= 0 {
             let atyp: u32 = pinfo.get_type();
             if (atyp & SND_SEQ_PORT_TYPE_MIDI_GENERIC) == 0 &&
                 (atyp & SND_SEQ_PORT_TYPE_SYNTH ) == 0 { continue; }
@@ -305,27 +300,25 @@ unsafe fn port_info(seq: *const snd_seq_t, pinfo: &mut PortInfo, typ: u32, port_
 }
 
 fn get_port_name(seq: &Sequencer, typ: u32, port_number: i32) -> Result<String> {
+    use std::fmt::Write;
+    
     let mut pinfo = unsafe { PortInfo::allocate() };
     
-    unsafe {
-        use std::fmt::Write;
-        
-        if port_info(seq.as_ptr(), &mut pinfo, typ, port_number).is_some() {
-            let cnum: i32 = pinfo.get_client();    
-            let cinfo = seq.get_any_client_info(cnum);
-            let mut output = String::new();
-            write!(&mut output, "{} {}:{}", 
-                cinfo.get_name(),
-                pinfo.get_client(), // These lines added to make sure devices are listed
-                pinfo.get_port()    // with full portnames added to ensure individual device names
-            ).unwrap();
-            Ok(output)
-        } else {
-            // If we get here, we didn't find a match.
-            // TODO: get rid of "Warning", use better name 
-            let error_string = "MidiInAlsa::getPortName: error looking for port name!";
-            Err(Warning(error_string))
-        }
+    if port_info(seq.as_ptr(), &mut pinfo, typ, port_number).is_some() {
+        let cnum: i32 = pinfo.get_client();    
+        let cinfo = seq.get_any_client_info(cnum);
+        let mut output = String::new();
+        write!(&mut output, "{} {}:{}", 
+            cinfo.get_name(),
+            pinfo.get_client(), // These lines added to make sure devices are listed
+            pinfo.get_port()    // with full portnames added to ensure individual device names
+        ).unwrap();
+        Ok(output)
+    } else {
+        // If we get here, we didn't find a match.
+        // TODO: get rid of "Warning", use better name 
+        let error_string = "MidiInAlsa::getPortName: error looking for port name!";
+        Err(Warning(error_string))
     }
 }
 
@@ -386,7 +379,7 @@ impl MidiApi for MidiInAlsa {
         let mut src_pinfo = unsafe { PortInfo::allocate() };
         let data = &mut *self.api_data;
         
-        if unsafe { port_info(data.seq.lock().unwrap().as_ptr(), &mut src_pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32) }.is_none() {
+        if port_info(data.seq.lock().unwrap().as_ptr(), &mut src_pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32).is_none() {
             use std::fmt::Write; 
             let mut error_string = String::new();
             let _ = write!(error_string, "MidiInAlsa::openPort: the 'portNumber' argument ({}) is invalid.", port_number); 
@@ -679,7 +672,7 @@ impl MidiApi for MidiOutAlsa {
         
         let mut pinfo = unsafe { PortInfo::allocate() };
         
-        if unsafe { port_info(self.seq.as_ptr(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, port_number as i32).is_none() } {
+        if port_info(self.seq.as_ptr(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, port_number as i32).is_none() {
             use std::fmt::Write; 
             let mut error_string = String::new();
             let _ = write!(error_string, "MidiOutAlsa::openPort: the 'portNumber' argument ({}) is invalid.", port_number); 
