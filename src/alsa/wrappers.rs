@@ -1,3 +1,5 @@
+#![allow(raw_pointer_derive)]
+
 use std::{mem, str};
 use std::ffi::{CString, CStr};
 use alsa_sys::{
@@ -6,6 +8,7 @@ use alsa_sys::{
     snd_seq_close,
     snd_seq_create_port,
     snd_seq_set_client_name,
+    snd_seq_get_any_client_info,
     snd_seq_poll_descriptors_count,
     snd_seq_client_id,
     snd_seq_client_info_t,
@@ -108,6 +111,14 @@ impl Sequencer {
         unsafe { snd_seq_client_id(self.p) }      
     }
     
+    pub fn get_any_client_info(&self, cnum: i32) -> ClientInfo {
+        unsafe {
+            let mut cinfo = ClientInfo::allocate();
+            snd_seq_get_any_client_info(self.p, cnum, cinfo.as_ptr());
+            cinfo
+        }
+    }
+    
     pub fn set_client_name(&mut self, name: &str) {
         let c_name = CString::new(name).ok().expect("client_name must not contain null bytes");
         unsafe { snd_seq_set_client_name(self.p, c_name.as_ptr()) };
@@ -125,14 +136,16 @@ impl Sequencer {
     }
     
     pub fn poll_descriptors(&self, pollfds: &mut [pollfd], events: i16) {
-        unsafe { snd_seq_poll_descriptors(self.p, pollfds.as_mut_ptr(), pollfds.len() as u32, POLLIN) };   
+        unsafe { snd_seq_poll_descriptors(self.p, pollfds.as_mut_ptr(), pollfds.len() as u32, events) };   
     }
     
-    pub fn event_input(&mut self) -> Result<Event, i32> {
+    pub fn event_input(&mut self) -> Result<(Event, i32), i32> {
         let mut ev = unsafe { mem::uninitialized() };
-        match unsafe { snd_seq_event_input(self.p, &mut ev) } {
-            0 => Ok(Event { p: ev }),
-            err => Err(err)
+        let res = unsafe { snd_seq_event_input(self.p, &mut ev) };
+        if res < 0 {
+            Err(res)
+        } else {
+            Ok((Event { p: ev }, res))
         }
     }
     
@@ -152,14 +165,15 @@ impl Drop for Sequencer {
     }
 }
 
+#[derive(Debug)]
 pub struct ClientInfo {
     p: *mut snd_seq_client_info_t
 }
 
 impl ClientInfo {
-    pub fn allocate() -> ClientInfo {
-        let mut cinfo: *mut snd_seq_client_info_t = unsafe { mem::uninitialized() };
-        unsafe { snd_seq_client_info_malloc(&mut cinfo) };
+    pub unsafe fn allocate() -> ClientInfo {
+        let mut cinfo: *mut snd_seq_client_info_t = mem::uninitialized();
+        snd_seq_client_info_malloc(&mut cinfo);
         // TODO: check return value?
         ClientInfo { p: cinfo }
     }
@@ -168,16 +182,16 @@ impl ClientInfo {
         self.p
     }
     
-    pub unsafe fn set_client(&mut self, client: i32) {
-        snd_seq_client_info_set_client(self.p, client);
+    pub fn set_client(&mut self, client: i32) {
+        unsafe { snd_seq_client_info_set_client(self.p, client) };
     }
     
-    pub unsafe fn get_client(&self) -> i32 {
-        snd_seq_client_info_get_client(self.p)
+    pub fn get_client(&self) -> i32 {
+        unsafe { snd_seq_client_info_get_client(self.p) }
     }
     
-    pub unsafe fn get_name(&self) -> &str {
-        let name_bytes = CStr::from_ptr(snd_seq_client_info_get_name(self.p)).to_bytes(); 
+    pub fn get_name(&self) -> &str {
+        let name_bytes = unsafe { CStr::from_ptr(snd_seq_client_info_get_name(self.p)).to_bytes() }; 
         str::from_utf8(name_bytes).ok().expect("Error converting name to UTF8")
     }
 }
@@ -188,14 +202,15 @@ impl Drop for ClientInfo {
     }
 }
 
+#[derive(Debug)]
 pub struct PortInfo {
     p: *mut snd_seq_port_info_t
 }
 
 impl PortInfo {
-    pub fn allocate() -> PortInfo {
-        let mut pinfo: *mut snd_seq_port_info_t = unsafe { mem::uninitialized() };
-        unsafe { snd_seq_port_info_malloc(&mut pinfo) };
+    pub unsafe fn allocate() -> PortInfo {
+        let mut pinfo: *mut snd_seq_port_info_t = mem::uninitialized();
+        snd_seq_port_info_malloc(&mut pinfo);
         // TODO: check return value?
         PortInfo { p: pinfo }
     }
@@ -264,6 +279,7 @@ impl Drop for PortInfo {
     }
 }
 
+#[derive(Debug)]
 pub struct PortSubscription {
     p: *mut snd_seq_port_subscribe_t
 }
@@ -295,6 +311,7 @@ impl Drop for PortSubscription {
     }
 }
 
+#[derive(Debug)]
 pub struct EventDecoder {
     p: *mut snd_midi_event_t
 }
@@ -329,6 +346,7 @@ impl Drop for EventDecoder {
     }
 }
 
+#[derive(Debug)]
 pub struct Event {
     p: *const snd_seq_event_t
 }
