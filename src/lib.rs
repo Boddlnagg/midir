@@ -1,4 +1,4 @@
-#![feature(heap_api, vec_push_all)]
+#![feature(vec_push_all)]
 //#![allow(raw_pointer_derive, unused_must_use)]
 
 extern crate alsa_sys;

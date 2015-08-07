@@ -2,11 +2,9 @@
 
 use std::mem;
 use std::ptr;
-use std::rt::heap::{allocate, deallocate};
 use std::ffi::CString;
 use std::thread::{Builder, JoinHandle};
 use std::io::{stderr, Write};
-use std::slice;
 use std::sync::{Arc, RwLock, Mutex};
 
 use super::Error::*;
@@ -176,27 +174,22 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
     return;
   }
   
-  let mut buffer = {
-    let buffer_ptr = unsafe { allocate(init_buffer_size as usize, mem::align_of::<u8>()) };
-    if buffer_ptr.is_null() {
-      *data.do_input.write().unwrap() = false;
-      unsafe { snd_midi_event_free(data.coder) };
-      data.coder = ptr::null_mut();
-      write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: error initializing buffer memory!\n\n");
-      return;
-    }
-    unsafe { slice::from_raw_parts_mut(buffer_ptr, init_buffer_size) }
+  let mut buffer = unsafe {
+    let mut vec = Vec::with_capacity(init_buffer_size);
+    vec.set_len(init_buffer_size);
+    vec.into_boxed_slice()
   };
   
-  let poll_fds: &mut [pollfd];
+  let mut poll_fds: Box<[pollfd]>;
   unsafe {
     snd_midi_event_init(data.coder);
     snd_midi_event_no_status(data.coder, 1); // suppress running status messages
 
     let poll_fd_count = (snd_seq_poll_descriptors_count(*data.seq.read().unwrap(), POLLIN ) + 1) as usize;
-    let poll_fds_ptr: *mut pollfd = mem::transmute(allocate(poll_fd_count * mem::size_of::<pollfd>(), mem::align_of::<pollfd>())); 
-    poll_fds = slice::from_raw_parts_mut(poll_fds_ptr, poll_fd_count);
-    snd_seq_poll_descriptors(*data.seq.read().unwrap(), poll_fds_ptr.offset(1), poll_fd_count as u32 - 1, POLLIN );
+    let mut vec = Vec::with_capacity(poll_fd_count);
+    vec.set_len(poll_fd_count);
+    poll_fds = vec.into_boxed_slice();
+    snd_seq_poll_descriptors(*data.seq.read().unwrap(), poll_fds.as_mut_ptr().offset(1), poll_fd_count as u32 - 1, POLLIN );
   }
   poll_fds[0].fd = data.trigger_fds.read().unwrap()[0];
   poll_fds[0].events = POLLIN;
@@ -205,7 +198,7 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
 
     if unsafe { snd_seq_event_input_pending(*data.seq.read().unwrap(), 1) } == 0 {
       // No data pending
-      if poll(poll_fds, -1) >= 0 {
+      if poll(&mut poll_fds, -1) >= 0 {
         if poll_fds[0].revents & POLLIN != 0 {
           let mut dummy: bool = unsafe { mem::uninitialized() };
           let _res = unsafe { ::libc::read(poll_fds[0].fd, mem::transmute(&mut dummy), mem::size_of::<bool>() as ::libc::size_t) };
@@ -272,13 +265,11 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
           let data_len = unsafe { (*ev.data.ext()).len } as usize;
           let buffer_len = buffer.len();
           if data_len > buffer_len {
-            unsafe {
-              deallocate(buffer.as_mut_ptr(), buffer_len, mem::align_of::<u8>());
-              buffer = slice::from_raw_parts_mut(
-                allocate(data_len, mem::align_of::<u8>()),
-                data_len
-              );
-            }
+            buffer = unsafe {
+              let mut vec = Vec::with_capacity(data_len);
+              vec.set_len(data_len);
+              vec.into_boxed_slice()
+            };
             if buffer.as_ptr().is_null() {
               *data.do_input.write().unwrap() = false;
               write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: error resizing buffer memory!\n\n");
@@ -360,10 +351,7 @@ fn alsa_midi_handler(mut data: AlsaMidiInData) {
     }
   }
   
-  unsafe {
-    if !buffer.as_ptr().is_null() { deallocate(buffer.as_mut_ptr(), buffer.len(), mem::align_of::<u8>()); }
-    snd_midi_event_free( data.coder );
-  }
+  unsafe { snd_midi_event_free( data.coder ) }
   data.coder = ptr::null_mut();
 }
 
