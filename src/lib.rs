@@ -1,9 +1,9 @@
 #![feature(vec_push_all, box_raw, heap_api)]
 
-#[cfg(linux)] extern crate libc;
-#[cfg(linux)] extern crate alsa_sys;
-#[cfg(windows)] extern crate winapi;
-#[cfg(windows)] extern crate winmm as winmm_sys;
+#[cfg(target_os="linux")] extern crate libc;
+#[cfg(target_os="linux")] extern crate alsa_sys;
+#[cfg(target_os="windows")] extern crate winapi;
+#[cfg(target_os="windows")] extern crate winmm as winmm_sys;
 
 // TODO: use Cow<str> instead of String?
 // TODO: get rid of unused error types
@@ -105,8 +105,8 @@ pub trait MidiOutApi : MidiApi {
 }
 
 // TODO: allow feature selection (ALSA and/or Jack)
-#[cfg(linux)]
+#[cfg(target_os="linux")]
 pub mod alsa;
 
-#[cfg(windows)]
+#[cfg(target_os="windows")]
 pub mod winmm;
