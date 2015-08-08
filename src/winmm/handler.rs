@@ -17,14 +17,11 @@ pub extern "C" fn handle_input(_: HMIDIIN,
     
     // Calculate time stamp.
     let timestamp = timestamp as u64;
-    if data.first_message == true {
-        data.message.timestamp = 0.0;
-        data.first_message = false;
-    }
-    else {
-        data.message.timestamp = (timestamp - data.last_time) as f64 * 0.001;
-    }
-    data.last_time = timestamp;
+    data.message.timestamp = match data.last_time {
+        None => 0.0,
+        Some(last) => (timestamp - last) as f64 * 0.001
+    };
+    data.last_time = Some(timestamp);
     
     if input_status == MM_MIM_DATA { // Channel or system message
         // Make sure the first byte is a status byte.

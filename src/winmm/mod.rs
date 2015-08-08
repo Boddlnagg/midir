@@ -79,9 +79,8 @@ pub struct MidiInputConnection {
 }
 
 struct HandlerData {
-    first_message: bool,
     message: MidiMessage,
-    last_time: u64, // TODO: combine first_message and last_time into single Option<>
+    last_time: Option<u64>,
     sysex_buffer: [LPMIDIHDR; RT_SYSEX_BUFFER_COUNT],
     in_handle: Option<Mutex<HMIDIIN>>,
     ignore_flags: Ignore,
@@ -126,9 +125,8 @@ impl MidiInput {
         where F: FnMut(f64, &Vec<u8>)+Send+'static {
         
         let mut handler_data = Box::new(HandlerData {
-            first_message: true,
             message: MidiMessage::new(),
-            last_time: 0,
+            last_time: None,
             sysex_buffer: unsafe { mem::uninitialized() },
             in_handle: None,
             ignore_flags: self.ignore_flags,

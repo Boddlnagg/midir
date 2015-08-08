@@ -40,7 +40,7 @@ fn main() {
         let mut conn_out = match midi_out.unwrap().connect(1, "RtMidi") {
             Ok(c) => c,
             Err(err) => {
-                println!("Error opening input connection: {:?}", err);
+                println!("Error opening output connection: {:?}", err);
                 return;
             }
         };
