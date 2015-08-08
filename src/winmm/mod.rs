@@ -119,6 +119,8 @@ extern "C" fn midi_input_callback(_: HMIDIIN,
             // Sysex message and we're not ignoring it
             let bytes: &[u8] = unsafe { slice::from_raw_parts(sysex.lpData as *const u8, sysex.dwBytesRecorded as usize) };
             data.message.bytes.push_all(bytes);
+            // TODO: If sysex messages are longer than RT_SYSEX_BUFFER_SIZE, they
+            //       are split in chunks. We could reassemble a single message.
         }
     
         // The WinMM API requires that the sysex buffer be requeued after
