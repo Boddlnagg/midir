@@ -1,9 +1,10 @@
 use std::{mem, ptr, slice};
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
-use std::sync::{Arc, Mutex};
+use std::sync::{Mutex};
 use std::io::{stderr, Write};
 use std::rt::heap;
+use std::thread::sleep_ms;
 
 use winapi::*;
 
@@ -17,7 +18,16 @@ use winmm_sys::{
     midiInStop,
     midiInAddBuffer,
     midiInPrepareHeader,
-    midiInUnprepareHeader
+    midiInUnprepareHeader,
+    midiOutGetNumDevs,
+    midiOutGetDevCapsW,
+    midiOutOpen,
+    midiOutReset,
+    midiOutClose,
+    midiOutPrepareHeader,
+    midiOutUnprepareHeader,
+    midiOutLongMsg,
+    midiOutShortMsg,
 };
 
 use super::Error::*;
@@ -90,24 +100,21 @@ extern "C" fn midi_input_callback(_: HMIDIIN,
         if !(status & 0x80 != 0) { return; }
         
         // Determine the number of bytes in the MIDI message.
-        let mut nbytes: u16 = 1;
-        if status < 0xC0 { nbytes = 3 }
-        else if status < 0xE0 { nbytes = 2 }
-        else if status < 0xF0 { nbytes = 3 }
+        let nbytes: u16 = if status < 0xC0 { 3 }
+        else if status < 0xE0 { 2 }
+        else if status < 0xF0 { 3 }
         else if status == 0xF1 {
             if ignore_flags & 0x02 != 0 { return; }
-            else  { nbytes = 2 }
-        }
-        else if status == 0xF2 { nbytes = 3; }
-        else if status == 0xF3 { nbytes = 2; }
+            else  { 2 }
+        } else if status == 0xF2 { 3 }
+        else if status == 0xF3 { 2 }
         else if status == 0xF8 && (ignore_flags & 0x02 != 0) {
             // A MIDI timing tick message and we're ignoring it.
             return;
-        }
-        else if status == 0xFE && (ignore_flags & 0x04 != 0) {
+        } else if status == 0xFE && (ignore_flags & 0x04 != 0) {
             // A MIDI active sensing message and we're ignoring it.
             return;
-        }
+        } else { 1 };
         
         // Copy bytes to our MIDI message.
         let ptr = (&midi_message) as *const u64 as *const u8;
@@ -196,7 +203,7 @@ impl MidiApi for MidiInWinMM {
         Ok(output)
     }
     
-    fn open_port(&mut self, port_number: u32 /*= 0*/, port_name: &str /*= "RtMidi"*/) -> Result<()> {
+    fn open_port(&mut self, port_number: u32 /*= 0*/, _port_name: &str /*= "RtMidi"*/) -> Result<()> {
         if self.connected {
             let error_string = "MidiInWinMM::openPort: a valid connection already exists!";
             return Err(Warning(error_string));
@@ -270,19 +277,20 @@ impl MidiApi for MidiInWinMM {
     fn close_port(&mut self) {
         if self.connected {
             // for information about his lock, see https://groups.google.com/forum/#!topic/mididev/6OUjHutMpEo
-            let in_handle = self.handler_data.in_handle.as_mut().unwrap().lock().unwrap();
+            let mut in_handle = self.handler_data.in_handle.take();
+            let in_handle_lock = in_handle.as_mut().unwrap().lock().unwrap();
             
             // TODO: Call both reset and stop here? The difference seems to be that
             //       reset "returns all pending input buffers to the callback function"
             unsafe {
-                midiInReset(*in_handle);
-                midiInStop(*in_handle);
+                midiInReset(*in_handle_lock);
+                midiInStop(*in_handle_lock);
             }
             
             for i in 0..RT_SYSEX_BUFFER_COUNT {
                 let _result;
                 unsafe {
-                    _result = midiInUnprepareHeader(*in_handle, self.handler_data.sysex_buffer[i], mem::size_of::<MIDIHDR>() as u32);
+                    _result = midiInUnprepareHeader(*in_handle_lock, self.handler_data.sysex_buffer[i], mem::size_of::<MIDIHDR>() as u32);
                     heap::deallocate((*self.handler_data.sysex_buffer[i]).lpData as *mut u8, RT_SYSEX_BUFFER_SIZE, mem::align_of::<u8>());
                     heap::deallocate(self.handler_data.sysex_buffer[i] as *mut u8, mem::size_of::<MIDIHDR>(), mem::align_of::<MIDIHDR>());
                 }
@@ -295,7 +303,7 @@ impl MidiApi for MidiInWinMM {
                 }*/
             }
             
-            unsafe { midiInClose(*in_handle) };
+            unsafe { midiInClose(*in_handle_lock) };
             self.connected = false;
         }
     }
@@ -380,5 +388,172 @@ impl MidiInApi for MidiInWinMM {
         }
     
         delta_time
+    }
+}
+
+impl Drop for MidiInWinMM {
+    fn drop(&mut self) {
+        self.close_port();
+    }
+}
+
+pub struct MidiOutWinMM {
+	connected: bool,
+    out_handle: Option<HMIDIOUT>,
+}
+
+impl MidiApi for MidiOutWinMM {
+    fn get_port_count(&self) -> u32 {
+        unsafe { midiOutGetNumDevs() }
+    }
+    
+    fn get_port_name(&self, port_number: u32 /*= 0*/) -> Result<String> {
+        use std::fmt::Write;
+        
+        let ndevices = self.get_port_count();
+        if port_number >= ndevices {
+            use std::fmt::Write; 
+            let mut error_string = String::new();
+            let _ = write!(error_string, "MidiInWinMM::getPortName: the 'portNumber' argument ({}) is invalid.", port_number); 
+            return Err(InvalidParameter(error_string));
+        }
+        
+        let mut device_caps: MIDIOUTCAPSW = unsafe { mem::uninitialized() };
+        unsafe { midiOutGetDevCapsW(port_number as u64, &mut device_caps, mem::size_of::<MIDIOUTCAPSW>() as u32) };
+        let mut output = from_wide_ptr(device_caps.szPname.as_ptr(), device_caps.szPname.len()).to_string_lossy().into_owned();
+        
+        // Next lines added to add the portNumber to the name so that 
+        // the device's names are sure to be listed with individual names
+        // even when they have the same brand name
+        let _ = write!(&mut output, " {}", port_number);
+        Ok(output)
+    }
+    
+    fn open_port(&mut self, port_number: u32 /*= 0*/, _port_name: &str /*= "RtMidi"*/) -> Result<()> {
+        if self.connected {
+            let error_string = "MidiOutWinMM::openPort: a valid connection already exists!";
+            return Err(Warning(error_string));
+        }
+       
+        let ndevices = self.get_port_count();
+        
+        if port_number >= ndevices {
+            use std::fmt::Write; 
+            let mut error_string = String::new();
+            let _ = write!(error_string, "MidiOutWinMM::openPort: the 'portNumber' argument ({}) is invalid.", port_number); 
+            return Err(InvalidParameter(error_string));
+        }
+        
+        let mut out_handle = unsafe { mem::uninitialized() };
+        
+        let result = unsafe { midiOutOpen(&mut out_handle, port_number, 0, 0, CALLBACK_NULL) };
+        if result != MMSYSERR_NOERROR {
+            let error_string = "MidiOutWinMM::openPort: error creating Windows MM MIDI output port.";
+            return Err(DriverError(error_string));
+        }
+        
+        self.connected = true;
+        self.out_handle = Some(out_handle);
+        Ok(())
+    }
+    
+    fn close_port(&mut self) {
+        if self.connected {
+            let out_handle = self.out_handle.take().unwrap();
+            unsafe {
+                midiOutReset(out_handle);
+                midiOutClose(out_handle);
+            }
+            self.connected = false;
+        }
+    }
+    
+    fn is_port_open(&self) -> bool {
+        self.connected
+    }
+}
+
+impl MidiOutApi for MidiOutWinMM {
+    fn new(_client_name: &str /*= "RtMidi Output Client"*/) -> Result<Self> {
+        Ok(MidiOutWinMM {
+            connected: false,
+            out_handle: None
+        })
+    }
+    
+    fn send_message(&mut self, message: &[u8]) -> Result<()> {
+        // TODO: replace this with static guarantee (sending only possible on open port)
+        if !self.connected { return Err(InvalidUse); }
+        
+        let nbytes = message.len();
+        
+        if nbytes == 0 {
+            // TODO: probably replace with debug_assert
+            let error_string = "MidiOutWinMM::sendMessage: message argument is empty!";
+            return Err(Warning(error_string));
+        }
+        
+        if message[0] == 0xF0 { // Sysex message
+            // Allocate buffer for sysex data and copy message
+            let mut buffer = message.to_vec();
+        
+            // Create and prepare MIDIHDR structure.
+            let mut sysex = MIDIHDR {
+                lpData: buffer.as_mut_ptr() as *mut i8,
+                dwBufferLength: nbytes as u32,
+                dwBytesRecorded: 0,
+                dwUser: 0,
+                dwFlags: 0,
+                lpNext: ptr::null_mut(),
+                reserved: 0,
+                dwOffset: 0,
+                dwReserved: [0; 4],
+            };
+            let result = unsafe { midiOutPrepareHeader(*self.out_handle.as_ref().unwrap(), &mut sysex, mem::size_of::<MIDIHDR>() as u32) }; 
+            if result != MMSYSERR_NOERROR {
+                let error_string = "MidiOutWinMM::sendMessage: error preparing sysex header.";
+                return Err(DriverError(error_string));
+            }
+            
+            // Send the message.
+            let result = unsafe { midiOutLongMsg(*self.out_handle.as_ref().unwrap(), &mut sysex, mem::size_of::<MIDIHDR>() as u32) };
+            if result != MMSYSERR_NOERROR {
+                let error_string = "MidiOutWinMM::sendMessage: error sending sysex message.";
+                return Err(DriverError(error_string));
+            }
+        
+            // Unprepare the buffer and MIDIHDR.
+            while MIDIERR_STILLPLAYING == unsafe { midiOutUnprepareHeader(*self.out_handle.as_ref().unwrap(), &mut sysex, mem::size_of::<MIDIHDR>() as u32) } {
+                sleep_ms(1);
+            }
+        } else { // Channel or system message.
+            // Make sure the message size isn't too big.
+            if nbytes > 3 {
+                // TODO: change this into assert
+                let error_string = "MidiOutWinMM::sendMessage: message size is greater than 3 bytes (and not sysex)!";
+                return Err(Warning(error_string));
+            }
+            
+            // Pack MIDI bytes into double word.
+            let packet: DWORD = 0;
+            let ptr = &packet as *const u32 as *mut u8;
+            for i in 0..nbytes {
+                unsafe { *ptr.offset(i as isize) = message[i] };
+            }
+            
+            // Send the message immediately.
+            let result = unsafe { midiOutShortMsg(*self.out_handle.as_ref().unwrap(), packet) };
+            if result != MMSYSERR_NOERROR {
+                let error_string = "MidiOutWinMM::sendMessage: error sending MIDI message.";
+                return Err(DriverError(error_string));
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Drop for MidiOutWinMM {
+    fn drop(&mut self) {
+        self.close_port();
     }
 }

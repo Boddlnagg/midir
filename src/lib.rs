@@ -25,10 +25,10 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub trait MidiApi {
-    fn open_port(&mut self, port_number: u32 /*= 0*/, port_name: &str /*= "RtMidi"*/) -> Result<()>;
-    //fn open_virtual_port(port_name: &str/*= "RtMidi"*/);
     fn get_port_count(&self) -> u32;
     fn get_port_name(&self, port_number: u32 /*= 0*/) -> Result<String>;
+    fn open_port(&mut self, port_number: u32 /*= 0*/, port_name: &str /*= "RtMidi"*/) -> Result<()>;
+    //fn open_virtual_port(port_name: &str/*= "RtMidi"*/);
     fn close_port(&mut self);
     fn is_port_open(&self) -> bool;
 }
