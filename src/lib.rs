@@ -5,6 +5,9 @@
 #[cfg(target_os="windows")] extern crate winapi;
 #[cfg(target_os="windows")] extern crate winmm as winmm_sys;
 
+use std::ops::BitOr;
+use std::mem;
+
 // TODO: use Cow<str> instead of String?
 // TODO: get rid of unused error types
 #[derive(Debug)]
@@ -23,6 +26,35 @@ pub enum Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy)]
+pub enum Ignore {
+    None = 0x00,
+    Sysex = 0x01,
+    Time = 0x02,
+    SysexAndTime = 0x03,
+    ActiveSense = 0x04,
+    SysexAndActiveSense = 0x05,
+    TimeAndActiveSense = 0x06,
+    All = 0x07
+}
+
+impl BitOr for Ignore {
+    type Output = Ignore;
+    #[inline(always)]
+    fn bitor(self, rhs: Self) -> Self::Output {
+        // this is safe because all combinations also exist as variants
+        unsafe { mem::transmute(self as u8 | rhs as u8) }
+    }
+}
+
+impl Ignore {
+    #[inline(always)]
+    pub fn contains(self, other: Ignore) -> bool {
+        self as u8 & other as u8 != 0 
+    }
+}
 
 pub trait MidiApi {
     fn get_port_count(&self) -> u32;

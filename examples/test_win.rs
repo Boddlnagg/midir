@@ -3,44 +3,64 @@ extern crate midir;
 use std::thread::sleep_ms;
 use std::io::stdin;
 
-use midir::{MidiApi, MidiInApi, MidiOutApi};
-use midir::winmm::{MidiInWinMM, MidiOutWinMM};
+use midir::winmm::{MidiInput, MidiOutput};
+use midir::Ignore;
 
 fn main() {
-    let mut midi_in = MidiInWinMM::new("My Test", 100).unwrap();
-    let mut midi_out = MidiOutWinMM::new("My Test").unwrap();
-    let count_in = midi_in.get_port_count();
-    println!("Number of input devices: {}", count_in);
-    for i in 0..count_in {
-        println!("{}: {}", i, midi_in.get_port_name(i).unwrap());
+    let mut midi_in = MidiInput::new("My Test");
+    midi_in.ignore(Ignore::None);
+    let mut midi_out = MidiOutput::new("My Test");
+    
+    println!("Input devices:");
+    for i in 0..midi_in.port_count() {
+        println!("{}: {}", i, midi_in.port_name(i).unwrap());
     }
-    let count_out = midi_out.get_port_count();
-    println!("Number of output devices: {}", count_out);
-    for i in 0..count_out {
-        println!("{}: {}", i, midi_out.get_port_name(i).unwrap());
+    
+    println!("\nOutput devices:");
+    for i in 0..midi_out.port_count() {
+        println!("{}: {}", i, midi_out.port_name(i).unwrap());
     }
-    println!("Opening ports");
-    midi_in.open_port(0, "RtMidi").unwrap();
-    midi_out.open_port(1, "RtMidi").unwrap();
-    midi_in.ignore_types(false, false, false);
-    midi_in.set_callback(|stamp, message| {
-        println!("{}: {:?} (len = {})", stamp, message, message.len());
-    });
-    println!("Ports open, enter `q` to exit ...");
-    let mut input = String::new();
-    loop {
-        stdin().read_line(&mut input).unwrap();
-        if (input.trim() == "q") {
-            break;
-        } else {
-            midi_out.send_message(&[144, 60, 1]);
-            sleep_ms(200);
-            midi_out.send_message(&[144, 60, 0]);
+    
+    let mut midi_in = Some(midi_in);
+    let mut midi_out = Some(midi_out);
+    
+    // This shows how to reuse input and output objects
+    for _ in 0..2 {
+        println!("\nOpening connections");
+        let conn_in = match midi_in.unwrap().connect(0, "RtMidi", |stamp, message| {
+            println!("{}: {:?} (len = {})", stamp, message, message.len());
+        }) {
+            Ok(c) => c,
+            Err(err) => {
+                println!("Error opening input connection: {:?}", err);
+                return;
+            }
+        };
+        
+        let mut conn_out = match midi_out.unwrap().connect(1, "RtMidi") {
+            Ok(c) => c,
+            Err(err) => {
+                println!("Error opening input connection: {:?}", err);
+                return;
+            }
+        };
+        
+        println!("Connections open, enter `q` to exit ...");
+        let mut input = String::new();
+        loop {
+            stdin().read_line(&mut input).unwrap();
+            if (input.trim() == "q") {
+                break;
+            } else {
+                conn_out.send_message(&[144, 60, 1]);
+                sleep_ms(200);
+                conn_out.send_message(&[144, 60, 0]);
+            }
+            input.clear();
         }
-        input.clear();
+        println!("Closing connections");
+        midi_in = Some(conn_in.close());
+        midi_out = Some(conn_out.close());
+        println!("Connections closed");
     }
-    println!("Closing ports");
-    midi_in.close_port();
-    midi_out.close_port();
-    println!("Ports closed");
 }
