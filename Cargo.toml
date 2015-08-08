@@ -3,6 +3,14 @@ name = "midir"
 version = "0.1.0"
 authors = ["Patrick Reisert"]
 
-[dependencies]
+[target.i686-unknown-linux-gnu.dependencies]
 alsa-sys = "0.0.8"
 libc = "*"
+
+[target.x86_64-unknown-linux-gnu.dependencies]
+alsa-sys = "0.0.8"
+libc = "*"
+
+[target.x86_64-pc-windows-gnu.dependencies]
+winapi = "0.2"
+winmm-sys = "0.1.1"

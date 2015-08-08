@@ -1,7 +1,9 @@
-#![feature(vec_push_all)]
+#![feature(vec_push_all, box_raw, heap_api)]
 
-extern crate alsa_sys;
-extern crate libc;
+#[cfg(linux)] extern crate libc;
+#[cfg(linux)] extern crate alsa_sys;
+#[cfg(windows)] extern crate winapi;
+#[cfg(windows)] extern crate winmm as winmm_sys;
 
 // TODO: use Cow<str> instead of String?
 // TODO: get rid of unused error types
@@ -57,7 +59,7 @@ pub trait MidiInApi : MidiApi {
 
 // A MIDI structure used internally by the class to store incoming
 // messages.  Each message represents one and only one MIDI message.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct MidiMessage {
     bytes: Vec<u8>,
     timestamp: f64
@@ -102,5 +104,9 @@ pub trait MidiOutApi : MidiApi {
     fn send_message(&mut self, message: &[u8]) -> Result<()>;
 }
 
-// TODO: include ALSA only if compiling for Linux (and ALSA feature is selected)
+// TODO: allow feature selection (ALSA and/or Jack)
+#[cfg(linux)]
 pub mod alsa;
+
+#[cfg(windows)]
+pub mod winmm;

@@ -56,6 +56,7 @@ use self::wrappers::{ClientInfo, PortInfo, PortSubscription};
 use self::wrappers::{EventDecoder, EventEncoder, Event};
 use self::wrappers::{pollfd, POLLIN, poll};
 
+// TODO: use bitflags! macro
 const SND_SEQ_PORT_TYPE_MIDI_GENERIC: u32 = 1<<1;
 const SND_SEQ_PORT_TYPE_SYNTH: u32 = 1<<10;
 const SND_SEQ_PORT_TYPE_APPLICATION: u32 = 1<<20;
@@ -70,15 +71,19 @@ struct AlsaMidiHandlerData {
     ignore_flags: Arc<Mutex<u8>>,
     do_input: Arc<Mutex<bool>>,
     first_message: bool,
-    using_callback: bool,
+    using_callback: bool, // TODO: unused?
     continue_sysex: bool,
     last_time: u64,
     // TODO: turn into read-only pointers?
     seq: Arc<Mutex<Sequencer>>,
     trigger_fds: Arc<Mutex<[i32; 2]>>,
-    callback: Arc<Mutex<Option<Box<FnMut(f64, &Vec<u8>)+Send>>>>
+    // TODO: make sure that changing callback from within callback doesn't deadlock
+    // (maybe don't allow that, instead create separate APIs for callback-based vs. queue-based
+    // ... queue-based can be implemented on top of callback-based)
+    callback: Arc<Mutex<Option<Box<FnMut(f64, &Vec<u8>)+Send>>>> 
 }
 
+// TODO: use a single Arc<Mutex<AlsaMidiHandlerData>>
 struct AlsaMidiInData {
     seq: Arc<Mutex<Sequencer>>,
     vport: i32,
@@ -516,7 +521,7 @@ impl MidiApi for MidiInAlsa {
 }
 
 impl MidiInApi for MidiInAlsa {
-    fn new(client_name: &str /*= "RtMidi Input Client"*/, queue_size_limit: usize /*= 100*/) -> Result<MidiInAlsa> {
+    fn new(client_name: &str /*= "RtMidi Input Client"*/, queue_size_limit: usize /*= 100*/) -> Result<Self> {
         // Set up the ALSA sequencer client.
         let mut seq = match Sequencer::open(SequencerOpenMode::Duplex, true) {
             Ok(s) => s,
@@ -603,10 +608,10 @@ impl MidiInApi for MidiInAlsa {
         if !previous.is_some() {
             let error_string = "RtMidiIn::cancelCallback: no callback function was set!";
             return Err(Warning(error_string));
-      }
+        }
       
-      *previous = None;
-      Ok(())
+        *previous = None;
+        Ok(())
     }
     
     fn ignore_types(&mut self, sysex: bool /*= true*/, time: bool /*= true*/, active_sense: bool /*= true*/) {
