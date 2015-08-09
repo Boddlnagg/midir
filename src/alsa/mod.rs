@@ -11,8 +11,6 @@ use super::{Result, MidiApi, MidiInApi, MidiOutApi, MidiQueue, MidiMessage};
 
 use alsa_sys::{
     snd_seq_t,
-    snd_seq_query_next_client,
-    snd_seq_query_next_port,
     snd_seq_addr_t,
     snd_seq_delete_port, // TODO: wrap
     snd_seq_subscribe_port,
@@ -51,15 +49,23 @@ unsafe fn snd_seq_start_queue(seq: *mut snd_seq_t, q: i32, ev: *mut snd_seq_even
 
 // Include ALSA wrappers
 mod wrappers;
-use self::wrappers::{Sequencer, SequencerOpenMode, QueueTempo};
-use self::wrappers::{ClientInfo, PortInfo, PortSubscription};
-use self::wrappers::{EventDecoder, EventEncoder, Event};
-use self::wrappers::{pollfd, POLLIN, poll};
+use self::wrappers::{
+    Sequencer,
+    SequencerOpenMode,
+    QueueTempo,
+    PortInfo,
+    PortSubscription,
+    EventDecoder,
+    EventEncoder,
+    Event,
+    pollfd,
+    POLLIN,
+    poll,
+    port_info,
+    SND_SEQ_PORT_TYPE_MIDI_GENERIC,
+    SND_SEQ_PORT_TYPE_APPLICATION
+};
 
-// TODO: use bitflags! macro
-const SND_SEQ_PORT_TYPE_MIDI_GENERIC: u32 = 1<<1;
-const SND_SEQ_PORT_TYPE_SYNTH: u32 = 1<<10;
-const SND_SEQ_PORT_TYPE_APPLICATION: u32 = 1<<20;
 const SND_SEQ_PORT_CAP_READ: u32 = 1<<0;
 const SND_SEQ_PORT_CAP_WRITE: u32 = 1<<1;
 const SND_SEQ_PORT_CAP_SUBS_READ: u32 = 1<<5;
@@ -89,38 +95,6 @@ struct HandlerData {
     // (maybe don't allow that, instead create separate APIs for callback-based vs. queue-based
     // ... queue-based can be implemented on top of callback-based)
     callback: Arc<Mutex<Option<Box<FnMut(f64, &Vec<u8>)+Send>>>> 
-}
-
-/// This function is used to count or get the pinfo structure for a given port number.
-/// TODO: introduce iterator
-fn port_info(seq: *const snd_seq_t, pinfo: &mut PortInfo, typ: u32, port_number: i32) -> Option<i32> {
-    let mut client;
-    let mut count = 0;
-    let mut cinfo = unsafe { ClientInfo::allocate() };
-    let seq = seq as *mut _;
-
-    cinfo.set_client(-1);
-    while unsafe { snd_seq_query_next_client(seq, cinfo.as_ptr()) } >= 0 {
-        client = cinfo.get_client();
-        if client == 0 { continue; }
-        // Reset query info
-        pinfo.set_client(client);
-        pinfo.set_port(-1);
-        while unsafe { snd_seq_query_next_port(seq, pinfo.as_ptr()) } >= 0 {
-            let atyp: u32 = pinfo.get_type();
-            if (atyp & SND_SEQ_PORT_TYPE_MIDI_GENERIC) == 0 &&
-                (atyp & SND_SEQ_PORT_TYPE_SYNTH ) == 0 { continue; }
-            let caps: u32 = pinfo.get_capability();
-            if (caps & typ) != typ { continue; }
-            if count == port_number { return Some(1); }
-            count += 1;
-        }
-    }
-
-    // If a negative portNumber was used, return the port count.
-    // TODO: This could be a separate function which returns a u32
-    if port_number < 0 { return Some(count) };
-    None
 }
 
 fn get_port_name(seq: &Sequencer, typ: u32, port_number: i32) -> Result<String> {

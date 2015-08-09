@@ -58,9 +58,10 @@ use alsa_sys::{
     snd_seq_queue_tempo_free,
     snd_seq_queue_tempo_set_tempo,
     snd_seq_queue_tempo_set_ppq,
-    snd_seq_timestamp_t
+    snd_seq_timestamp_t,
+    snd_seq_query_next_client,
+    snd_seq_query_next_port,
 };
-
 
 const SND_SEQ_OPEN_OUTPUT: i32 = 1;
 const SND_SEQ_OPEN_INPUT: i32 = 2;
@@ -69,6 +70,11 @@ const SND_SEQ_NONBLOCK: i32 = 0x0001;
 const SND_SEQ_ADDRESS_SUBSCRIBERS: u8 = 254;
 const SND_SEQ_ADDRESS_UNKNOWN: u8 = 253;
 const SND_SEQ_QUEUE_DIRECT: u8 = 253;
+
+// TODO: use bitflags! macro
+pub const SND_SEQ_PORT_TYPE_MIDI_GENERIC: u32 = 1<<1;
+pub const SND_SEQ_PORT_TYPE_SYNTH: u32 = 1<<10;
+pub const SND_SEQ_PORT_TYPE_APPLICATION: u32 = 1<<20;
 
 // TODO: try to make sure that wrapped pointers are directly initialized,
 //       then mark them as non-zero and use std::ptr::Unique where appropriate 
@@ -94,6 +100,38 @@ pub const POLLIN: i16 = 1;
 pub fn poll(fds: &mut [pollfd], timeout: i32) -> i32 {
     extern { fn poll(fds: *mut pollfd, nfds: u32, timeout: i32) -> i32; }
     unsafe { poll(fds.as_mut_ptr(), fds.len() as u32, timeout) }
+}
+
+/// This function is used to count or get the pinfo structure for a given port number.
+/// TODO: introduce iterator
+pub fn port_info(seq: *const snd_seq_t, pinfo: &mut PortInfo, typ: u32, port_number: i32) -> Option<i32> {
+    let mut client;
+    let mut count = 0;
+    let mut cinfo = unsafe { ClientInfo::allocate() };
+    let seq = seq as *mut _;
+
+    cinfo.set_client(-1);
+    while unsafe { snd_seq_query_next_client(seq, cinfo.as_ptr()) } >= 0 {
+        client = cinfo.get_client();
+        if client == 0 { continue; }
+        // Reset query info
+        pinfo.set_client(client);
+        pinfo.set_port(-1);
+        while unsafe { snd_seq_query_next_port(seq, pinfo.as_ptr()) } >= 0 {
+            let atyp: u32 = pinfo.get_type();
+            if (atyp & SND_SEQ_PORT_TYPE_MIDI_GENERIC) == 0 &&
+                (atyp & SND_SEQ_PORT_TYPE_SYNTH ) == 0 { continue; }
+            let caps: u32 = pinfo.get_capability();
+            if (caps & typ) != typ { continue; }
+            if count == port_number { return Some(1); }
+            count += 1;
+        }
+    }
+
+    // If a negative portNumber was used, return the port count.
+    // TODO: This could be a separate function which returns a u32
+    if port_number < 0 { return Some(count) };
+    None
 }
 
 #[repr(i32)]
