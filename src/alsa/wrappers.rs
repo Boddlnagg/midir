@@ -103,8 +103,8 @@ pub fn poll(fds: &mut [pollfd], timeout: i32) -> i32 {
 }
 
 /// This function is used to count or get the pinfo structure for a given port number.
-/// TODO: introduce iterator
-pub fn port_info(seq: *const snd_seq_t, pinfo: &mut PortInfo, typ: u32, port_number: i32) -> Option<i32> {
+/// TODO: introduce iterator?
+pub fn get_port_info(seq: *const snd_seq_t, pinfo: &mut PortInfo, typ: u32, port_number: i32) -> Option<i32> {
     let mut client;
     let mut count = 0;
     let mut cinfo = unsafe { ClientInfo::allocate() };
@@ -132,6 +132,27 @@ pub fn port_info(seq: *const snd_seq_t, pinfo: &mut PortInfo, typ: u32, port_num
     // TODO: This could be a separate function which returns a u32
     if port_number < 0 { return Some(count) };
     None
+}
+
+pub fn get_port_name(seq: &Sequencer, typ: u32, port_number: i32) -> Result<String, ()> {
+    use std::fmt::Write;
+    
+    let mut pinfo = unsafe { PortInfo::allocate() };
+    
+    if get_port_info(seq.as_ptr(), &mut pinfo, typ, port_number).is_some() {
+        let cnum: i32 = pinfo.get_client();    
+        let cinfo = seq.get_any_client_info(cnum);
+        let mut output = String::new();
+        write!(&mut output, "{} {}:{}", 
+            cinfo.get_name(),
+            pinfo.get_client(), // These lines added to make sure devices are listed
+            pinfo.get_port()    // with full portnames added to ensure individual device names
+        ).unwrap();
+        Ok(output)
+    } else {
+        // If we get here, we didn't find a match.
+        Err(())
+    }
 }
 
 #[repr(i32)]

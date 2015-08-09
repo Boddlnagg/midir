@@ -30,22 +30,9 @@ use winmm_sys::{
     midiOutShortMsg,
 };
 
-use super::{MidiMessage, Ignore};
+use super::{MidiMessage, Ignore, PortInfoError, ConnectError};
 
 mod handler;
-
-// TODO: move errors into top-level and create abstraction traits
-
-#[derive(Debug)]
-pub enum PortInfoError {
-    PortNumberOutOfRange,
-}
-
-#[derive(Debug)]
-pub enum ConnectError<T> {
-    PortNumberOutOfRange(T),
-    Unspecified(T)
-}
 
 impl<T> ConnectError<T> {
     pub fn into_inner(self) -> T {
@@ -118,7 +105,6 @@ impl MidiInput {
         Ok(output)
     }
     
-    // TODO: add ability to set (but not change) filter flags, in a type-safe way
     pub fn connect<F>(
         self, port_number: u32, _port_name: &str, callback: F
     ) -> Result<MidiInputConnection, ConnectError<MidiInput>>
@@ -188,7 +174,6 @@ impl MidiInput {
 }
 
 impl MidiInputConnection {
-    // TODO: really return MidiInput again?
     pub fn close(self) -> MidiInput {
         // The actual closing is done by the implementation of Drop
         MidiInput {
@@ -226,6 +211,7 @@ impl MidiInputConnection {
 
 impl Drop for MidiInputConnection {
     fn drop(&mut self) {
+        // TODO: move implementation here directly
         self.close_internal();
     }
 }

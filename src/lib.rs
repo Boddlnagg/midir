@@ -27,6 +27,20 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+// TODO: create abstraction traits for MidiInput, etc
+
+#[derive(Debug)]
+pub enum PortInfoError {
+    PortNumberOutOfRange,
+}
+
+// TODO: implement (not derive) Debug, Show, ... without using inner T
+#[derive(Debug)]
+pub enum ConnectError<T> {
+    PortNumberOutOfRange(T),
+    Unspecified(T) // TODO: maybe add a &str description?
+}
+
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]
 pub enum Ignore {

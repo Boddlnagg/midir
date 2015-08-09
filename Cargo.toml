@@ -3,6 +3,9 @@ name = "midir"
 version = "0.1.0"
 authors = ["Patrick Reisert"]
 
+[features]
+avoid_timestamping = []
+
 [target.i686-unknown-linux-gnu.dependencies]
 alsa-sys = "0.0.8"
 libc = "*"
