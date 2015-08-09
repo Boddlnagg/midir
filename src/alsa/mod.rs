@@ -65,24 +65,6 @@ const SND_SEQ_PORT_CAP_WRITE: u32 = 1<<1;
 const SND_SEQ_PORT_CAP_SUBS_READ: u32 = 1<<5;
 const SND_SEQ_PORT_CAP_SUBS_WRITE: u32 = 1<<6;
 
-struct AlsaMidiHandlerData {
-    queue: Arc<Mutex<MidiQueue>>,
-    message: MidiMessage,
-    ignore_flags: Arc<Mutex<u8>>,
-    do_input: Arc<Mutex<bool>>,
-    first_message: bool,
-    using_callback: bool, // TODO: unused?
-    continue_sysex: bool,
-    last_time: u64,
-    // TODO: turn into read-only pointers?
-    seq: Arc<Mutex<Sequencer>>,
-    trigger_fds: Arc<Mutex<[i32; 2]>>,
-    // TODO: make sure that changing callback from within callback doesn't deadlock
-    // (maybe don't allow that, instead create separate APIs for callback-based vs. queue-based
-    // ... queue-based can be implemented on top of callback-based)
-    callback: Arc<Mutex<Option<Box<FnMut(f64, &Vec<u8>)+Send>>>> 
-}
-
 // TODO: use a single Arc<Mutex<AlsaMidiHandlerData>>
 struct AlsaMidiInData {
     seq: Arc<Mutex<Sequencer>>,
@@ -96,180 +78,17 @@ struct AlsaMidiInData {
     callback: Arc<Mutex<Option<Box<FnMut(f64, &Vec<u8>)+Send>>>>
 }
 
-fn alsa_midi_handler(mut data: AlsaMidiHandlerData) {
-    let mut time: u64;
-    let mut last_time: u64;
-    let mut continue_sysex: bool = false;
-    
-    let init_buffer_size = 32;
-    
-    let mut buffer = unsafe {
-        let mut vec = Vec::with_capacity(init_buffer_size);
-        vec.set_len(init_buffer_size);
-        vec.into_boxed_slice()
-    };
-    
-    let mut coder = EventDecoder::new(false);
-    
-    let mut poll_fds: Box<[pollfd]>;
-    unsafe {
-        let poll_fd_count = (data.seq.lock().unwrap().poll_descriptors_count(POLLIN) + 1) as usize;
-        let mut vec = Vec::with_capacity(poll_fd_count);
-        vec.set_len(poll_fd_count);
-        poll_fds = vec.into_boxed_slice();
-    }
-    data.seq.lock().unwrap().poll_descriptors(&mut poll_fds[1..], POLLIN); 
-    poll_fds[0].fd = data.trigger_fds.lock().unwrap()[0];
-    poll_fds[0].events = POLLIN;
-    
-    while *data.do_input.lock().unwrap() {
-
-        if unsafe { snd_seq_event_input_pending(data.seq.lock().unwrap().as_mut_ptr(), 1) } == 0 {
-            // No data pending
-            if poll(&mut poll_fds, -1) >= 0 {
-                if poll_fds[0].revents & POLLIN != 0 {
-                    let mut dummy: bool = unsafe { mem::uninitialized() };
-                    let _res = unsafe { ::libc::read(poll_fds[0].fd, mem::transmute(&mut dummy), mem::size_of::<bool>() as ::libc::size_t) };
-                }
-            }
-            continue;
-        }
-
-        // If here, there should be data.
-        let mut ev = match data.seq.lock().unwrap().event_input() {
-            Ok((ev, _)) => ev,
-            Err(e) if e == -::libc::consts::os::posix88::ENOSPC => {
-                let _ = write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: MIDI input buffer overrun!\n\n");
-                continue;
-            },
-            Err(_) => {
-                let _ = write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: unknown MIDI input error!\n");
-                //perror("System reports");
-                continue;
-            }
-        };
-        
-        let mut message = MidiMessage::new();
-
-        // This is a bit weird, but we now have to decode an ALSA MIDI
-        // event (back) into MIDI bytes. We'll ignore non-MIDI types.
-        if !continue_sysex { message.bytes.clear() }
-        
-        let ignore_flags: u8 = *data.ignore_flags.lock().unwrap();
-        let do_decode = match ev._type as u32 {
-            SND_SEQ_EVENT_PORT_SUBSCRIBED => {
-                if cfg!(debug) { println!("MidiInAlsa::alsaMidiHandler: port connection made!") };
-                false
-            },
-            SND_SEQ_EVENT_PORT_UNSUBSCRIBED => {
-                if cfg!(debug) {
-                    let _ = writeln!(stderr(), "MidiInAlsa::alsaMidiHandler: port connection has closed!");
-                    let connect = unsafe { &*ev.data.connect() };
-                    println!("sender = {}:{}, dest = {}:{}",
-                        connect.sender.client,
-                        connect.sender.port,
-                        connect.dest.client,
-                        connect.dest.port
-                    );
-                }
-                false
-            },
-            SND_SEQ_EVENT_QFRAME => { // MIDI time code
-                ignore_flags & 0x02 == 0
-            },
-            SND_SEQ_EVENT_TICK => { // 0xF9 ... MIDI timing tick
-                ignore_flags & 0x02 == 0
-            },
-            SND_SEQ_EVENT_CLOCK => { // 0xF8 ... MIDI timing (clock) tick
-                ignore_flags & 0x02 == 0
-            },
-            SND_SEQ_EVENT_SENSING => { // Active sensing
-                ignore_flags & 0x04 == 0
-            },
-            SND_SEQ_EVENT_SYSEX => {
-                if ignore_flags & 0x01 != 0 { false }
-                else {
-                    let data_len = unsafe { (*ev.data.ext()).len } as usize;
-                    let buffer_len = buffer.len();
-                    if data_len > buffer_len {
-                        buffer = unsafe {
-                            let mut vec = Vec::with_capacity(data_len);
-                            vec.set_len(data_len);
-                            vec.into_boxed_slice()
-                        };
-                        if buffer.as_ptr().is_null() {
-                            *data.do_input.lock().unwrap() = false;
-                            let _ = write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: error resizing buffer memory!\n\n");
-                            false
-                        } else { true }
-                    } else { true }
-                }
-            }
-            _ => true
-        };
-
-        if do_decode {
-            let nbytes = unsafe { snd_midi_event_decode(coder.as_ptr(), buffer.as_mut_ptr(), buffer.len() as i64, &**ev) } as usize;
-            
-            if nbytes > 0 {
-                // The ALSA sequencer has a maximum buffer size for MIDI sysex
-                // events of 256 bytes. If a device sends sysex messages larger
-                // than this, they are segmented into 256 byte chunks.    So,
-                // we'll watch for this and concatenate sysex chunks into a
-                // single sysex message if necessary.
-                if !continue_sysex {
-                    message.bytes.clear();
-                }
-                message.bytes.push_all(&buffer[0..nbytes]);
-                
-                continue_sysex = ( ev._type as u32 == SND_SEQ_EVENT_SYSEX ) && ( *message.bytes.last().unwrap() != 0xF7 );
-                if !continue_sysex {
-                    // Calculate the time stamp:
-                    message.timestamp = 0.0;
-
-                    // Use the ALSA sequencer event time data.
-                    // (thanks to Pedro Lopez-Cabanillas!).
-                    let alsa_time = unsafe { &*ev.time.time() };
-                    time = ( alsa_time.tv_sec as u64 * 1_000_000 ) + ( alsa_time.tv_nsec as u64/1_000 );
-                    last_time = time;
-                    time -= data.last_time;
-                    data.last_time = last_time;
-                    if data.first_message == true {
-                        data.first_message = false;
-                    } else { 
-                        message.timestamp = time as f64 * 0.000001;
-                    }
-                } else {
-                    // TODO: this doesn't make sense
-                    if cfg!(debug) {
-                        let _ = write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: event parsing error or not a MIDI event!\n\n");
-                    }
-                }
-            }
-        }
-
-        drop(ev);
-        if message.bytes.len() == 0 || continue_sysex { continue; }
-        
-        let mut callback = data.callback.lock().unwrap();
-        if callback.is_some() {
-            callback.as_mut().unwrap()(message.timestamp, &message.bytes);
-        } else {
-            // As long as we haven't reached our queue size limit, push the message.
-            let mut queue = data.queue.lock().unwrap();
-            if queue.size < queue.ring.len() {
-                queue.ring[queue.back as usize] = message;
-                queue.back += 1;
-                if queue.back == queue.ring.len() {
-                    queue.back = 0;
-                }
-                queue.size += 1;
-            }
-            else {
-                let _ = write!(stderr(), "\nMidiInAlsa: message queue limit reached!!\n\n");
-            }
-        }
-    }
+struct HandlerData {
+    message: MidiMessage,
+    ignore_flags: Arc<Mutex<u8>>,
+    do_input: Arc<Mutex<bool>>,
+    // TODO: turn into read-only pointers?
+    seq: Arc<Mutex<Sequencer>>,
+    trigger_fds: Arc<Mutex<[i32; 2]>>,
+    // TODO: make sure that changing callback from within callback doesn't deadlock
+    // (maybe don't allow that, instead create separate APIs for callback-based vs. queue-based
+    // ... queue-based can be implemented on top of callback-based)
+    callback: Arc<Mutex<Option<Box<FnMut(f64, &Vec<u8>)+Send>>>> 
 }
 
 /// This function is used to count or get the pinfo structure for a given port number.
@@ -330,7 +149,7 @@ fn get_port_name(seq: &Sequencer, typ: u32, port_number: i32) -> Result<String> 
 pub struct MidiInAlsa {
     api_data: Box<AlsaMidiInData>, // TODO: should this really be a Box?
     connected: bool,
-    handler_data: Option<AlsaMidiHandlerData>,
+    handler_data: Option<HandlerData>,
     queue: Arc<Mutex<MidiQueue>>,
 }
 
@@ -457,7 +276,7 @@ impl MidiApi for MidiInAlsa {
             //pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
             //pthread_attr_setschedpolicy(&attr, SCHED_OTHER);*/
             data.thread = match threadbuilder.spawn(move || {
-                alsa_midi_handler(input_data);
+                handle_input(input_data);
             }) {
                 Ok(handle) => Some(handle),
                 Err(_) => {
@@ -570,15 +389,10 @@ impl MidiInApi for MidiInAlsa {
         let queue = Arc::new(Mutex::new(MidiQueue::new(queue_size_limit)));
         
         // TODO: create this only when needed
-        let handler_data = Some(AlsaMidiHandlerData {
-            queue: queue.clone(),
+        let handler_data = Some(HandlerData {
             message: MidiMessage::new(),
             ignore_flags: data.ignore_flags.clone(),
             do_input: data.do_input.clone(),
-            first_message: true,
-            using_callback: false,
-            continue_sysex: false,
-            last_time: 0,
             seq: data.seq.clone(),
             trigger_fds: data.trigger_fds.clone(),
             callback: data.callback.clone()
@@ -802,6 +616,162 @@ impl Drop for MidiOutAlsa {
         // Cleanup.
         if self.vport >= 0 {
             unsafe { snd_seq_delete_port(self.seq.as_mut_ptr(), self.vport ) };
+        }
+    }
+}
+
+fn handle_input(data: HandlerData) {
+    let mut last_time: Option<u64> = None;
+    let mut continue_sysex: bool = false;
+    
+    let init_buffer_size = 32;
+    
+    let mut buffer = unsafe {
+        let mut vec = Vec::with_capacity(init_buffer_size);
+        vec.set_len(init_buffer_size);
+        vec.into_boxed_slice()
+    };
+    
+    let mut coder = EventDecoder::new(false);
+    
+    let mut poll_fds: Box<[pollfd]>;
+    unsafe {
+        let poll_fd_count = (data.seq.lock().unwrap().poll_descriptors_count(POLLIN) + 1) as usize;
+        let mut vec = Vec::with_capacity(poll_fd_count);
+        vec.set_len(poll_fd_count);
+        poll_fds = vec.into_boxed_slice();
+    }
+    data.seq.lock().unwrap().poll_descriptors(&mut poll_fds[1..], POLLIN); 
+    poll_fds[0].fd = data.trigger_fds.lock().unwrap()[0];
+    poll_fds[0].events = POLLIN;
+    
+    while *data.do_input.lock().unwrap() {
+
+        if unsafe { snd_seq_event_input_pending(data.seq.lock().unwrap().as_mut_ptr(), 1) } == 0 {
+            // No data pending
+            if poll(&mut poll_fds, -1) >= 0 {
+                if poll_fds[0].revents & POLLIN != 0 {
+                    let mut dummy: bool = unsafe { mem::uninitialized() };
+                    let _res = unsafe { ::libc::read(poll_fds[0].fd, mem::transmute(&mut dummy), mem::size_of::<bool>() as ::libc::size_t) };
+                }
+            }
+            continue;
+        }
+
+        // If here, there should be data.
+        let mut ev = match data.seq.lock().unwrap().event_input() {
+            Ok((ev, _)) => ev,
+            Err(e) if e == -::libc::consts::os::posix88::ENOSPC => {
+                let _ = write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: MIDI input buffer overrun!\n\n");
+                continue;
+            },
+            Err(_) => {
+                let _ = write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: unknown MIDI input error!\n");
+                //perror("System reports");
+                continue;
+            }
+        };
+        
+        let mut message = MidiMessage::new();
+
+        // This is a bit weird, but we now have to decode an ALSA MIDI
+        // event (back) into MIDI bytes. We'll ignore non-MIDI types.
+        if !continue_sysex { message.bytes.clear() }
+        
+        let ignore_flags: u8 = *data.ignore_flags.lock().unwrap();
+        let do_decode = match ev._type as u32 {
+            SND_SEQ_EVENT_PORT_SUBSCRIBED => {
+                if cfg!(debug) { println!("MidiInAlsa::alsaMidiHandler: port connection made!") };
+                false
+            },
+            SND_SEQ_EVENT_PORT_UNSUBSCRIBED => {
+                if cfg!(debug) {
+                    let _ = writeln!(stderr(), "MidiInAlsa::alsaMidiHandler: port connection has closed!");
+                    let connect = unsafe { &*ev.data.connect() };
+                    println!("sender = {}:{}, dest = {}:{}",
+                        connect.sender.client,
+                        connect.sender.port,
+                        connect.dest.client,
+                        connect.dest.port
+                    );
+                }
+                false
+            },
+            SND_SEQ_EVENT_QFRAME => { // MIDI time code
+                ignore_flags & 0x02 == 0
+            },
+            SND_SEQ_EVENT_TICK => { // 0xF9 ... MIDI timing tick
+                ignore_flags & 0x02 == 0
+            },
+            SND_SEQ_EVENT_CLOCK => { // 0xF8 ... MIDI timing (clock) tick
+                ignore_flags & 0x02 == 0
+            },
+            SND_SEQ_EVENT_SENSING => { // Active sensing
+                ignore_flags & 0x04 == 0
+            },
+            SND_SEQ_EVENT_SYSEX => {
+                if ignore_flags & 0x01 != 0 { false }
+                else {
+                    let data_len = unsafe { (*ev.data.ext()).len } as usize;
+                    let buffer_len = buffer.len();
+                    if data_len > buffer_len {
+                        buffer = unsafe {
+                            let mut vec = Vec::with_capacity(data_len);
+                            vec.set_len(data_len);
+                            vec.into_boxed_slice()
+                        };
+                        if buffer.as_ptr().is_null() {
+                            *data.do_input.lock().unwrap() = false;
+                            let _ = write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: error resizing buffer memory!\n\n");
+                            false
+                        } else { true }
+                    } else { true }
+                }
+            }
+            _ => true
+        };
+
+        if do_decode {
+            let nbytes = unsafe { snd_midi_event_decode(coder.as_ptr(), buffer.as_mut_ptr(), buffer.len() as i64, &**ev) } as usize;
+            
+            if nbytes > 0 {
+                // The ALSA sequencer has a maximum buffer size for MIDI sysex
+                // events of 256 bytes. If a device sends sysex messages larger
+                // than this, they are segmented into 256 byte chunks.    So,
+                // we'll watch for this and concatenate sysex chunks into a
+                // single sysex message if necessary.
+                if !continue_sysex {
+                    message.bytes.clear();
+                }
+                message.bytes.push_all(&buffer[0..nbytes]);
+                
+                continue_sysex = ( ev._type as u32 == SND_SEQ_EVENT_SYSEX ) && ( *message.bytes.last().unwrap() != 0xF7 );
+                if !continue_sysex {
+                    // Calculate the time stamp:
+                    // Use the ALSA sequencer event time data.
+                    // (thanks to Pedro Lopez-Cabanillas!).
+                    let alsa_time = unsafe { &*ev.time.time() };
+                    let timestamp = ( alsa_time.tv_sec as u64 * 1_000_000 ) + ( alsa_time.tv_nsec as u64/1_000 );
+                    message.timestamp = match last_time {
+                        None => 0.0,
+                        Some(last) => (timestamp - last) as f64 * 0.000001
+                    };
+                    last_time = Some(timestamp);
+                } else {
+                    // TODO: this doesn't make sense
+                    if cfg!(debug) {
+                        let _ = write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: event parsing error or not a MIDI event!\n\n");
+                    }
+                }
+            }
+        }
+
+        drop(ev);
+        if message.bytes.len() == 0 || continue_sysex { continue; }
+        
+        let mut callback = data.callback.lock().unwrap();
+        if callback.is_some() {
+            (callback.as_mut().unwrap())(message.timestamp, &message.bytes);
         }
     }
 }
