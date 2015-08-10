@@ -77,13 +77,12 @@ const INITIAL_CODER_BUFFER_SIZE: usize = 32;
 pub struct MidiInput {
     ignore_flags: Ignore,
     seq: Option<Sequencer>,
-    vport: i32, // TODO: probably port numbers are only u8, therefore could use Option<u8>
 }
 
 pub struct MidiInputConnection<T: 'static> {
-    subscription: PortSubscription,
+    subscription: Option<PortSubscription>,
     thread: Option<JoinHandle<(HandlerData<T>, T)>>,
-    vport: i32,
+    vport: i32, // TODO: probably port numbers are only u8, therefore could use Option<u8>
     trigger_send_fd: i32,
 }
 
@@ -107,7 +106,6 @@ impl MidiInput {
         Ok(MidiInput {
             ignore_flags: Ignore::None,
             seq: Some(seq),
-            vport: -1
         })
     }
     
@@ -118,14 +116,77 @@ impl MidiInput {
 	pub fn port_count(&self) -> u32 {
         unsafe {
             let mut pinfo = APortInfo::allocate();
-            get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, -1).unwrap() as u32
+            get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, -1).unwrap() as u32
         }
     }
     
     pub fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
-        match get_port_name(&self.seq.as_ref().unwrap(), SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, port_number as i32) {
+        match get_port_name(&self.seq.as_ref().unwrap(), SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32) {
             Ok(s) => Ok(s),
             Err(()) => Err(PortInfoError::PortNumberOutOfRange)
+        }
+    }
+    
+    #[inline(always)]
+    fn init_queue(&mut self) -> i32 {
+        let seq = self.seq.as_mut().unwrap();
+        let mut queue_id = 0;
+        // Create the input queue
+        if !cfg!(feature = "avoid_timestamping") {
+            queue_id = unsafe { snd_seq_alloc_named_queue(seq.as_mut_ptr(), mem::transmute(b"RtMidi Queue")) };
+            // Set arbitrary tempo (mm=100) and resolution (240)
+            let mut qtempo = unsafe { QueueTempo::allocate() };
+            qtempo.set_tempo(600_000);
+            qtempo.set_ppq(240);
+            unsafe {
+                snd_seq_set_queue_tempo(seq.as_mut_ptr(), queue_id, qtempo.as_ptr());
+                snd_seq_drain_output(seq.as_mut_ptr());
+            }
+        }
+        
+        queue_id
+    }
+    
+    #[inline(always)]
+    fn init_trigger(&mut self) -> Result<[i32; 2], ()> {
+        let mut trigger_fds = [-1, -1];
+        
+        if unsafe { ::libc::pipe(trigger_fds.as_mut_ptr()) } == -1 {
+            Err(())
+        } else {
+            Ok(trigger_fds)
+        }
+    }
+    
+    #[inline(always)]
+    fn create_port(&mut self, port_name: &str, queue_id: i32) -> Result<i32, ()> {
+        let mut pinfo = unsafe { APortInfo::allocate() };
+        pinfo.set_client(0);
+        pinfo.set_port(0);
+        pinfo.set_capability(SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE);
+        pinfo.set_type(SND_SEQ_PORT_TYPE_MIDI_GENERIC | SND_SEQ_PORT_TYPE_APPLICATION);
+        pinfo.set_midi_channels(16);
+        
+        if !cfg!(feature = "avoid_timestamping") {
+            pinfo.set_timestamping(true);
+            pinfo.set_timestamp_real(true);
+            pinfo.set_timestamp_queue(queue_id);
+        }
+        
+        pinfo.set_name(port_name);
+        match self.seq.as_mut().unwrap().create_port(&mut pinfo) {
+            Ok(_) => Ok(pinfo.get_port()),
+            Err(_) => Err(())
+        }
+    }
+    
+    fn start_input_queue(&mut self, queue_id: i32) {
+        if !cfg!(feature = "avoid_timestamping") {
+            unsafe {
+                let seq = self.seq.as_mut().unwrap();
+                snd_seq_start_queue(seq.as_mut_ptr(), queue_id, ptr::null_mut());
+                snd_seq_drain_output(seq.as_mut_ptr());
+            }
         }
     }
     
@@ -134,39 +195,18 @@ impl MidiInput {
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
         where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
         
-        fn seq(self_: &mut MidiInput) -> &mut Sequencer {
-            self_.seq.as_mut().unwrap()
-        }
+        let trigger_fds = match self.init_trigger() {
+            Ok(fds) => fds,
+            Err(()) => { return Err(ConnectError::other("could not create communication pipe for ALSA handler", self)); }
+        };
         
-        let mut trigger_fds = [-1, -1];
-        
-        if unsafe { ::libc::pipe(trigger_fds.as_mut_ptr()) } == -1 {
-            return Err(ConnectError::other("could not create communication pipe for ALSA handler", self));
-        }
+        let queue_id = self.init_queue();
         
         let subscription;
-        let queue_id;
-        {
-            let seq = self.seq.as_mut().unwrap();
-            let mut qid = 0;
-            // Create the input queue
-            if !cfg!(feature = "avoid_timestamping") {
-                qid = unsafe { snd_seq_alloc_named_queue(seq.as_mut_ptr(), mem::transmute(b"RtMidi Queue")) };
-                // Set arbitrary tempo (mm=100) and resolution (240)
-                let mut qtempo = unsafe { QueueTempo::allocate() };
-                qtempo.set_tempo(600_000);
-                qtempo.set_ppq(240);
-                unsafe {
-                    snd_seq_set_queue_tempo(seq.as_mut_ptr(), qid, qtempo.as_ptr());
-                    snd_seq_drain_output(seq.as_mut_ptr());
-                }
-            }
-            queue_id = qid;
-        }
         
         let mut src_pinfo = unsafe { APortInfo::allocate() };
         
-        if get_port_info(self.seq.as_mut().unwrap(), &mut src_pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32).is_none() {
+        if get_port_info(self.seq.as_mut().unwrap(), &mut src_pinfo, SND_SEQ_PORT_CAP_READ | SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32).is_none() {
             return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self));
         }
         
@@ -175,33 +215,16 @@ impl MidiInput {
             port: src_pinfo.get_port() as u8
         };
         
-        let mut pinfo = unsafe { APortInfo::allocate() };
-        
-        if self.vport < 0 {
-            pinfo.set_client(0);
-            pinfo.set_port(0);
-            pinfo.set_capability(SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE);
-            pinfo.set_type(SND_SEQ_PORT_TYPE_MIDI_GENERIC | SND_SEQ_PORT_TYPE_APPLICATION);
-            pinfo.set_midi_channels(16);
-            
-            if !cfg!(feature = "avoid_timestamping") {
-                pinfo.set_timestamping(true);
-                pinfo.set_timestamp_real(true);
-                pinfo.set_timestamp_queue(queue_id);
+        let vport = match self.create_port(port_name, queue_id) {
+            Ok(vp) => vp,
+            Err(_) => {
+                return Err(ConnectError::other("could not create ALSA input port", self));
             }
-            
-            pinfo.set_name(port_name);
-            self.vport = match self.seq.as_mut().unwrap().create_port(&mut pinfo) {
-                Ok(_) => pinfo.get_port(),
-                Err(_) => {
-                    return Err(ConnectError::other("could not create ALSA input port", self));
-                }
-            }
-        }
+        };
         
         let receiver = snd_seq_addr_t {
             client: self.seq.as_mut().unwrap().get_client_id() as u8,
-            port: self.vport as u8
+            port: vport as u8
         };
         
         // Make subscription
@@ -214,13 +237,7 @@ impl MidiInput {
         subscription = sub;
         
         // Start the input queue
-        if !cfg!(feature = "avoid_timestamping") {
-            unsafe {
-                let seq = self.seq.as_mut().unwrap();
-                snd_seq_start_queue(seq.as_mut_ptr(), queue_id, ptr::null_mut());
-                snd_seq_drain_output(seq.as_mut_ptr());
-            }
-        }
+        self.start_input_queue(queue_id);
 
         // Start our MIDI input thread.
         let handler_data = HandlerData {
@@ -232,8 +249,6 @@ impl MidiInput {
         };
         
         let threadbuilder = Builder::new();
-        //pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-        //pthread_attr_setschedpolicy(&attr, SCHED_OTHER);*/
         let thread = match threadbuilder.spawn(move || {
             let mut d = data;
             let h = handle_input(handler_data, &mut d);
@@ -247,23 +262,11 @@ impl MidiInput {
         };
 
         Ok(MidiInputConnection {
-            subscription: subscription,
+            subscription: Some(subscription),
             thread: Some(thread),
-            vport: self.vport,
+            vport: vport,
             trigger_send_fd: trigger_fds[1]
         })
-    }
-}
-
-
-impl Drop for MidiInput {
-    fn drop(&mut self) {
-        match self.seq {
-            Some(ref mut seq) if self.vport >= 0 => unsafe {
-                snd_seq_delete_port(seq.as_mut_ptr(), self.vport);
-            },
-            _ => ()
-        }
     }
 }
 
@@ -292,6 +295,61 @@ impl<T: Send> InputConnect<T> for MidiInput {
     }
 }
 
+impl<T: Send> ::os::nix::VirtualInput<T> for MidiInput {
+    type Connection = MidiInputConnection<T>;
+    
+    fn create_virtual<F>(
+        mut self, port_name: &str, callback: F, data: T
+    ) -> Result<Self::Connection, ConnectError<Self>>
+    where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
+        let trigger_fds = match self.init_trigger() {
+            Ok(fds) => fds,
+            Err(()) => { return Err(ConnectError::other("could not create communication pipe for ALSA handler", self)); }
+        };
+        
+        let queue_id = self.init_queue();
+        
+        let vport = match self.create_port(port_name, queue_id) {
+            Ok(vp) => vp,
+            Err(_) => {
+                return Err(ConnectError::other("could not create ALSA input port", self));
+            }
+        };
+        
+        // Start the input queue
+        self.start_input_queue(queue_id);
+        
+        // Start our MIDI input thread.
+        let handler_data = HandlerData {
+            ignore_flags: self.ignore_flags,
+            seq: self.seq.take().unwrap(),
+            trigger_rcv_fd: trigger_fds[0],
+            callback: Box::new(callback),
+            queue_id: queue_id
+        };
+        
+        let threadbuilder = Builder::new();
+        let thread = match threadbuilder.spawn(move || {
+            let mut d = data;
+            let h = handle_input(handler_data, &mut d);
+            (h, d) // return both the handler data and the user data 
+        }) {
+            Ok(handle) => handle,
+            Err(_) => {
+                //unsafe { snd_seq_unsubscribe_port(self.seq.as_mut_ptr(), sub.as_ptr()) };
+                return Err(ConnectError::other("could not start ALSA input handler thread", self));
+            }
+        };
+
+        Ok(MidiInputConnection {
+            subscription: None,
+            thread: Some(thread),
+            vport: vport,
+            trigger_send_fd: trigger_fds[1]
+        })
+    }
+}
+
 impl<T> MidiInputConnection<T> {
     pub fn close(mut self) -> (MidiInput, T) {
         let (handler_data, user_data) = self.close_internal();
@@ -299,23 +357,23 @@ impl<T> MidiInputConnection<T> {
         (MidiInput {
             ignore_flags: handler_data.ignore_flags,
             seq: Some(handler_data.seq),
-            vport: self.vport
         }, user_data)
     }
     
-    /// This might only be called if the handler thread has not yet been shut down
+    /// This must only be called if the handler thread has not yet been shut down
     fn close_internal(&mut self) -> (HandlerData<T>, T) {
         // Request the thread to stop.
         let _res = unsafe { ::libc::write(self.trigger_send_fd, mem::transmute(&false), mem::size_of::<bool>() as ::libc::size_t) };
         
-        //if (!pthread_equal(data.thread, data.dummy_thread_id))
-        //    pthread_join( data.thread, NULL);
         let thread = self.thread.take().unwrap(); 
         // Join the thread to get the handler_data back
         let (mut handler_data, user_data) = thread.join().unwrap(); // TODO: don't use unwrap here
         
         // TODO: find out why snd_seq_unsubscribe_port takes a long time if there was not yet any input message
-        unsafe { snd_seq_unsubscribe_port(handler_data.seq.as_mut_ptr(), self.subscription.as_ptr()) };
+        match self.subscription.as_mut() {
+            Some(sub) => unsafe { snd_seq_unsubscribe_port(handler_data.seq.as_mut_ptr(), sub.as_ptr()); },
+            None => ()
+        }
         
         // Close the trigger fds (TODO: make sure that these are closed even in the presence of panic in thread)
         unsafe {
@@ -331,6 +389,9 @@ impl<T> MidiInputConnection<T> {
                 snd_seq_free_queue(handler_data.seq.as_mut_ptr(), handler_data.queue_id);
             }
         }
+        
+        // Delete the port
+        unsafe { snd_seq_delete_port(handler_data.seq.as_mut_ptr(), self.vport) };
         
         (handler_data, user_data)
     }
@@ -356,15 +417,13 @@ impl<T> InputConnection<T> for MidiInputConnection<T> {
 
 pub struct MidiOutput {
     seq: Option<Sequencer>, // TODO: if `Sequencer` is marked as non-zero, this should just be pointer-sized 
-    vport: i32,
-    
 }
 
 pub struct MidiOutputConnection {
     seq: Option<Sequencer>,
     vport: i32,
     coder: EventEncoder,
-    subscription: PortSubscription
+    subscription: Option<PortSubscription>
 }
 
 impl MidiOutput {
@@ -379,7 +438,6 @@ impl MidiOutput {
         
         Ok(MidiOutput {
             seq: Some(seq),
-            vport: -1
         })
     }
     
@@ -409,20 +467,18 @@ impl MidiOutput {
             port: pinfo.get_port() as u8
         };
         
-        if self.vport < 0 {
-            self.vport = match self.seq.as_mut().unwrap().create_simple_port(port_name,
-                                SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ,
-                                SND_SEQ_PORT_TYPE_MIDI_GENERIC|SND_SEQ_PORT_TYPE_APPLICATION) {
-                Ok(vport) => vport,
-                Err(_) => {
-                    return Err(ConnectError::other("could not create ALSA output port", self));
-                }
-            };
-        }
+        let vport = match self.seq.as_mut().unwrap().create_simple_port(port_name,
+                            SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ,
+                            SND_SEQ_PORT_TYPE_MIDI_GENERIC|SND_SEQ_PORT_TYPE_APPLICATION) {
+            Ok(vport) => vport,
+            Err(_) => {
+                return Err(ConnectError::other("could not create ALSA output port", self));
+            }
+        };
         
         let sender = snd_seq_addr_t {
             client: self.seq.as_ref().unwrap().get_client_id() as u8,
-            port: self.vport as u8
+            port: vport as u8
         };
         
         // Make subscription
@@ -437,21 +493,10 @@ impl MidiOutput {
         
         Ok(MidiOutputConnection {
             seq: self.seq.take(),
-            vport: self.vport,
+            vport: vport,
             coder: EventEncoder::new(INITIAL_CODER_BUFFER_SIZE),
-            subscription: sub
+            subscription: Some(sub)
         })
-    }
-}
-
-impl Drop for MidiOutput {
-    fn drop(&mut self) {
-        match self.seq {
-            Some(ref mut seq) if self.vport >= 0 => unsafe {
-                snd_seq_delete_port(seq.as_mut_ptr(), self.vport);
-            },
-            _ => ()
-        }
     }
 }
 
@@ -479,13 +524,37 @@ impl OutputConnect for MidiOutput {
     }
 }
 
+impl ::os::nix::VirtualOutput for MidiOutput {
+    type Connection = MidiOutputConnection;
+    
+    fn create_virtual(
+        mut self, port_name: &str
+    ) -> Result<Self::Connection, ConnectError<Self>> {
+        let vport = match self.seq.as_mut().unwrap().create_simple_port(port_name,
+                            SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ,
+                            SND_SEQ_PORT_TYPE_MIDI_GENERIC|SND_SEQ_PORT_TYPE_APPLICATION) {
+            Ok(vport) => vport,
+            Err(_) => {
+                return Err(ConnectError::other("could not create ALSA output port", self));
+            }
+        };
+        
+        Ok(MidiOutputConnection {
+            seq: self.seq.take(),
+            vport: vport,
+            coder: EventEncoder::new(INITIAL_CODER_BUFFER_SIZE),
+            subscription: None
+        })
+    }
+}
+        
+
 impl MidiOutputConnection {
     pub fn close(mut self) -> MidiOutput {
         self.close_internal();
         
         MidiOutput {
             seq: self.seq.take(),
-            vport: self.vport
         }
     }
     
@@ -519,7 +588,11 @@ impl MidiOutputConnection {
     
     fn close_internal(&mut self) {
         unsafe {
-            snd_seq_unsubscribe_port(self.seq.as_mut().unwrap().as_mut_ptr(), self.subscription.as_ptr());
+            let seq = self.seq.as_mut().unwrap();
+            if self.subscription.is_some() {
+                snd_seq_unsubscribe_port(seq.as_mut_ptr(), self.subscription.as_mut().unwrap().as_ptr());
+            }
+            snd_seq_delete_port(seq.as_mut_ptr(), self.vport);
         }
     }
 }
