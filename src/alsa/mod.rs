@@ -86,7 +86,6 @@ pub struct MidiInputConnection<T: 'static> {
 }
 
 struct HandlerData<T: 'static> {
-    message: MidiMessage,
     ignore_flags: Ignore,
     seq: Sequencer,
     trigger_rcv_fd: i32,
@@ -222,7 +221,6 @@ impl MidiInput {
 
         // Start our MIDI input thread.
         let handler_data = HandlerData {
-            message: MidiMessage::new(),
             ignore_flags: self.ignore_flags,
             seq: self.seq.take().unwrap(),
             trigger_rcv_fd: trigger_fds[0],
