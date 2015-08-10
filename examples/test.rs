@@ -6,7 +6,6 @@ use std::error::Error;
 
 use midir::{MidiInput, MidiOutput, Ignore};
 
-// TODO: better error handling using try! macro for all possible failures and printing actual error message
 fn main() {
     match run() {
         Ok(_) => (),

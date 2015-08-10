@@ -2,6 +2,11 @@
 name = "midir"
 version = "0.1.0"
 authors = ["Patrick Reisert"]
+description = "A cross-platform, realtime MIDI processing library, inspired by RtMidi."
+repository = "https://github.com/Boddlnagg/midir"
+readme = "README.md"
+keywords = ["midi"]
+license = "MIT"
 
 [features]
 avoid_timestamping = []
