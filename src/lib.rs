@@ -28,6 +28,7 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 // TODO: create abstraction traits for MidiInput, etc
+// TODO: also have an error type for ::new (InitError?)
 
 #[derive(Debug)]
 pub enum PortInfoError {
@@ -35,10 +36,17 @@ pub enum PortInfoError {
 }
 
 // TODO: implement (not derive) Debug, Show, ... without using inner T
+// TODO: use struct(kind: ConnectErrorKind, inner: T) instead
 #[derive(Debug)]
 pub enum ConnectError<T> {
     PortNumberOutOfRange(T),
     Unspecified(T) // TODO: maybe add a &str description?
+}
+
+#[derive(Debug)]
+pub enum SendError {
+    InvalidData,
+    Unspecified // TODO: maybe add a &str description?
 }
 
 #[repr(u8)]

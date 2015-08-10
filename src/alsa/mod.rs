@@ -4,7 +4,6 @@ use std::mem;
 use std::ptr;
 use std::thread::{Builder, JoinHandle};
 use std::io::{stderr, Write};
-use std::sync::{Arc, Mutex};
 
 use alsa_sys::{
     snd_seq_t,
@@ -34,7 +33,7 @@ use alsa_sys::{
     SND_SEQ_EVENT_START
 };
 
-use super::{MidiMessage, Ignore, PortInfoError, ConnectError};
+use super::{MidiMessage, Ignore, PortInfoError, ConnectError, SendError};
 
 // Include ALSA wrappers
 mod wrappers;
@@ -71,10 +70,12 @@ const SND_SEQ_PORT_CAP_WRITE: u32 = 1<<1;
 const SND_SEQ_PORT_CAP_SUBS_READ: u32 = 1<<5;
 const SND_SEQ_PORT_CAP_SUBS_WRITE: u32 = 1<<6;
 
+const INITIAL_CODER_BUFFER_SIZE: usize = 32;
+
 pub struct MidiInput {
     ignore_flags: Ignore,
     seq: Option<Sequencer>,
-    vport: i32
+    vport: i32, // TODO: probably port numbers are only u8, therefore could use Option<u8>
 }
 
 pub struct MidiInputConnection {
@@ -95,7 +96,7 @@ struct HandlerData {
 
 impl MidiInput {
     pub fn new(client_name: &str) -> Self {
-        // Set up the ALSA sequencer client.
+        // Set up the ALSA sequencer client (this should not fail except with out-of-memory).
         let mut seq = Sequencer::open(SequencerOpenMode::Duplex, true)
                         .ok().expect("Error creating ALSA sequencer client.");
         
@@ -115,7 +116,7 @@ impl MidiInput {
 	pub fn port_count(&self) -> u32 {
         unsafe {
             let mut pinfo = PortInfo::allocate();
-            get_port_info(self.seq.as_ref().unwrap().as_ptr(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, -1).unwrap() as u32
+            get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, -1).unwrap() as u32
         }
     }
     
@@ -127,10 +128,9 @@ impl MidiInput {
     }
     
     pub fn connect<F>(
-        self, port_number: u32, port_name: &str, callback: F
+        mut self, port_number: u32, port_name: &str, callback: F
     ) -> Result<MidiInputConnection, ConnectError<MidiInput>>
         where F: FnMut(f64, &Vec<u8>)+Send+'static {
-        let mut mut_self = self;
         
         fn seq(self_: &mut MidiInput) -> &mut Sequencer {
             self_.seq.as_mut().unwrap()
@@ -139,13 +139,13 @@ impl MidiInput {
         let mut trigger_fds = [-1, -1];
         
         if unsafe { ::libc::pipe(trigger_fds.as_mut_ptr()) } == -1 {
-            return Err(ConnectError::Unspecified(mut_self));
+            return Err(ConnectError::Unspecified(self));
         }
         
         let subscription;
         let queue_id;
         {
-            let seq = mut_self.seq.as_mut().unwrap();
+            let seq = self.seq.as_mut().unwrap();
             let mut qid = 0;
             // Create the input queue
             if !cfg!(feature = "avoid_timestamping") {
@@ -164,8 +164,8 @@ impl MidiInput {
         
         let mut src_pinfo = unsafe { PortInfo::allocate() };
         
-        if get_port_info(mut_self.seq.as_mut().unwrap().as_ptr(), &mut src_pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32).is_none() {
-            return Err(ConnectError::PortNumberOutOfRange(mut_self));
+        if get_port_info(self.seq.as_mut().unwrap(), &mut src_pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32).is_none() {
+            return Err(ConnectError::PortNumberOutOfRange(self));
         }
         
         let sender = snd_seq_addr_t {
@@ -175,7 +175,7 @@ impl MidiInput {
         
         let mut pinfo = unsafe { PortInfo::allocate() };
         
-        if mut_self.vport < 0 {
+        if self.vport < 0 {
             pinfo.set_client(0);
             pinfo.set_port(0);
             pinfo.set_capability(SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE);
@@ -189,32 +189,32 @@ impl MidiInput {
             }
             
             pinfo.set_name(port_name);
-            mut_self.vport = match mut_self.seq.as_mut().unwrap().create_port(&mut pinfo) {
+            self.vport = match self.seq.as_mut().unwrap().create_port(&mut pinfo) {
                 Ok(_) => pinfo.get_port(),
                 Err(_) => {
-                    return Err(ConnectError::Unspecified(mut_self));
+                    return Err(ConnectError::Unspecified(self));
                 }
             }
         }
         
         let receiver = snd_seq_addr_t {
-            client: mut_self.seq.as_mut().unwrap().get_client_id() as u8,
-            port: mut_self.vport as u8
+            client: self.seq.as_mut().unwrap().get_client_id() as u8,
+            port: self.vport as u8
         };
         
         // Make subscription
         let mut sub = unsafe { PortSubscription::allocate() };
         sub.set_sender(&sender);
         sub.set_dest(&receiver);
-        if unsafe { snd_seq_subscribe_port(mut_self.seq.as_mut().unwrap().as_mut_ptr(), sub.as_ptr()) } != 0 {
-            return Err(ConnectError::Unspecified(mut_self));
+        if unsafe { snd_seq_subscribe_port(self.seq.as_mut().unwrap().as_mut_ptr(), sub.as_ptr()) } != 0 {
+            return Err(ConnectError::Unspecified(self));
         }
         subscription = sub;
         
         // Start the input queue
         if !cfg!(feature = "avoid_timestamping") {
             unsafe {
-                let seq = mut_self.seq.as_mut().unwrap();
+                let seq = self.seq.as_mut().unwrap();
                 snd_seq_start_queue(seq.as_mut_ptr(), queue_id, ptr::null_mut());
                 snd_seq_drain_output(seq.as_mut_ptr());
             }
@@ -223,8 +223,8 @@ impl MidiInput {
         // Start our MIDI input thread.
         let handler_data = HandlerData {
             message: MidiMessage::new(),
-            ignore_flags: mut_self.ignore_flags,
-            seq: mut_self.seq.take().unwrap(),
+            ignore_flags: self.ignore_flags,
+            seq: self.seq.take().unwrap(),
             trigger_rcv_fd: trigger_fds[0],
             callback: Box::new(callback),
             queue_id: queue_id
@@ -239,15 +239,15 @@ impl MidiInput {
         }) {
             Ok(handle) => handle,
             Err(_) => {
-                //unsafe { snd_seq_unsubscribe_port(mut_self.seq.as_mut_ptr(), sub.as_ptr()) };
-                return Err(ConnectError::Unspecified(mut_self));
+                //unsafe { snd_seq_unsubscribe_port(self.seq.as_mut_ptr(), sub.as_ptr()) };
+                return Err(ConnectError::Unspecified(self));
             }
         };
 
         Ok(MidiInputConnection {
             subscription: subscription,
             thread: Some(thread),
-            vport: mut_self.vport,
+            vport: self.vport,
             trigger_send_fd: trigger_fds[1]
         })
     }
@@ -266,14 +266,13 @@ impl Drop for MidiInput {
 }
 
 impl MidiInputConnection {
-    pub fn close(self) -> MidiInput {
-        let mut mut_self = self;
-        let handler_data = mut_self.close_internal();
+    pub fn close(mut self) -> MidiInput {
+        let handler_data = self.close_internal();
         
         MidiInput {
             ignore_flags: handler_data.ignore_flags,
             seq: Some(handler_data.seq),
-            vport: mut_self.vport
+            vport: self.vport
         }
     }
     
@@ -320,15 +319,166 @@ impl Drop for MidiInputConnection {
     }
 }
 
+pub struct MidiOutput {
+    seq: Option<Sequencer>, // TODO: if `Sequencer` is marked as non-zero, this should just be pointer-sized 
+    vport: i32,
+    
+}
+
+pub struct MidiOutputConnection {
+    seq: Option<Sequencer>,
+    vport: i32,
+    coder: EventEncoder,
+    subscription: PortSubscription
+}
+
+impl MidiOutput {
+    pub fn new(client_name: &str) -> Self {
+        // Set up the ALSA sequencer client (this should not fail except with out-of-memory).
+        let mut seq = Sequencer::open(SequencerOpenMode::Output, true)
+                        .ok().expect("Error creating ALSA sequencer client.");
+        
+        // Set client name.
+        seq.set_client_name(client_name);
+        
+        MidiOutput {
+            seq: Some(seq),
+            vport: -1
+        }
+    }
+    
+	pub fn port_count(&self) -> u32 {
+        unsafe {
+            let mut pinfo = PortInfo::allocate();
+            get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, -1).unwrap() as u32
+        }
+    }
+    
+    pub fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
+        match get_port_name(&self.seq.as_ref().unwrap(), SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, port_number as i32) {
+            Ok(s) => Ok(s),
+            Err(()) => Err(PortInfoError::PortNumberOutOfRange)
+        }
+    }
+    
+    pub fn connect(mut self, port_number: u32, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
+        let mut pinfo = unsafe { PortInfo::allocate() };
+        
+        if get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, port_number as i32).is_none() {
+            return Err(ConnectError::PortNumberOutOfRange(self));
+        }
+        
+        let receiver = snd_seq_addr_t {
+            client: pinfo.get_client() as u8,
+            port: pinfo.get_port() as u8
+        };
+        
+        if self.vport < 0 {
+            self.vport = match self.seq.as_mut().unwrap().create_simple_port(port_name,
+                                SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ,
+                                SND_SEQ_PORT_TYPE_MIDI_GENERIC|SND_SEQ_PORT_TYPE_APPLICATION) {
+                Ok(vport) => vport,
+                Err(_) => {
+                    return Err(ConnectError::Unspecified(self));
+                }
+            };
+        }
+        
+        let sender = snd_seq_addr_t {
+            client: self.seq.as_ref().unwrap().get_client_id() as u8,
+            port: self.vport as u8
+        };
+        
+        // Make subscription
+        let mut sub = unsafe { PortSubscription::allocate() };
+        sub.set_sender(&sender);
+        sub.set_dest(&receiver);
+        sub.set_time_update(true);
+        sub.set_time_real(true);
+        if unsafe { snd_seq_subscribe_port(self.seq.as_mut().unwrap().as_mut_ptr(), sub.as_ptr()) } != 0 {
+            return Err(ConnectError::Unspecified(self));
+        }
+        
+        Ok(MidiOutputConnection {
+            seq: self.seq.take(),
+            vport: self.vport,
+            coder: EventEncoder::new(INITIAL_CODER_BUFFER_SIZE),
+            subscription: sub
+        })
+    }
+}
+
+impl Drop for MidiOutput {
+    fn drop(&mut self) {
+        match self.seq {
+            Some(ref mut seq) if self.vport >= 0 => unsafe {
+                snd_seq_delete_port(seq.as_mut_ptr(), self.vport);
+            },
+            _ => ()
+        }
+    }
+}
+
+impl MidiOutputConnection {
+    pub fn close(mut self) -> MidiOutput {
+        self.close_internal();
+        
+        MidiOutput {
+            seq: self.seq.take(),
+            vport: self.vport
+        }
+    }
+    
+    /// This will panic if the message is not a valid MIDI message.
+    pub fn send_message(&mut self, message: &[u8]) -> Result<(), SendError> {        
+        let nbytes = message.len();
+        
+        if nbytes > self.coder.get_buffer_size() {
+            if self.coder.resize_buffer(nbytes).is_err() {
+                return Err(SendError::Unspecified);
+            }
+        }
+        
+        let mut ev = Event::new();
+        ev.set_source(self.vport as u8);
+        ev.set_subs();
+        ev.set_direct();
+        
+        if self.coder.encode(message, &mut ev).is_err() {
+            return Err(SendError::InvalidData);
+        }
+        
+        // Send the event.
+        if self.seq.as_mut().unwrap().event_output(&ev).is_err() {
+            return Err(SendError::Unspecified);
+        }
+        
+        self.seq.as_mut().unwrap().drain_output();
+        Ok(())
+    }
+    
+    fn close_internal(&mut self) {
+        unsafe {
+            snd_seq_unsubscribe_port(self.seq.as_mut().unwrap().as_mut_ptr(), self.subscription.as_ptr());
+        }
+    }
+}
+
+impl Drop for MidiOutputConnection {
+    fn drop(&mut self) {
+        if self.seq.is_some() {
+            self.close_internal();
+        }
+    }
+}
+
 fn handle_input(mut data: HandlerData) -> HandlerData {
     let mut last_time: Option<u64> = None;
     let mut continue_sysex: bool = false;
     
-    let init_buffer_size = 32;
-    
     let mut buffer = unsafe {
-        let mut vec = Vec::with_capacity(init_buffer_size);
-        vec.set_len(init_buffer_size);
+        let mut vec = Vec::with_capacity(INITIAL_CODER_BUFFER_SIZE);
+        vec.set_len(INITIAL_CODER_BUFFER_SIZE);
         vec.into_boxed_slice()
     };
     

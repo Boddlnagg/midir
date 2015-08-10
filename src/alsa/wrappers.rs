@@ -104,11 +104,14 @@ pub fn poll(fds: &mut [pollfd], timeout: i32) -> i32 {
 
 /// This function is used to count or get the pinfo structure for a given port number.
 /// TODO: introduce iterator?
-pub fn get_port_info(seq: *const snd_seq_t, pinfo: &mut PortInfo, typ: u32, port_number: i32) -> Option<i32> {
+pub fn get_port_info(seq: &Sequencer, pinfo: &mut PortInfo, typ: u32, port_number: i32) -> Option<i32> {
     let mut client;
     let mut count = 0;
     let mut cinfo = unsafe { ClientInfo::allocate() };
-    let seq = seq as *mut _;
+    
+    // Get a *mut pointer out of `seq`. This should be safe, since
+    // the `query` functions won't modify it, the interface just always uses *mut.
+    let seq = seq.p as *mut _;
 
     cinfo.set_client(-1);
     while unsafe { snd_seq_query_next_client(seq, cinfo.as_ptr()) } >= 0 {
@@ -139,7 +142,7 @@ pub fn get_port_name(seq: &Sequencer, typ: u32, port_number: i32) -> Result<Stri
     
     let mut pinfo = unsafe { PortInfo::allocate() };
     
-    if get_port_info(seq.as_ptr(), &mut pinfo, typ, port_number).is_some() {
+    if get_port_info(seq, &mut pinfo, typ, port_number).is_some() {
         let cnum: i32 = pinfo.get_client();    
         let cinfo = seq.get_any_client_info(cnum);
         let mut output = String::new();
