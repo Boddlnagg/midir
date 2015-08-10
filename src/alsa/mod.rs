@@ -34,7 +34,7 @@ use alsa_sys::{
 };
 
 use super::{MidiMessage, Ignore};
-use super::{InitError, PortInfoError, ConnectError, SendError};
+use super::{InitError, PortInfoError, ConnectError, ConnectErrorKind, SendError};
 use super::traits::*;
 
 // Include ALSA wrappers
@@ -141,7 +141,7 @@ impl MidiInput {
         let mut trigger_fds = [-1, -1];
         
         if unsafe { ::libc::pipe(trigger_fds.as_mut_ptr()) } == -1 {
-            return Err(ConnectError::Unspecified(self));
+            return Err(ConnectError::other("could not create communication pipe for ALSA handler", self));
         }
         
         let subscription;
@@ -167,7 +167,7 @@ impl MidiInput {
         let mut src_pinfo = unsafe { APortInfo::allocate() };
         
         if get_port_info(self.seq.as_mut().unwrap(), &mut src_pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32).is_none() {
-            return Err(ConnectError::PortNumberOutOfRange(self));
+            return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self));
         }
         
         let sender = snd_seq_addr_t {
@@ -194,7 +194,7 @@ impl MidiInput {
             self.vport = match self.seq.as_mut().unwrap().create_port(&mut pinfo) {
                 Ok(_) => pinfo.get_port(),
                 Err(_) => {
-                    return Err(ConnectError::Unspecified(self));
+                    return Err(ConnectError::other("could not create ALSA input port", self));
                 }
             }
         }
@@ -209,7 +209,7 @@ impl MidiInput {
         sub.set_sender(&sender);
         sub.set_dest(&receiver);
         if unsafe { snd_seq_subscribe_port(self.seq.as_mut().unwrap().as_mut_ptr(), sub.as_ptr()) } != 0 {
-            return Err(ConnectError::Unspecified(self));
+            return Err(ConnectError::other("could not create ALSA input subscription", self));
         }
         subscription = sub;
         
@@ -242,7 +242,7 @@ impl MidiInput {
             Ok(handle) => handle,
             Err(_) => {
                 //unsafe { snd_seq_unsubscribe_port(self.seq.as_mut_ptr(), sub.as_ptr()) };
-                return Err(ConnectError::Unspecified(self));
+                return Err(ConnectError::other("could not start ALSA input handler thread", self));
             }
         };
 
@@ -401,7 +401,7 @@ impl MidiOutput {
         let mut pinfo = unsafe { APortInfo::allocate() };
         
         if get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, port_number as i32).is_none() {
-            return Err(ConnectError::PortNumberOutOfRange(self));
+            return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self));
         }
         
         let receiver = snd_seq_addr_t {
@@ -415,7 +415,7 @@ impl MidiOutput {
                                 SND_SEQ_PORT_TYPE_MIDI_GENERIC|SND_SEQ_PORT_TYPE_APPLICATION) {
                 Ok(vport) => vport,
                 Err(_) => {
-                    return Err(ConnectError::Unspecified(self));
+                    return Err(ConnectError::other("could not create ALSA output port", self));
                 }
             };
         }
@@ -432,7 +432,7 @@ impl MidiOutput {
         sub.set_time_update(true);
         sub.set_time_real(true);
         if unsafe { snd_seq_subscribe_port(self.seq.as_mut().unwrap().as_mut_ptr(), sub.as_ptr()) } != 0 {
-            return Err(ConnectError::Unspecified(self));
+            return Err(ConnectError::other("could not create ALSA output subscription", self));
         }
         
         Ok(MidiOutputConnection {
@@ -495,7 +495,7 @@ impl MidiOutputConnection {
         
         if nbytes > self.coder.get_buffer_size() {
             if self.coder.resize_buffer(nbytes).is_err() {
-                return Err(SendError::Unspecified);
+                return Err(SendError::Other("could not resize ALSA encoding buffer"));
             }
         }
         
@@ -505,12 +505,12 @@ impl MidiOutputConnection {
         ev.set_direct();
         
         if self.coder.encode(message, &mut ev).is_err() {
-            return Err(SendError::InvalidData);
+            return Err(SendError::InvalidData("ALSA encoder reported invalid data"));
         }
         
         // Send the event.
         if self.seq.as_mut().unwrap().event_output(&ev).is_err() {
-            return Err(SendError::Unspecified);
+            return Err(SendError::Other("could not send encoded ALSA message"));
         }
         
         self.seq.as_mut().unwrap().drain_output();
