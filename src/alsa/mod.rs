@@ -78,19 +78,19 @@ pub struct MidiInput {
     vport: i32, // TODO: probably port numbers are only u8, therefore could use Option<u8>
 }
 
-pub struct MidiInputConnection {
+pub struct MidiInputConnection<T: 'static> {
     subscription: PortSubscription,
-    thread: Option<JoinHandle<HandlerData>>,
+    thread: Option<JoinHandle<(HandlerData<T>, T)>>,
     vport: i32,
     trigger_send_fd: i32,
 }
 
-struct HandlerData {
+struct HandlerData<T: 'static> {
     message: MidiMessage,
     ignore_flags: Ignore,
     seq: Sequencer,
     trigger_rcv_fd: i32,
-    callback: Box<FnMut(f64, &Vec<u8>)+Send>,
+    callback: Box<FnMut(f64, &[u8], &mut T)+Send>,
     queue_id: i32, // an input queue is needed to get timestamped events
 }
 
@@ -127,10 +127,10 @@ impl MidiInput {
         }
     }
     
-    pub fn connect<F>(
-        mut self, port_number: u32, port_name: &str, callback: F
-    ) -> Result<MidiInputConnection, ConnectError<MidiInput>>
-        where F: FnMut(f64, &Vec<u8>)+Send+'static {
+    pub fn connect<F, T: Send>(
+        mut self, port_number: u32, port_name: &str, callback: F, data: T
+    ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
+        where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
         
         fn seq(self_: &mut MidiInput) -> &mut Sequencer {
             self_.seq.as_mut().unwrap()
@@ -234,8 +234,9 @@ impl MidiInput {
         //pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
         //pthread_attr_setschedpolicy(&attr, SCHED_OTHER);*/
         let thread = match threadbuilder.spawn(move || {
-            ::std::thread::sleep_ms(100);
-            handle_input(handler_data)
+            let mut d = data;
+            let h = handle_input(handler_data, &mut d);
+            (h, d) // return both the handler data and the user data 
         }) {
             Ok(handle) => handle,
             Err(_) => {
@@ -265,19 +266,19 @@ impl Drop for MidiInput {
     }
 }
 
-impl MidiInputConnection {
-    pub fn close(mut self) -> MidiInput {
-        let handler_data = self.close_internal();
+impl<T> MidiInputConnection<T> {
+    pub fn close(mut self) -> (MidiInput, T) {
+        let (handler_data, user_data) = self.close_internal();
         
-        MidiInput {
+        (MidiInput {
             ignore_flags: handler_data.ignore_flags,
             seq: Some(handler_data.seq),
             vport: self.vport
-        }
+        }, user_data)
     }
     
     /// This might only be called if the handler thread has not yet been shut down
-    fn close_internal(&mut self) -> HandlerData {
+    fn close_internal(&mut self) -> (HandlerData<T>, T) {
         // Request the thread to stop.
         let _res = unsafe { ::libc::write(self.trigger_send_fd, mem::transmute(&false), mem::size_of::<bool>() as ::libc::size_t) };
         
@@ -285,7 +286,7 @@ impl MidiInputConnection {
         //    pthread_join( data.thread, NULL);
         let thread = self.thread.take().unwrap(); 
         // Join the thread to get the handler_data back
-        let mut handler_data = thread.join().unwrap(); // TODO: don't use unwrap here
+        let (mut handler_data, user_data) = thread.join().unwrap(); // TODO: don't use unwrap here
         
         // TODO: find out why snd_seq_unsubscribe_port takes a long time if there was not yet any input message
         unsafe { snd_seq_unsubscribe_port(handler_data.seq.as_mut_ptr(), self.subscription.as_ptr()) };
@@ -305,12 +306,12 @@ impl MidiInputConnection {
             }
         }
         
-        handler_data
+        (handler_data, user_data)
     }
 }
 
 
-impl Drop for MidiInputConnection {
+impl<T> Drop for MidiInputConnection<T> {
     fn drop(&mut self) {
         // Use `self.thread` as a flag whether the connection has already been dropped
         if self.thread.is_some() {
@@ -472,7 +473,7 @@ impl Drop for MidiOutputConnection {
     }
 }
 
-fn handle_input(mut data: HandlerData) -> HandlerData {
+fn handle_input<'a, T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T> {
     let mut last_time: Option<u64> = None;
     let mut continue_sysex: bool = false;
     
@@ -616,7 +617,7 @@ fn handle_input(mut data: HandlerData) -> HandlerData {
         drop(ev);
         if message.bytes.len() == 0 || continue_sysex { continue; }
         
-        (data.callback)(message.timestamp, &message.bytes);
+        (data.callback)(message.timestamp, &message.bytes, user_data);
     }
     data // return data back to thread owner
 }

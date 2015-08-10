@@ -27,9 +27,9 @@ fn main() {
     // This shows how to reuse input and output objects
     for _ in 0..2 {
         println!("\nOpening connections");
-        let conn_in = match midi_in.unwrap().connect(2, "RtMidi", |stamp, message| {
+        let conn_in = match midi_in.unwrap().connect(2, "RtMidi", |stamp, message, _| {
             println!("{}: {:?} (len = {})", stamp, message, message.len());
-        }) {
+        }, ()) {
             Ok(c) => c,
             Err(err) => {
                 println!("Error opening input connection.");
@@ -59,7 +59,7 @@ fn main() {
             input.clear();
         }
         println!("Closing connections");
-        midi_in = Some(conn_in.close());
+        midi_in = Some(conn_in.close().0);
         midi_out = Some(conn_out.close());
         println!("Connections closed");
     }
