@@ -30,19 +30,11 @@ use winmm_sys::{
     midiOutShortMsg,
 };
 
-use super::{MidiMessage, Ignore, PortInfoError, ConnectError};
+use super::{MidiMessage, Ignore};
+use super::{InitError, PortInfoError, ConnectErrorKind, ConnectError, SendError};
 use super::traits::*;
 
 mod handler;
-
-impl<T> ConnectError<T> {
-    pub fn into_inner(self) -> T {
-        match self {
-            ConnectError::PortNumberOutOfRange(i) => i,
-            ConnectError::Unspecified(i) => i
-        }
-    }
-}
 
 const RT_SYSEX_BUFFER_SIZE: usize = 1024;
 const RT_SYSEX_BUFFER_COUNT: usize = 4;
@@ -82,8 +74,8 @@ struct HandlerData<T> {
 }
 
 impl MidiInput {
-    pub fn new(_client_name: &str) -> Self {
-        MidiInput { ignore_flags: Ignore::None }
+    pub fn new(_client_name: &str) -> Result<Self, InitError> {
+        Ok(MidiInput { ignore_flags: Ignore::None })
     }
     
     pub fn ignore(&mut self, flags: Ignore) {
@@ -102,7 +94,7 @@ impl MidiInput {
         if result == MMSYSERR_BADDEVICEID {
             return Err(PortInfoError::PortNumberOutOfRange)
         }
-        assert!(result == MMSYSERR_NOERROR, "Error retrieving Windows MM MIDI input port name.");
+        assert!(result == MMSYSERR_NOERROR, "could not retrieve Windows MM MIDI input port name");
         let mut output = from_wide_ptr(device_caps.szPname.as_ptr(), device_caps.szPname.len()).to_string_lossy().into_owned();
         
         // Next lines added to add the portNumber to the name so that 
@@ -134,9 +126,9 @@ impl MidiInput {
                         mem::transmute_copy::<_, *mut HandlerData<T>>(&handler_data) as DWORD_PTR,
                         CALLBACK_FUNCTION) };
         if result == MMSYSERR_BADDEVICEID {
-            return Err(ConnectError::PortNumberOutOfRange(self));
+            return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self));
         } else if result != MMSYSERR_NOERROR {
-            return Err(ConnectError::Unspecified(self));
+            return Err(ConnectError::other("could not create Windows MM MIDI input port", self));
         }
         
         // Allocate and init the sysex buffers.
@@ -157,11 +149,15 @@ impl MidiInput {
             // TODO: close port in case of error?
             
             let result = unsafe { midiInPrepareHeader(in_handle, handler_data.sysex_buffer[i], mem::size_of::<MIDIHDR>() as u32) };
-            assert!(result == MMSYSERR_NOERROR, "Error initializing Windows MM MIDI input port (PrepareHeader).");
+            if result != MMSYSERR_NOERROR {
+                return Err(ConnectError::other("could not initialize Windows MM MIDI input port (PrepareHeader)", self));
+            }
             
             // Register the buffer.
             let result = unsafe { midiInAddBuffer(in_handle, handler_data.sysex_buffer[i], mem::size_of::<MIDIHDR>() as u32) };
-            assert!(result == MMSYSERR_NOERROR, "Error initializing Windows MM MIDI input port (AddBuffer).");            
+            if result != MMSYSERR_NOERROR {
+                return Err(ConnectError::other("could not initialize Windows MM MIDI input port (AddBuffer)", self));
+            }            
         }
         
         handler_data.in_handle = Some(Mutex::new(in_handle));
@@ -172,7 +168,7 @@ impl MidiInput {
         let result = unsafe { midiInStart(in_handle) };
         if result != MMSYSERR_NOERROR {
             unsafe { midiInClose(in_handle) };
-            assert!(false, "Error starting Windows MM MIDI input port.");
+            return Err(ConnectError::other("could not start Windows MM MIDI input port", self));
         }
         
         Ok(MidiInputConnection {
@@ -182,6 +178,10 @@ impl MidiInput {
 }
 
 impl PortInfo for MidiInput {
+    fn new(client_name: &str) -> Result<Self, InitError> {
+        Self::new(client_name)
+    }
+    
     fn port_count(&self) -> u32 {
         self.port_count()
     }
@@ -264,8 +264,8 @@ pub struct MidiOutputConnection {
 }
 
 impl MidiOutput {
-    pub fn new(_client_name: &str) -> Self {
-        MidiOutput
+    pub fn new(_client_name: &str) -> Result<Self, InitError> {
+        Ok(MidiOutput)
     }
     
 	pub fn port_count(&self) -> u32 {
@@ -280,7 +280,7 @@ impl MidiOutput {
         if result == MMSYSERR_BADDEVICEID {
             return Err(PortInfoError::PortNumberOutOfRange)
         }
-        assert!(result == MMSYSERR_NOERROR, "Error retrieving Windows MM MIDI output port name.");
+        assert!(result == MMSYSERR_NOERROR, "could not retrieve Windows MM MIDI output port name");
         let mut output = from_wide_ptr(device_caps.szPname.as_ptr(), device_caps.szPname.len()).to_string_lossy().into_owned();
         
         // Next lines added to add the portNumber to the name so that 
@@ -295,9 +295,9 @@ impl MidiOutput {
         
         let result = unsafe { midiOutOpen(&mut out_handle, port_number, 0, 0, CALLBACK_NULL) };
         if result == MMSYSERR_BADDEVICEID {
-            return Err(ConnectError::PortNumberOutOfRange(self));
+            return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self));
         } else if result != MMSYSERR_NOERROR {
-            return Err(ConnectError::Unspecified(self));
+            return Err(ConnectError::other("could not create Windows MM MIDI output port", self));
         }
         
         Ok(MidiOutputConnection {
@@ -307,6 +307,10 @@ impl MidiOutput {
 }
 
 impl PortInfo for MidiOutput {
+    fn new(client_name: &str) -> Result<Self, InitError> {
+        Self::new(client_name)
+    }
+    
     fn port_count(&self) -> u32 {
         self.port_count()
     }
@@ -333,9 +337,11 @@ impl MidiOutputConnection {
     }
     
     /// This will panic if the message is not a valid MIDI message.
-    pub fn send_message(&mut self, message: &[u8]) {        
+    pub fn send_message(&mut self, message: &[u8]) -> Result<(), SendError> {        
         let nbytes = message.len();
-        assert!(nbytes != 0, "Message to be sent must not be empty");
+        if nbytes == 0 {
+            return Err(SendError::InvalidData("message to be sent must not be empty"));
+        }
         
         if message[0] == 0xF0 { // Sysex message
             // Allocate buffer for sysex data and copy message
@@ -355,7 +361,10 @@ impl MidiOutputConnection {
             };
             
             let result = unsafe { midiOutPrepareHeader(self.out_handle, &mut sysex, mem::size_of::<MIDIHDR>() as u32) };
-            assert!(result == MMSYSERR_NOERROR, "Preparation for sending sysex message failed.");
+            
+            if result != MMSYSERR_NOERROR {
+                return Err(SendError::Other("preparation for sending sysex message failed (OutPrepareHeader)"));
+            }
             
             // Send the message.
             loop {
@@ -364,7 +373,9 @@ impl MidiOutputConnection {
                     sleep_ms(1);
                     continue;
                 } else {
-                    assert!(result == MMSYSERR_NOERROR, "Sending sysex message failed.");
+                    if result != MMSYSERR_NOERROR {
+                        return Err(SendError::Other("sending sysex message failed"));
+                    }
                     break;
                 }
             }
@@ -378,7 +389,9 @@ impl MidiOutputConnection {
             }
         } else { // Channel or system message.
             // Make sure the message size isn't too big.
-            assert!(nbytes <= 3, "Trying to send invalid message, it's size is greater than 3 bytes (and not sysex).");
+            if nbytes > 3 {
+                return Err(SendError::InvalidData("non-sysex message must not be longer than 3 bytes"));
+            }
             
             // Pack MIDI bytes into double word.
             let packet: DWORD = 0;
@@ -394,11 +407,15 @@ impl MidiOutputConnection {
                     sleep_ms(1);
                     continue;
                 } else {
-                    assert!(result == MMSYSERR_NOERROR, "Sending non-sysex message failed");
+                    if result != MMSYSERR_NOERROR {
+                        return Err(SendError::Other("sending non-sysex message failed"));
+                    }
                     break;
                 }
             }
         }
+        
+        Ok(())
     }
 }
 
@@ -418,7 +435,7 @@ impl OutputConnection for MidiOutputConnection {
         self.close()
     }
     
-    fn send_message(&mut self, message: &[u8]) {
+    fn send_message(&mut self, message: &[u8]) -> Result<(), SendError> {
         self.send_message(message)
     }   
 }
