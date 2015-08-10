@@ -33,7 +33,9 @@ use alsa_sys::{
     SND_SEQ_EVENT_START
 };
 
-use super::{MidiMessage, Ignore, PortInfoError, ConnectError, SendError};
+use super::{MidiMessage, Ignore};
+use super::{InitError, PortInfoError, ConnectError, SendError};
+use super::traits::*;
 
 // Include ALSA wrappers
 mod wrappers;
@@ -41,7 +43,6 @@ use self::wrappers::{
     Sequencer,
     SequencerOpenMode,
     QueueTempo,
-    PortInfo,
     PortSubscription,
     EventDecoder,
     EventEncoder,
@@ -54,6 +55,7 @@ use self::wrappers::{
     SND_SEQ_PORT_TYPE_MIDI_GENERIC,
     SND_SEQ_PORT_TYPE_APPLICATION
 };
+use self::wrappers::PortInfo as APortInfo;
 
 #[inline(always)]
 unsafe fn snd_seq_stop_queue(seq: *mut snd_seq_t, q: i32, ev: *mut snd_seq_event_t) {
@@ -94,18 +96,19 @@ struct HandlerData<T: 'static> {
 }
 
 impl MidiInput {
-    pub fn new(client_name: &str) -> Self {
-        // Set up the ALSA sequencer client (this should not fail except with out-of-memory).
-        let mut seq = Sequencer::open(SequencerOpenMode::Duplex, true)
-                        .ok().expect("Error creating ALSA sequencer client.");
+    pub fn new(client_name: &str) -> Result<Self, InitError> {
+        let mut seq = match Sequencer::open(SequencerOpenMode::Duplex, true) {
+            Ok(s) => s,
+            Err(_) => { return Err(InitError); }
+        };
         
         seq.set_client_name(client_name);
         
-        MidiInput {
+        Ok(MidiInput {
             ignore_flags: Ignore::None,
             seq: Some(seq),
             vport: -1
-        }
+        })
     }
     
     pub fn ignore(&mut self, flags: Ignore) {
@@ -114,7 +117,7 @@ impl MidiInput {
     
 	pub fn port_count(&self) -> u32 {
         unsafe {
-            let mut pinfo = PortInfo::allocate();
+            let mut pinfo = APortInfo::allocate();
             get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, -1).unwrap() as u32
         }
     }
@@ -161,7 +164,7 @@ impl MidiInput {
             queue_id = qid;
         }
         
-        let mut src_pinfo = unsafe { PortInfo::allocate() };
+        let mut src_pinfo = unsafe { APortInfo::allocate() };
         
         if get_port_info(self.seq.as_mut().unwrap(), &mut src_pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32).is_none() {
             return Err(ConnectError::PortNumberOutOfRange(self));
@@ -172,7 +175,7 @@ impl MidiInput {
             port: src_pinfo.get_port() as u8
         };
         
-        let mut pinfo = unsafe { PortInfo::allocate() };
+        let mut pinfo = unsafe { APortInfo::allocate() };
         
         if self.vport < 0 {
             pinfo.set_client(0);
@@ -264,6 +267,31 @@ impl Drop for MidiInput {
     }
 }
 
+impl PortInfo for MidiInput {
+    fn new(client_name: &str) -> Result<Self, super::InitError> {
+        Self::new(client_name)
+    }
+    
+    fn port_count(&self) -> u32 {
+        self.port_count()
+    }
+    
+    fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
+        self.port_name(port_number)
+    }
+}
+
+impl<T: Send> InputConnect<T> for MidiInput {
+    type Connection = MidiInputConnection<T>; 
+    
+    fn connect<F>(
+        self, port_number: u32, port_name: &str, callback: F, data: T
+    ) -> Result<Self::Connection, ConnectError<Self>>
+    where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
+        self.connect(port_number, port_name, callback, data)
+    }
+}
+
 impl<T> MidiInputConnection<T> {
     pub fn close(mut self) -> (MidiInput, T) {
         let (handler_data, user_data) = self.close_internal();
@@ -318,6 +346,14 @@ impl<T> Drop for MidiInputConnection<T> {
     }
 }
 
+impl<T> InputConnection<T> for MidiInputConnection<T> {
+    type Input = MidiInput;
+    
+    fn close(self) -> (Self::Input, T) {
+        self.close()
+    }
+}
+
 pub struct MidiOutput {
     seq: Option<Sequencer>, // TODO: if `Sequencer` is marked as non-zero, this should just be pointer-sized 
     vport: i32,
@@ -332,23 +368,24 @@ pub struct MidiOutputConnection {
 }
 
 impl MidiOutput {
-    pub fn new(client_name: &str) -> Self {
-        // Set up the ALSA sequencer client (this should not fail except with out-of-memory).
-        let mut seq = Sequencer::open(SequencerOpenMode::Output, true)
-                        .ok().expect("Error creating ALSA sequencer client.");
+    pub fn new(client_name: &str) -> Result<Self, InitError> {
+        let mut seq = match Sequencer::open(SequencerOpenMode::Output, true) {
+            Ok(s) => s,
+            Err(_) => { return Err(InitError); }
+        };
         
         // Set client name.
         seq.set_client_name(client_name);
         
-        MidiOutput {
+        Ok(MidiOutput {
             seq: Some(seq),
             vport: -1
-        }
+        })
     }
     
 	pub fn port_count(&self) -> u32 {
         unsafe {
-            let mut pinfo = PortInfo::allocate();
+            let mut pinfo = APortInfo::allocate();
             get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, -1).unwrap() as u32
         }
     }
@@ -361,7 +398,7 @@ impl MidiOutput {
     }
     
     pub fn connect(mut self, port_number: u32, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
-        let mut pinfo = unsafe { PortInfo::allocate() };
+        let mut pinfo = unsafe { APortInfo::allocate() };
         
         if get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, port_number as i32).is_none() {
             return Err(ConnectError::PortNumberOutOfRange(self));
@@ -418,6 +455,30 @@ impl Drop for MidiOutput {
     }
 }
 
+impl PortInfo for MidiOutput {
+    fn new(client_name: &str) -> Result<Self, super::InitError> {
+        Self::new(client_name)
+    }
+    
+    fn port_count(&self) -> u32 {
+        self.port_count()
+    }
+    
+    fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
+        self.port_name(port_number)
+    }
+}
+
+impl OutputConnect for MidiOutput {
+    type Connection = MidiOutputConnection; 
+    
+     fn connect(
+        self, port_number: u32, port_name: &str
+    ) -> Result<Self::Connection, super::ConnectError<Self>> {
+        self.connect(port_number, port_name)
+    }
+}
+
 impl MidiOutputConnection {
     pub fn close(mut self) -> MidiOutput {
         self.close_internal();
@@ -469,6 +530,18 @@ impl Drop for MidiOutputConnection {
             self.close_internal();
         }
     }
+}
+
+impl OutputConnection for MidiOutputConnection {
+    type Output = MidiOutput;
+    
+    fn close(self) -> Self::Output {
+        self.close()
+    }
+    
+    fn send_message(&mut self, message: &[u8]) -> Result<(), SendError> {
+        self.send_message(message)
+    }   
 }
 
 fn handle_input<'a, T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T> {
