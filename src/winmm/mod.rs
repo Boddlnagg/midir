@@ -61,17 +61,23 @@ pub struct MidiInput {
     ignore_flags: Ignore
 }
 
-pub struct MidiInputConnection {
-    handler_data: Box<HandlerData>,
+pub struct MidiInputConnection<T> {
+    handler_data: Box<HandlerData<T>>,
 }
 
-struct HandlerData {
+/// This is all the data that is stored on the heap as long as a connection
+/// is opened and passed to the callback handler.
+///
+/// It is important that `user_data` is the last field to not influence
+/// offsets after monomorphization.
+struct HandlerData<T> {
     message: MidiMessage,
     last_time: Option<u64>,
     sysex_buffer: [LPMIDIHDR; RT_SYSEX_BUFFER_COUNT],
     in_handle: Option<Mutex<HMIDIIN>>,
     ignore_flags: Ignore,
-    callback: Box<FnMut(f64, &Vec<u8>)+Send>
+    callback: Box<FnMut(f64, &[u8], &mut T)+Send>,
+    user_data: Option<T>
 }
 
 impl MidiInput {
@@ -105,10 +111,10 @@ impl MidiInput {
         Ok(output)
     }
     
-    pub fn connect<F>(
-        self, port_number: u32, _port_name: &str, callback: F
-    ) -> Result<MidiInputConnection, ConnectError<MidiInput>>
-        where F: FnMut(f64, &Vec<u8>)+Send+'static {
+    pub fn connect<F, T: Send>(
+        self, port_number: u32, _port_name: &str, callback: F, data: T
+    ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
+        where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
         
         let mut handler_data = Box::new(HandlerData {
             message: MidiMessage::new(),
@@ -117,13 +123,14 @@ impl MidiInput {
             in_handle: None,
             ignore_flags: self.ignore_flags,
             callback: Box::new(callback),
+            user_data: Some(data)
         });
         
         let mut in_handle: HMIDIIN = unsafe { mem::uninitialized() };
         let result = unsafe { midiInOpen(&mut in_handle,
                         port_number,
-                        handler::handle_input as DWORD_PTR,
-                        mem::transmute_copy::<_,*mut HandlerData>(&handler_data) as DWORD_PTR,
+                        handler::handle_input::<T> as DWORD_PTR,
+                        mem::transmute_copy::<_, *mut HandlerData<T>>(&handler_data) as DWORD_PTR,
                         CALLBACK_FUNCTION) };
         if result == MMSYSERR_BADDEVICEID {
             return Err(ConnectError::PortNumberOutOfRange(self));
@@ -173,12 +180,13 @@ impl MidiInput {
     }
 }
 
-impl MidiInputConnection {
-    pub fn close(self) -> MidiInput {
-        // The actual closing is done by the implementation of Drop
-        MidiInput {
-            ignore_flags: self.handler_data.ignore_flags
-        }
+impl<T> MidiInputConnection<T> {
+    pub fn close(mut self) -> (MidiInput, T) {
+        self.close_internal();
+        
+        (MidiInput {
+            ignore_flags: self.handler_data.ignore_flags,
+        }, self.handler_data.user_data.take().unwrap())
     }
     
     fn close_internal(&mut self) {
@@ -209,10 +217,12 @@ impl MidiInputConnection {
     }
 }
 
-impl Drop for MidiInputConnection {
+impl<T> Drop for MidiInputConnection<T> {
     fn drop(&mut self) {
-        // TODO: move implementation here directly
-        self.close_internal();
+        // If user_data has been emptied, we know that we already have closed the connection
+        if (self.handler_data.user_data.is_some()) {
+            self.close_internal()
+        }
     }
 }
 
