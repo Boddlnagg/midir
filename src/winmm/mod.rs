@@ -31,6 +31,7 @@ use winmm_sys::{
 };
 
 use super::{MidiMessage, Ignore, PortInfoError, ConnectError};
+use super::traits::*;
 
 mod handler;
 
@@ -180,6 +181,27 @@ impl MidiInput {
     }
 }
 
+impl PortInfo for MidiInput {
+    fn port_count(&self) -> u32 {
+        self.port_count()
+    }
+    
+    fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
+        self.port_name(port_number)
+    }
+}
+
+impl<T: Send> InputConnect<T> for MidiInput {
+    type Connection = MidiInputConnection<T>; 
+    
+    fn connect<F>(
+        self, port_number: u32, port_name: &str, callback: F, data: T
+    ) -> Result<Self::Connection, ConnectError<Self>>
+    where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
+        self.connect(port_number, port_name, callback, data)
+    }
+}
+
 impl<T> MidiInputConnection<T> {
     pub fn close(mut self) -> (MidiInput, T) {
         self.close_internal();
@@ -220,9 +242,17 @@ impl<T> MidiInputConnection<T> {
 impl<T> Drop for MidiInputConnection<T> {
     fn drop(&mut self) {
         // If user_data has been emptied, we know that we already have closed the connection
-        if (self.handler_data.user_data.is_some()) {
+        if self.handler_data.user_data.is_some() {
             self.close_internal()
         }
+    }
+}
+
+impl<T> InputConnection<T> for MidiInputConnection<T> {
+    type Input = MidiInput;
+    
+    fn close(self) -> (Self::Input, T) {
+        self.close()
     }
 }
 
@@ -273,6 +303,26 @@ impl MidiOutput {
         Ok(MidiOutputConnection {
             out_handle: out_handle
         })
+    }
+}
+
+impl PortInfo for MidiOutput {
+    fn port_count(&self) -> u32 {
+        self.port_count()
+    }
+    
+    fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
+        self.port_name(port_number)
+    }
+}
+
+impl OutputConnect for MidiOutput {
+    type Connection = MidiOutputConnection; 
+    
+     fn connect(
+        self, port_number: u32, port_name: &str
+    ) -> Result<Self::Connection, super::ConnectError<Self>> {
+        self.connect(port_number, port_name)
     }
 }
 
@@ -359,4 +409,16 @@ impl Drop for MidiOutputConnection {
             midiOutClose(self.out_handle);
         }
     }
+}
+
+impl OutputConnection for MidiOutputConnection {
+    type Output = MidiOutput;
+    
+    fn close(self) -> Self::Output {
+        self.close()
+    }
+    
+    fn send_message(&mut self, message: &[u8]) {
+        self.send_message(message)
+    }   
 }
