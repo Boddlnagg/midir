@@ -73,7 +73,7 @@ pub extern "C" fn handle_input<T>(_: HMIDIIN,
             let result = unsafe { midiInAddBuffer(*in_handle, data.sysex_buffer[sysex.dwUser as usize], mem::size_of::<MIDIHDR>() as u32) };
             drop(in_handle);
             if result != MMSYSERR_NOERROR {
-                let _ = write!(stderr(), "\nRtMidiIn::midiInputCallback: error sending sysex to Midi device!!\n\n");
+                let _ = writeln!(stderr(), "\nError in handle_input: Requeuing WinMM input sysex buffer failed.\n");
             }
             
             if data.ignore_flags.contains(Ignore::Sysex) { return; }

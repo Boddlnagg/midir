@@ -133,7 +133,7 @@ impl MidiInput {
         let mut queue_id = 0;
         // Create the input queue
         if !cfg!(feature = "avoid_timestamping") {
-            queue_id = unsafe { snd_seq_alloc_named_queue(seq.as_mut_ptr(), mem::transmute(b"RtMidi Queue")) };
+            queue_id = unsafe { snd_seq_alloc_named_queue(seq.as_mut_ptr(), mem::transmute(b"midir queue")) };
             // Set arbitrary tempo (mm=100) and resolution (240)
             let mut qtempo = unsafe { QueueTempo::allocate() };
             qtempo.set_tempo(600_000);
@@ -657,11 +657,11 @@ fn handle_input<'a, T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerDa
         let mut ev = match data.seq.event_input() {
             Ok((ev, _)) => ev,
             Err(e) if e == -::libc::consts::os::posix88::ENOSPC => {
-                let _ = write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: MIDI input buffer overrun!\n\n");
+                let _ = writeln!(stderr(), "\nError in handle_input: ALSA MIDI input buffer overrun!\n");
                 continue;
             },
             Err(_) => {
-                let _ = write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: unknown MIDI input error!\n");
+                let _ = writeln!(stderr(), "\nError in handle_input: unknown ALSA MIDI input error!\n");
                 //perror("System reports");
                 continue;
             }
@@ -676,12 +676,12 @@ fn handle_input<'a, T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerDa
         let ignore_flags = data.ignore_flags;
         let do_decode = match ev._type as u32 {
             SND_SEQ_EVENT_PORT_SUBSCRIBED => {
-                if cfg!(debug) { println!("MidiInAlsa::alsaMidiHandler: port connection made!") };
+                if cfg!(debug) { println!("Notice from handle_input: ALSA port connection made!") };
                 false
             },
             SND_SEQ_EVENT_PORT_UNSUBSCRIBED => {
                 if cfg!(debug) {
-                    let _ = writeln!(stderr(), "MidiInAlsa::alsaMidiHandler: port connection has closed!");
+                    let _ = writeln!(stderr(), "Notice from handle_input: ALSA port connection has closed!");
                     let connect = unsafe { &*ev.data.connect() };
                     println!("sender = {}:{}, dest = {}:{}",
                         connect.sender.client,
@@ -752,7 +752,7 @@ fn handle_input<'a, T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerDa
                 } else {
                     // TODO: this doesn't make sense
                     if cfg!(debug) {
-                        let _ = write!(stderr(), "\nMidiInAlsa::alsaMidiHandler: event parsing error or not a MIDI event!\n\n");
+                        let _ = writeln!(stderr(), "\nError in handle_input: event parsing error or not a MIDI event!\n");
                     }
                 }
             }
