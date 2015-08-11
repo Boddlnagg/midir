@@ -10,7 +10,7 @@ Cross-platform, realtime MIDI processing in Rust.
 - [x] ALSA (Linux)
 - [ ] WinMM (Windows), blocked on a [winapi-rs PR](https://github.com/retep998/winapi-rs/pull/176)
 - [ ] CoreMIDI (OS X, iOS), see [this issue](https://github.com/Boddlnagg/midir/issues/1)
-- [ ] Jack (Linux, OS X), see [this issue](https://github.com/Boddlnagg/midir/issues/2)
+- [x] Jack (Linux, OS X), use `--features jack`
 
 A higher-level API for parsing and assembling MIDI messages might be added in the future.
 
