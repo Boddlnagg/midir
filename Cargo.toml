@@ -5,7 +5,7 @@ authors = ["Patrick Reisert"]
 description = "A cross-platform, realtime MIDI processing library, inspired by RtMidi."
 repository = "https://github.com/Boddlnagg/midir"
 readme = "README.md"
-keywords = ["midi"]
+keywords = ["midi", "audio", "music", "sound"]
 license = "MIT"
 
 [features]
