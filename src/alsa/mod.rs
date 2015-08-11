@@ -721,7 +721,7 @@ fn handle_input<'a, T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerDa
         };
 
         if do_decode {
-            let nbytes = unsafe { snd_midi_event_decode(coder.as_ptr(), buffer.as_mut_ptr(), buffer.len() as i64, &**ev) } as usize;
+            let nbytes = coder.decode(&mut buffer, &mut *ev);
             
             if nbytes > 0 {
                 // The ALSA sequencer has a maximum buffer size for MIDI sysex

@@ -24,6 +24,10 @@ libc = "*"
 alsa-sys = "0.0.8"
 libc = "*"
 
+[target.arm-unknown-linux-gnueabihf.dependencies]
+alsa-sys = "0.0.8"
+libc = "*"
+
 [target.i686-pc-windows-gnu.dependencies]
 winapi = "0.2"
 winmm-sys = "0.1.1"

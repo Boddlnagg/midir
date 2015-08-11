@@ -439,7 +439,7 @@ impl EventDecoder {
     
     pub fn decode(&mut self, buffer: &mut [u8], ev: &mut Event) -> usize {
         unsafe {
-            snd_midi_event_decode(self.p, buffer.as_mut_ptr(), buffer.len() as i64, &ev.ev) as usize
+            snd_midi_event_decode(self.p, buffer.as_mut_ptr(), buffer.len() as ::libc::c_long, &ev.ev) as usize
         }
     }
 }
@@ -461,7 +461,7 @@ impl EventEncoder {
         unsafe {
             coder = mem::uninitialized();
             // this could only fail with "Out of memory", which we ignore
-            snd_midi_event_new(buffer_size as u64, &mut coder);
+            snd_midi_event_new(buffer_size as ::libc::size_t, &mut coder);
             //snd_midi_event_init(data.coder);
         }
         EventEncoder { p: coder, buffer_size: buffer_size }
@@ -476,13 +476,17 @@ impl EventEncoder {
     }
     
     pub fn resize_buffer(&mut self, new_size: usize) -> Result<(), ()> {
-        let result = unsafe { snd_midi_event_resize_buffer(self.p, new_size as u64) };
+        let result = unsafe { snd_midi_event_resize_buffer(self.p, new_size as ::libc::size_t) };
         if result != 0 { Err(()) } else { Ok(()) }
     }
     
     pub fn encode(&mut self, message: &[u8], ev: &mut Event) -> Result<(), ()> {
-        let result = unsafe { snd_midi_event_encode(self.p, message.as_ptr(), message.len() as i64, &mut ev.ev) };
-        if result < message.len() as i64 { Err(()) } else { Ok(()) }
+        let result = unsafe { snd_midi_event_encode(self.p, message.as_ptr(), message.len() as ::libc::c_long, &mut ev.ev) as usize};
+        if result < message.len() { Err(()) } else { Ok(()) }
+    }
+    
+    pub fn decode(&mut self, buffer: &mut [u8], ev: &snd_seq_event_t) {
+        unsafe { snd_midi_event_decode(self.p, buffer.as_mut_ptr(), buffer.len() as ::libc::c_long, ev) };
     }
 }
 
