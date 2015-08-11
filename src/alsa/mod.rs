@@ -127,7 +127,6 @@ impl MidiInput {
         }
     }
     
-    #[inline(always)]
     fn init_queue(&mut self) -> i32 {
         let seq = self.seq.as_mut().unwrap();
         let mut queue_id = 0;
@@ -147,7 +146,6 @@ impl MidiInput {
         queue_id
     }
     
-    #[inline(always)]
     fn init_trigger(&mut self) -> Result<[i32; 2], ()> {
         let mut trigger_fds = [-1, -1];
         
@@ -158,7 +156,6 @@ impl MidiInput {
         }
     }
     
-    #[inline(always)]
     fn create_port(&mut self, port_name: &str, queue_id: i32) -> Result<i32, ()> {
         let mut pinfo = unsafe { APortInfo::allocate() };
         pinfo.set_client(0);

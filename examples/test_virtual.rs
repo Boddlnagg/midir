@@ -1,7 +1,6 @@
 extern crate midir;
 
 use std::thread::sleep_ms;
-use std::io::{stdin, stdout, Write};
 use std::error::Error;
 
 use midir::{MidiInput, MidiOutput, Ignore};
@@ -16,8 +15,6 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<Error>> {
-    let mut input = String::new();
-    
     let mut midi_in = try!(MidiInput::new("My Test Input"));
     midi_in.ignore(Ignore::None);
     let midi_out = try!(MidiOutput::new("My Test Output"));
@@ -62,7 +59,7 @@ fn run() -> Result<(), Box<Error>> {
     println!("Closing input ...");
     let midi_in = conn_in.close().0;
     println!("Closing virtual output ...");
-    let midi_out = conn_out.close();
+    conn_out.close();
     assert_eq!(midi_in.port_count(), previous_count);
     Ok(())
 }

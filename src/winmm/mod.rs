@@ -337,7 +337,7 @@ impl MidiOutputConnection {
     }
     
     /// This will panic if the message is not a valid MIDI message.
-    pub fn send_message(&mut self, message: &[u8]) -> Result<(), SendError> {        
+    pub fn send_message(&mut self, message: &[u8]) -> Result<(), SendError> {
         let nbytes = message.len();
         if nbytes == 0 {
             return Err(SendError::InvalidData("message to be sent must not be empty"));

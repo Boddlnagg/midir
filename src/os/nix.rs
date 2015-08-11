@@ -1,4 +1,5 @@
-use ::{InputConnection, OutputConnection, ConnectError};
+use traits::{InputConnection, OutputConnection};
+use ::ConnectError;
 
 pub trait VirtualInput<T: Send> {
     type Connection: InputConnection<T>;

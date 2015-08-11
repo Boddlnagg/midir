@@ -1,6 +1,6 @@
 [package]
 name = "midir"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Patrick Reisert"]
 description = "A cross-platform, realtime MIDI processing library, inspired by RtMidi."
 repository = "https://github.com/Boddlnagg/midir"
@@ -9,7 +9,12 @@ keywords = ["midi"]
 license = "MIT"
 
 [features]
+default = []
 avoid_timestamping = []
+jack = ["jack-sys"]
+
+[dependencies]
+bitflags = "0.3"
 
 [target.i686-unknown-linux-gnu.dependencies]
 alsa-sys = "0.0.8"
@@ -19,6 +24,14 @@ libc = "*"
 alsa-sys = "0.0.8"
 libc = "*"
 
+[target.i686-pc-windows-gnu.dependencies]
+winapi = "0.2"
+winmm-sys = "0.1.1"
+
 [target.x86_64-pc-windows-gnu.dependencies]
 winapi = "0.2"
 winmm-sys = "0.1.1"
+
+[dependencies.jack-sys]
+version = "0.0.2"
+optional = true

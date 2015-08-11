@@ -1,7 +1,15 @@
 #![feature(vec_push_all, box_raw, heap_api)]
 
-#[cfg(target_os="linux")] extern crate libc;
-#[cfg(target_os="linux")] extern crate alsa_sys;
+#[macro_use]
+extern crate bitflags;
+
+#[cfg(target_os="linux")]
+extern crate libc;
+#[cfg(all(target_os="linux", not(feature = "jack")))]
+extern crate alsa_sys;
+#[cfg(all(feature = "jack", not(target_os = "windows")))]
+extern crate jack_sys;
+
 #[cfg(target_os="windows")] extern crate winapi;
 #[cfg(target_os="windows")] extern crate winmm as winmm_sys;
 
@@ -45,8 +53,6 @@ impl fmt::Display for PortInfoError {
         self.description().fmt(f)
     }
 }
-
-// TODO: implement (not derive) Debug, Show, ... without using inner T
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectErrorKind {
@@ -183,15 +189,24 @@ pub mod os; // include platform-specific behaviour
 mod traits;
 pub use traits::*;
 
-// TODO: allow feature selection (ALSA and/or Jack)
-#[cfg(target_os="linux")] pub mod alsa;
-#[cfg(target_os="linux")] pub type MidiInput = alsa::MidiInput;
-#[cfg(target_os="linux")] pub type MidiInputConnection<T> = alsa::MidiInputConnection<T>;
-#[cfg(target_os="linux")] pub type MidiOutput = alsa::MidiOutput;
-#[cfg(target_os="linux")] pub type MidiOutputConnection = alsa::MidiOutputConnection;
+// TODO: improve feature selection (make sure that there is always exactly one implementation)
+// TODO: allow to disable build dependency on ALSA
+// TODO: use reexport syntax `pub use` instead of type aliases? didn't work when I tried ...
 
-#[cfg(target_os="windows")] pub mod winmm;
+#[cfg(all(target_os="linux", not(feature = "jack")))] mod alsa;
+#[cfg(all(target_os="linux", not(feature = "jack")))] pub type MidiInput = alsa::MidiInput;
+#[cfg(all(target_os="linux", not(feature = "jack")))] pub type MidiInputConnection<T> = alsa::MidiInputConnection<T>;
+#[cfg(all(target_os="linux", not(feature = "jack")))] pub type MidiOutput = alsa::MidiOutput;
+#[cfg(all(target_os="linux", not(feature = "jack")))] pub type MidiOutputConnection = alsa::MidiOutputConnection;
+
+#[cfg(target_os="windows")] mod winmm;
 #[cfg(target_os="windows")] pub type MidiInput = winmm::MidiInput;
 #[cfg(target_os="windows")] pub type MidiInputConnection<T> = winmm::MidiInputConnection<T>;
 #[cfg(target_os="windows")] pub type MidiOutput = winmm::MidiOutput;
 #[cfg(target_os="windows")] pub type MidiOutputConnection = winmm::MidiOutputConnection;
+
+#[cfg(all(feature = "jack", not(target_os="windows")))] mod jack;
+#[cfg(all(feature = "jack", not(target_os="windows")))] pub type MidiInput = jack::MidiInput;
+#[cfg(all(feature = "jack", not(target_os="windows")))] pub type MidiInputConnection<T> = jack::MidiInputConnection<T>;
+#[cfg(all(feature = "jack", not(target_os="windows")))] pub type MidiOutput = jack::MidiOutput;
+#[cfg(all(feature = "jack", not(target_os="windows")))] pub type MidiOutputConnection = jack::MidiOutputConnection;
