@@ -13,7 +13,6 @@ use alsa_sys::{
     snd_seq_unsubscribe_port,
     snd_seq_event_t,
     snd_seq_event_input_pending,
-    snd_midi_event_decode,
     snd_seq_drain_output,
     snd_seq_alloc_named_queue,
     snd_seq_set_queue_tempo,
