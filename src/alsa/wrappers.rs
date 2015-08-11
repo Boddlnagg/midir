@@ -102,6 +102,8 @@ pub fn poll(fds: &mut [pollfd], timeout: i32) -> i32 {
     unsafe { poll(fds.as_mut_ptr(), fds.len() as u32, timeout) }
 }
 
+const DEFAULT_SEQ: &'static [u8] = b"default\0";
+
 /// This function is used to count or get the pinfo structure for a given port number.
 /// TODO: introduce iterator?
 pub fn get_port_info(seq: &Sequencer, pinfo: &mut PortInfo, typ: u32, port_number: i32) -> Option<i32> {
@@ -176,7 +178,7 @@ impl Sequencer {
         let mut seq = unsafe { mem::uninitialized() };
         let result = unsafe { snd_seq_open(
             &mut seq,
-            mem::transmute(b"default"),
+            DEFAULT_SEQ.as_ptr() as *const i8,
             mode as i32,
             if non_block { SND_SEQ_NONBLOCK } else { 0 }
         ) };
@@ -197,7 +199,7 @@ impl Sequencer {
     }
     
     pub fn set_client_name(&mut self, name: &str) {
-        let c_name = CString::new(name).ok().expect("client_name must not contain null bytes");
+        let c_name = CString::new(name).ok().expect("client name must not contain null bytes");
         unsafe { snd_seq_set_client_name(self.p, c_name.as_ptr()) };
     }
     
@@ -268,6 +270,8 @@ pub struct ClientInfo {
     p: *mut snd_seq_client_info_t
 }
 
+unsafe impl Send for ClientInfo {}
+
 impl ClientInfo {
     pub unsafe fn allocate() -> ClientInfo {
         let mut cinfo: *mut snd_seq_client_info_t = mem::uninitialized();
@@ -304,6 +308,8 @@ impl Drop for ClientInfo {
 pub struct PortInfo {
     p: *mut snd_seq_port_info_t
 }
+
+unsafe impl Send for PortInfo {}
 
 impl PortInfo {
     pub unsafe fn allocate() -> PortInfo {
@@ -381,6 +387,8 @@ pub struct PortSubscription {
     p: *mut snd_seq_port_subscribe_t
 }
 
+unsafe impl Send for PortSubscription {}
+
 impl PortSubscription {
     pub unsafe fn allocate() -> PortSubscription {
         let mut psub: *mut snd_seq_port_subscribe_t = mem::uninitialized();
@@ -420,6 +428,8 @@ pub struct EventDecoder {
     p: *mut snd_midi_event_t
 }
 
+unsafe impl Send for EventDecoder {}
+
 impl EventDecoder {
     pub fn new(no_status: bool) -> EventDecoder {
         let mut coder;
@@ -454,6 +464,8 @@ pub struct EventEncoder {
     p: *mut snd_midi_event_t,
     buffer_size: usize
 }
+
+unsafe impl Send for EventEncoder {}
 
 impl EventEncoder {
     pub fn new(buffer_size: usize) -> EventEncoder {
@@ -549,6 +561,8 @@ pub struct EventBox {
     p: *const snd_seq_event_t
 }
 
+unsafe impl Send for EventBox {}
+
 impl Deref for EventBox {
     type Target = Event;
     fn deref(&self) -> &Self::Target {
@@ -571,6 +585,8 @@ impl Drop for EventBox {
 pub struct QueueTempo {
     p: *mut snd_seq_queue_tempo_t
 }
+
+unsafe impl Send for QueueTempo {}
 
 impl QueueTempo {
     pub unsafe fn allocate() -> QueueTempo {

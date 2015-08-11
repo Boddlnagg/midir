@@ -65,6 +65,8 @@ pub struct Client {
 	p: *mut jack_client_t
 }
 
+unsafe impl Send for Client {}
+
 impl Client {
 	pub fn get_time() -> u64 {
 		unsafe { jack_get_time() }
@@ -140,6 +142,8 @@ struct PortInfos<'a> {
 	p: &'a[*const i8],
 }
 
+unsafe impl<'a> Send for PortInfos<'a> {}
+
 impl<'a> PortInfos<'a> {
 	pub fn count(&self) -> usize {
 		self.p.len()
@@ -171,6 +175,8 @@ impl<'a> Drop for PortInfos<'a> {
 pub struct MidiPort {
 	p: *mut jack_port_t
 }
+
+unsafe impl Send for MidiPort {}
 
 impl MidiPort {
 	pub fn get_name(&self) -> &CStr {
@@ -208,6 +214,8 @@ impl MidiBuffer {
 pub struct Ringbuffer {
 	p: *mut jack_ringbuffer_t
 }
+
+unsafe impl Send for Ringbuffer {}
 
 impl Ringbuffer {
 	pub fn new(size: usize) -> Ringbuffer {

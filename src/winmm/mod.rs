@@ -49,6 +49,8 @@ fn from_wide_ptr<'a>(ptr: *const u16, max_len: usize) -> OsString {
     }
 }
 
+// TODO: make sure that these structs are all `Send`
+
 #[derive(Debug)]
 pub struct MidiInput {
     ignore_flags: Ignore
