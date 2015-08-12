@@ -37,7 +37,7 @@ use jack_sys::{
 	jack_ringbuffer_write,
 };
 
-pub const JACK_DEFAULT_MIDI_TYPE: &'static [u8] = b"8 bit raw midi";
+pub const JACK_DEFAULT_MIDI_TYPE: &'static [u8] = b"8 bit raw midi\0";
 
 bitflags! {
 	flags JackOpenOptions: u32 {
