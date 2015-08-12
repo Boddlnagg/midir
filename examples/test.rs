@@ -59,9 +59,9 @@ fn run() -> Result<(), Box<Error>> {
             if input.trim() == "q" {
                 break;
             } else {
-                try!(conn_out.send_message(&[144, 60, 1]));
+                try!(conn_out.send(&[144, 60, 1]));
                 sleep_ms(200);
-                try!(conn_out.send_message(&[144, 60, 0]));
+                try!(conn_out.send(&[144, 60, 0]));
             }
         }
         println!("Closing connections");

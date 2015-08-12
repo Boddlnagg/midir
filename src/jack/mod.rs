@@ -379,7 +379,7 @@ impl ::os::nix::VirtualOutput for MidiOutput {
 }
 
 impl MidiOutputConnection {
-    pub fn send_message(&mut self, message: &[u8]) -> Result<(), SendError> {
+    pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
         let nbytes = message.len();
         
         // Write full message to buffer
@@ -421,8 +421,8 @@ impl OutputConnection for MidiOutputConnection {
         self.close()
     }
     
-    fn send_message(&mut self, message: &[u8]) -> Result<(), SendError> {
-        self.send_message(message)
+    fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
+        self.send(message)
     }   
 }
 

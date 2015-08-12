@@ -554,8 +554,7 @@ impl MidiOutputConnection {
         }
     }
     
-    /// This will panic if the message is not a valid MIDI message.
-    pub fn send_message(&mut self, message: &[u8]) -> Result<(), SendError> {        
+    pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {        
         let nbytes = message.len();
         
         if nbytes > self.coder.get_buffer_size() {
@@ -608,8 +607,8 @@ impl OutputConnection for MidiOutputConnection {
         self.close()
     }
     
-    fn send_message(&mut self, message: &[u8]) -> Result<(), SendError> {
-        self.send_message(message)
+    fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
+        self.send(message)
     }   
 }
 

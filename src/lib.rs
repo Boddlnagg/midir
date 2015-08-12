@@ -1,4 +1,4 @@
-#![cfg_attr(windows, feature(box_raw, heap_api))]
+#![cfg_attr(windows, feature(vec_push_all, box_raw, heap_api))]
 
 #[macro_use]
 extern crate bitflags;

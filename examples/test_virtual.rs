@@ -31,9 +31,9 @@ fn run() -> Result<(), Box<Error>> {
     println!("Connecting to port '{}' ...", midi_out.port_name(previous_count).unwrap());
     let mut conn_out = try!(midi_out.connect(previous_count, "midir-test").map_err(|e| e.kind()));
     println!("Starting to send messages ...");
-    try!(conn_out.send_message(&[144, 60, 1]));
+    try!(conn_out.send(&[144, 60, 1]));
     sleep_ms(200);
-    try!(conn_out.send_message(&[144, 60, 0]));
+    try!(conn_out.send(&[144, 60, 0]));
     sleep_ms(200);
     println!("Closing output ...");
     let midi_out = conn_out.close();
@@ -52,9 +52,9 @@ fn run() -> Result<(), Box<Error>> {
         println!("{}: {:?} (len = {})", stamp, message, message.len());
     }, ()).map_err(|e| e.kind()));
     println!("Starting to send messages ...");
-    try!(conn_out.send_message(&[144, 60, 1]));
+    try!(conn_out.send(&[144, 60, 1]));
     sleep_ms(200);
-    try!(conn_out.send_message(&[144, 60, 0]));
+    try!(conn_out.send(&[144, 60, 0]));
     sleep_ms(200);
     println!("Closing input ...");
     let midi_in = conn_in.close().0;

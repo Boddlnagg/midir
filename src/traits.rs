@@ -31,5 +31,5 @@ pub trait OutputConnection {
     type Output;
     
     fn close(self) -> Self::Output;
-    fn send_message(&mut self, message: &[u8]) -> Result<(), super::SendError>;   
+    fn send(&mut self, message: &[u8]) -> Result<(), super::SendError>;   
 }
