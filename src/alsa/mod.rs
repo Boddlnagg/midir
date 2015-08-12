@@ -731,7 +731,11 @@ fn handle_input<'a, T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerDa
                 if !continue_sysex {
                     message.bytes.clear();
                 }
-                message.bytes.push_all(&buffer[0..nbytes]);
+                
+                // TODO: use push_all or whatever it gets replaced with, when stable 
+                for b in &buffer[0..nbytes] {
+                    message.bytes.push(*b);
+                }
                 
                 continue_sysex = ( ev._type as u32 == SND_SEQ_EVENT_SYSEX ) && ( *message.bytes.last().unwrap() != 0xF7 );
                 if !continue_sysex {
