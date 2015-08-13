@@ -431,14 +431,14 @@ pub struct EventDecoder {
 unsafe impl Send for EventDecoder {}
 
 impl EventDecoder {
-    pub fn new(no_status: bool) -> EventDecoder {
+    pub fn new(merge_commands: bool) -> EventDecoder {
         let mut coder;
         unsafe {
             coder = mem::uninitialized();
             // this could only fail with "Out of memory", which we ignore
             snd_midi_event_new(0, &mut coder);
             //snd_midi_event_init(data.coder);
-            snd_midi_event_no_status(coder, no_status as i32);
+            snd_midi_event_no_status(coder, !merge_commands as i32);
         }
         EventDecoder { p: coder }
     }
