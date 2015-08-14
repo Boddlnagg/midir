@@ -4,7 +4,7 @@ Cross-platform, realtime MIDI processing in Rust.
 ##Features
 **midir** is inspired by [RtMidi](https://github.com/thestk/rtmidi) and supports the same features*, including virtual ports (except on Windows) and full SysEx support – but with a rust-y API!
 
-<sup>* With the exception of message queues, but these can be implemented on top of callbacks using e.g. Rust's `VecDeque` – alternatively you could use channels.</sup>
+<sup>* With the exception of message queues, but these can be implemented on top of callbacks using e.g. Rust's channels.</sup>
 
 **midir** currently supports the following platforms/backends: 
 - [x] ALSA (Linux)
