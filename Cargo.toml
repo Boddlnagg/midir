@@ -18,31 +18,31 @@ bitflags = "0.3"
 
 [target.i686-unknown-linux-gnu.dependencies]
 alsa-sys = "0.0.8"
-libc = "*"
+libc = "0.1"
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 alsa-sys = "0.0.8"
-libc = "*"
+libc = "0.1"
 
 [target.arm-unknown-linux-gnueabihf.dependencies]
 alsa-sys = "0.0.8"
-libc = "*"
+libc = "0.1"
 
 [target.i686-pc-windows-gnu.dependencies]
-winapi = "0.2"
-winmm-sys = "0.1.1"
+winapi = "0.2.4"
+winmm-sys = "0.2.0"
 
 [target.x86_64-pc-windows-gnu.dependencies]
-winapi = "0.2"
-winmm-sys = "0.1.1"
+winapi = "0.2.4"
+winmm-sys = "0.2.0"
 
 [target.i686-pc-windows-msvc.dependencies]
-winapi = "0.2"
-winmm-sys = "0.1.1"
+winapi = "0.2.4"
+winmm-sys = "0.2.0"
 
 [target.x86_64-pc-windows-msvc.dependencies]
-winapi = "0.2"
-winmm-sys = "0.1.1"
+winapi = "0.2.4"
+winmm-sys = "0.2.0"
 
 [dependencies.jack-sys]
 version = "0.0.2"

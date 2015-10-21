@@ -85,7 +85,7 @@ extern {
     pfds: *mut pollfd,
     space: u32,
     events: i16 
-	) -> i32;	
+    ) -> i32;
 }
 
 #[repr(C)]

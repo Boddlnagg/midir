@@ -1,6 +1,6 @@
 pub trait PortInfo {
     fn new(client_name: &str) -> Result<Self, super::InitError>;
-	fn port_count(&self) -> u32;
+    fn port_count(&self) -> u32;
     fn port_name(&self, port_number: u32) -> Result<String, super::PortInfoError>;
 }
 

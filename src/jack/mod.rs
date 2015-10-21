@@ -47,7 +47,7 @@ impl MidiInput {
         self.ignore_flags = flags;
     }
     
-	pub fn port_count(&self) -> u32 {
+    pub fn port_count(&self) -> u32 {
         self.client.as_ref().unwrap().get_midi_ports(PortIsOutput).count() as u32
     }
     
@@ -268,7 +268,7 @@ impl MidiOutput {
         })
     }
     
-	pub fn port_count(&self) -> u32 {
+    pub fn port_count(&self) -> u32 {
         self.client.as_ref().unwrap().get_midi_ports(PortIsInput).count() as u32
     }
     

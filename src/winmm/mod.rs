@@ -9,7 +9,7 @@ use std::thread::sleep_ms;
 use winapi::*;
 
 use winmm_sys::{
-	midiInGetNumDevs,
+    midiInGetNumDevs,
     midiInGetDevCapsW,
     midiInOpen,
     midiInStart,
@@ -84,7 +84,7 @@ impl MidiInput {
         self.ignore_flags = flags;
     }
     
-	pub fn port_count(&self) -> u32 {
+    pub fn port_count(&self) -> u32 {
         unsafe { midiInGetNumDevs() }
     }
     
@@ -270,7 +270,7 @@ impl MidiOutput {
         Ok(MidiOutput)
     }
     
-	pub fn port_count(&self) -> u32 {
+    pub fn port_count(&self) -> u32 {
         unsafe { midiOutGetNumDevs() }
     }
     

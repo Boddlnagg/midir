@@ -112,7 +112,7 @@ impl MidiInput {
         self.ignore_flags = flags;
     }
     
-	pub fn port_count(&self) -> u32 {
+    pub fn port_count(&self) -> u32 {
         unsafe {
             let mut pinfo = APortInfo::allocate();
             get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, -1).unwrap() as u32
@@ -437,7 +437,7 @@ impl MidiOutput {
         })
     }
     
-	pub fn port_count(&self) -> u32 {
+    pub fn port_count(&self) -> u32 {
         unsafe {
             let mut pinfo = APortInfo::allocate();
             get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, -1).unwrap() as u32
