@@ -3,8 +3,8 @@ use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
 use std::sync::{Mutex};
 use std::io::{stderr, Write};
-use std::rt::heap;
 use std::thread::sleep_ms;
+use alloc::heap;
 
 use winapi::*;
 

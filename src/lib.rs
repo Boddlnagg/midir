@@ -1,4 +1,4 @@
-#![cfg_attr(windows, feature(vec_push_all, box_raw, heap_api))]
+#![cfg_attr(windows, feature(vec_push_all, alloc, heap_api))]
 
 #[macro_use]
 extern crate bitflags;
@@ -12,6 +12,7 @@ extern crate jack_sys;
 
 #[cfg(target_os="windows")] extern crate winapi;
 #[cfg(target_os="windows")] extern crate winmm as winmm_sys;
+#[cfg(target_os="windows")] extern crate alloc;
 
 use std::ops::BitOr;
 use std::mem;

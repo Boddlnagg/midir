@@ -1,10 +1,10 @@
-pub trait PortInfo {
+pub trait PortInfo where Self: Sized {
     fn new(client_name: &str) -> Result<Self, super::InitError>;
     fn port_count(&self) -> u32;
     fn port_name(&self, port_number: u32) -> Result<String, super::PortInfoError>;
 }
 
-pub trait InputConnect<T: Send> {
+pub trait InputConnect<T: Send> where Self: Sized {
     type Connection: InputConnection<T>;
     
     fn connect<F>(
@@ -19,7 +19,7 @@ pub trait InputConnection<T> {
     fn close(mut self) -> (Self::Input, T);
 }
 
-pub trait OutputConnect {
+pub trait OutputConnect where Self: Sized {
     type Connection: OutputConnection;
     
     fn connect(
