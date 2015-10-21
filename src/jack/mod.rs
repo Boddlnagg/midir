@@ -13,7 +13,6 @@ const OUTPUT_RINGBUFFER_SIZE: usize = 16384;
 
 struct InputHandlerData<T> {
     port: Option<MidiPort>,
-    message: MidiMessage, // TODO: do we need to cache message contents across callback calls? if not, remove this
     last_time: Option<u64>,
     ignore_flags: Ignore,
     callback: Box<FnMut(f64, &[u8], &mut T)+Send>,
@@ -67,7 +66,6 @@ impl MidiInput {
     {
         let handler_data = Box::new(InputHandlerData {
             port: None,
-            message: MidiMessage::new(),
             last_time: None,
             ignore_flags: self.ignore_flags,
             callback: Box::new(callback),
@@ -136,7 +134,7 @@ impl PortInfo for MidiInput {
 }
 
 impl<T: Send> InputConnect<T> for MidiInput {
-    type Connection = MidiInputConnection<T>; 
+    type Connection = MidiInputConnection<T>;
     
     fn connect<F>(
         self, port_number: u32, port_name: &str, callback: F, data: T

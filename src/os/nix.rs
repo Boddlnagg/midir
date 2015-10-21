@@ -1,7 +1,7 @@
 use traits::{InputConnection, OutputConnection};
 use ::ConnectError;
 
-pub trait VirtualInput<T: Send> {
+pub trait VirtualInput<T: Send> where Self: Sized {
     type Connection: InputConnection<T>;
     
     fn create_virtual<F>(
@@ -10,7 +10,7 @@ pub trait VirtualInput<T: Send> {
     where F: FnMut(f64, &[u8], &mut T) + Send + 'static;
 }
 
-pub trait VirtualOutput {
+pub trait VirtualOutput where Self: Sized {
     type Connection: OutputConnection;
     
     fn create_virtual(

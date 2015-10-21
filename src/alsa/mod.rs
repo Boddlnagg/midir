@@ -281,7 +281,7 @@ impl PortInfo for MidiInput {
 }
 
 impl<T: Send> InputConnect<T> for MidiInput {
-    type Connection = MidiInputConnection<T>; 
+    type Connection = MidiInputConnection<T>;
     
     fn connect<F>(
         self, port_number: u32, port_name: &str, callback: F, data: T

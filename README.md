@@ -8,13 +8,13 @@ Cross-platform, realtime MIDI processing in Rust.
 
 **midir** currently supports the following platforms/backends: 
 - [x] ALSA (Linux)
-- [ ] WinMM (Windows), blocked on a [winapi-rs PR](https://github.com/retep998/winapi-rs/pull/176)
+- [x] WinMM (Windows)
 - [ ] CoreMIDI (OS X, iOS), see [this issue](https://github.com/Boddlnagg/midir/issues/1)
 - [x] Jack (Linux, OS X), use the `jack` feature
 
 A higher-level API for parsing and assembling MIDI messages might be added in the future.
 
-Does it work on stable Rust? Currently not, but it shouldn't be too hard to [change that](https://github.com/Boddlnagg/midir/issues/3).
+Does it work on stable Rust? Currently not, but it shouldn't be too hard to [change that](https://github.com/Boddlnagg/midir/issues/3). (Note: Unstable features are only used on Windows right now.)
 
 ## Example
 Have a look at [`examples/test.rs`](examples/test.rs) and run it directly using `cargo run --example test`.
