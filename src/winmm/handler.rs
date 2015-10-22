@@ -46,7 +46,7 @@ pub extern "C" fn handle_input<T>(_: HMIDIIN,
         } else { 1 };
         
         // Copy bytes to our MIDI message.
-        let ptr = (&midi_message) as *const u64 as *const u8;
+        let ptr = (&midi_message) as *const DWORD_PTR as *const u8;
         let bytes: &[u8] = unsafe { slice::from_raw_parts(ptr, nbytes as usize) };
         data.message.bytes.push_all(bytes);
     } else { // Sysex message (MIM_LONGDATA or MIM_LONGERROR)

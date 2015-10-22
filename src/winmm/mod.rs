@@ -92,7 +92,7 @@ impl MidiInput {
         use std::fmt::Write;
         
         let mut device_caps: MIDIINCAPSW = unsafe { mem::uninitialized() };
-        let result = unsafe { midiInGetDevCapsW(port_number as u64, &mut device_caps, mem::size_of::<MIDIINCAPSW>() as u32) };
+        let result = unsafe { midiInGetDevCapsW(port_number as UINT_PTR, &mut device_caps, mem::size_of::<MIDIINCAPSW>() as u32) };
         if result == MMSYSERR_BADDEVICEID {
             return Err(PortInfoError::PortNumberOutOfRange)
         }
@@ -139,7 +139,7 @@ impl MidiInput {
                 lpData: unsafe { heap::allocate(RT_SYSEX_BUFFER_SIZE, mem::align_of::<u8>()) } as *mut i8,
                 dwBufferLength: RT_SYSEX_BUFFER_SIZE as u32,
                 dwBytesRecorded: 0,
-                dwUser: i as u64, // We use the dwUser parameter as buffer indicator
+                dwUser: i as DWORD_PTR, // We use the dwUser parameter as buffer indicator
                 dwFlags: 0,
                 lpNext: ptr::null_mut(),
                 reserved: 0,
@@ -278,7 +278,7 @@ impl MidiOutput {
         use std::fmt::Write;
         
         let mut device_caps: MIDIOUTCAPSW = unsafe { mem::uninitialized() };
-        let result = unsafe { midiOutGetDevCapsW(port_number as u64, &mut device_caps, mem::size_of::<MIDIINCAPSW>() as u32) };
+        let result = unsafe { midiOutGetDevCapsW(port_number as UINT_PTR, &mut device_caps, mem::size_of::<MIDIINCAPSW>() as u32) };
         if result == MMSYSERR_BADDEVICEID {
             return Err(PortInfoError::PortNumberOutOfRange)
         }
