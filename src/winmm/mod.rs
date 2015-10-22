@@ -438,5 +438,5 @@ impl OutputConnection for MidiOutputConnection {
     
     fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
         self.send(message)
-    }   
+    }
 }

@@ -1,0 +1,22 @@
+sudo: false
+language: rust
+
+# run builds for both the nightly and stable branch (no unstable features are used on Linux)
+rust:
+  - nightly
+  - stable
+  
+env:
+  - FEATURES=''
+  - FEATURES='jack'
+  
+addons:
+  apt:
+    packages:
+    - libasound2-dev
+    - libjack-jackd2-dev
+
+# the main build (we can't run tests since Travis doesn't have an audio driver)
+script:
+  - |
+      cargo build --verbose --features "$FEATURES"
