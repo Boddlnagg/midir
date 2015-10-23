@@ -15,7 +15,7 @@ Cross-platform, realtime MIDI processing in Rust.
 
 A higher-level API for parsing and assembling MIDI messages might be added in the future.
 
-Does it work on stable Rust? Currently not, but it shouldn't be too hard to [change that](https://github.com/Boddlnagg/midir/issues/3). (Note: Unstable features are only used on Windows right now.)
+Does it work on stable Rust? Currently not, but it shouldn't be too hard to [change that](https://github.com/Boddlnagg/midir/issues/3).
 
 ## Example
 Have a look at [`examples/test.rs`](examples/test.rs) and run it directly using `cargo run --example test`.

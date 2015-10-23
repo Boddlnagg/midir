@@ -32,9 +32,8 @@ use alsa_sys::{
     SND_SEQ_EVENT_START
 };
 
-use super::{MidiMessage, Ignore};
-use super::{InitError, PortInfoError, ConnectError, ConnectErrorKind, SendError};
-use super::traits::*;
+use ::{MidiMessage, Ignore};
+use ::errors::*;
 
 // Include ALSA wrappers
 mod wrappers;
@@ -188,7 +187,7 @@ impl MidiInput {
     
     pub fn connect<F, T: Send>(
         mut self, port_number: u32, port_name: &str, callback: F, data: T
-    ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
+    ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
         where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
         
         let trigger_fds = match self.init_trigger() {
@@ -264,39 +263,10 @@ impl MidiInput {
             trigger_send_fd: trigger_fds[1]
         })
     }
-}
-
-impl PortInfo for MidiInput {
-    fn new(client_name: &str) -> Result<Self, super::InitError> {
-        Self::new(client_name)
-    }
     
-    fn port_count(&self) -> u32 {
-        self.port_count()
-    }
-    
-    fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
-        self.port_name(port_number)
-    }
-}
-
-impl<T: Send> InputConnect<T> for MidiInput {
-    type Connection = MidiInputConnection<T>;
-    
-    fn connect<F>(
-        self, port_number: u32, port_name: &str, callback: F, data: T
-    ) -> Result<Self::Connection, ConnectError<Self>>
-    where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
-        self.connect(port_number, port_name, callback, data)
-    }
-}
-
-impl<T: Send> ::os::nix::VirtualInput<T> for MidiInput {
-    type Connection = MidiInputConnection<T>;
-    
-    fn create_virtual<F>(
+    pub fn create_virtual<F, T: Send>(
         mut self, port_name: &str, callback: F, data: T
-    ) -> Result<Self::Connection, ConnectError<Self>>
+    ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
     where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
         let trigger_fds = match self.init_trigger() {
             Ok(fds) => fds,
@@ -403,14 +373,6 @@ impl<T> Drop for MidiInputConnection<T> {
     }
 }
 
-impl<T> InputConnection<T> for MidiInputConnection<T> {
-    type Input = MidiInput;
-    
-    fn close(self) -> (Self::Input, T) {
-        self.close()
-    }
-}
-
 pub struct MidiOutput {
     seq: Option<Sequencer>, // TODO: if `Sequencer` is marked as non-zero, this should just be pointer-sized 
 }
@@ -451,7 +413,7 @@ impl MidiOutput {
         }
     }
     
-    pub fn connect(mut self, port_number: u32, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
+    pub fn connect(mut self, port_number: u32, port_name: &str) -> Result<MidiOutputConnection, ConnectError<Self>> {
         let mut pinfo = unsafe { APortInfo::allocate() };
         
         if get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, port_number as i32).is_none() {
@@ -494,38 +456,10 @@ impl MidiOutput {
             subscription: Some(sub)
         })
     }
-}
-
-impl PortInfo for MidiOutput {
-    fn new(client_name: &str) -> Result<Self, super::InitError> {
-        Self::new(client_name)
-    }
     
-    fn port_count(&self) -> u32 {
-        self.port_count()
-    }
-    
-    fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
-        self.port_name(port_number)
-    }
-}
-
-impl OutputConnect for MidiOutput {
-    type Connection = MidiOutputConnection; 
-    
-     fn connect(
-        self, port_number: u32, port_name: &str
-    ) -> Result<Self::Connection, super::ConnectError<Self>> {
-        self.connect(port_number, port_name)
-    }
-}
-
-impl ::os::nix::VirtualOutput for MidiOutput {
-    type Connection = MidiOutputConnection;
-    
-    fn create_virtual(
+    pub fn create_virtual(
         mut self, port_name: &str
-    ) -> Result<Self::Connection, ConnectError<Self>> {
+    ) -> Result<MidiOutputConnection, ConnectError<Self>> {
         let vport = match self.seq.as_mut().unwrap().create_simple_port(port_name,
                             SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ,
                             SND_SEQ_PORT_TYPE_MIDI_GENERIC|SND_SEQ_PORT_TYPE_APPLICATION) {
@@ -600,19 +534,7 @@ impl Drop for MidiOutputConnection {
     }
 }
 
-impl OutputConnection for MidiOutputConnection {
-    type Output = MidiOutput;
-    
-    fn close(self) -> Self::Output {
-        self.close()
-    }
-    
-    fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
-        self.send(message)
-    }   
-}
-
-fn handle_input<'a, T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T> {
+fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T> {
     let mut last_time: Option<u64> = None;
     let mut continue_sysex: bool = false;
     

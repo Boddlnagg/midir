@@ -6,8 +6,7 @@ mod wrappers;
 use self::wrappers::*;
 
 use ::{Ignore, MidiMessage};
-use ::{InitError, PortInfoError, ConnectError, ConnectErrorKind, SendError};
-use ::traits::*;
+use ::errors::*;
 
 const OUTPUT_RINGBUFFER_SIZE: usize = 16384;
 
@@ -117,39 +116,10 @@ impl MidiInput {
             client: self.client.take()
         })
     }
-}
-
-impl PortInfo for MidiInput {
-    fn new(client_name: &str) -> Result<Self, InitError> {
-        Self::new(client_name)
-    }
     
-    fn port_count(&self) -> u32 {
-        self.port_count()
-    }
-    
-    fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
-        self.port_name(port_number)
-    }
-}
-
-impl<T: Send> InputConnect<T> for MidiInput {
-    type Connection = MidiInputConnection<T>;
-    
-    fn connect<F>(
-        self, port_number: u32, port_name: &str, callback: F, data: T
-    ) -> Result<Self::Connection, ConnectError<Self>>
-    where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
-        self.connect(port_number, port_name, callback, data)
-    }
-}
-
-impl<T: Send> ::os::nix::VirtualInput<T> for MidiInput {
-    type Connection = MidiInputConnection<T>;
-    
-    fn create_virtual<F>(
+    pub fn create_virtual<F, T: Send>(
         mut self, port_name: &str, callback: F, data: T
-    ) -> Result<Self::Connection, ConnectError<Self>>
+    ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
     where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
     
         let mut handler_data = self.activate_callback(callback, data);
@@ -191,14 +161,6 @@ impl<T> Drop for MidiInputConnection<T> {
         if self.client.is_some() {
             self.close_internal();
         }
-    }
-}
-
-impl<T> InputConnection<T> for MidiInputConnection<T> {
-    type Input = MidiInput;
-    
-    fn close(self) -> (Self::Input, T) {
-        self.close()
     }
 }
 
@@ -328,37 +290,10 @@ impl MidiOutput {
             client: self.client.take()
         })
     }
-}
-
-impl PortInfo for MidiOutput {
-    fn new(client_name: &str) -> Result<Self, super::InitError> {
-        Self::new(client_name)
-    }
     
-    fn port_count(&self) -> u32 {
-        self.port_count()
-    }
-    
-    fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
-        self.port_name(port_number)
-    }
-}
-
-impl OutputConnect for MidiOutput {
-    type Connection = MidiOutputConnection; 
-    
-     fn connect(
-        self, port_number: u32, port_name: &str
-    ) -> Result<Self::Connection, super::ConnectError<Self>> {
-        self.connect(port_number, port_name)
-    }
-}
-impl ::os::nix::VirtualOutput for MidiOutput {
-    type Connection = MidiOutputConnection;
-    
-    fn create_virtual(
+    pub fn create_virtual(
         mut self, port_name: &str
-    ) -> Result<Self::Connection, ConnectError<Self>> {
+    ) -> Result<MidiOutputConnection, ConnectError<Self>> {
         let mut handler_data = self.activate_callback();
         
         // Create port
@@ -410,18 +345,6 @@ impl Drop for MidiOutputConnection {
             self.close_internal();
         }
     }
-}
-
-impl OutputConnection for MidiOutputConnection {
-    type Output = MidiOutput;
-    
-    fn close(self) -> Self::Output {
-        self.close()
-    }
-    
-    fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
-        self.send(message)
-    }   
 }
 
 extern "C" fn handle_output(nframes: jack_nframes_t, arg: *mut ::libc::c_void) -> i32 {

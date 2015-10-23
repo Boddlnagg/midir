@@ -63,9 +63,6 @@ impl MidiMessage {
 
 pub mod os; // include platform-specific behaviour
 
-mod traits;
-pub use traits::*;
-
 mod errors;
 pub use errors::*;
 
