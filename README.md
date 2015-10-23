@@ -1,4 +1,4 @@
-#midir [![crates.io](https://img.shields.io/crates/v/midir.svg)](https://crates.io/crates/midir) [![Travis Build Status](https://travis-ci.org/Boddlnagg/midir.svg)](https://travis-ci.org/Boddlnagg/midir) [![AppVeyor Build status](https://ci.appveyor.com/api/projects/status/atit0teb38s2am2y?svg=true)](https://ci.appveyor.com/project/Boddlnagg/midir)
+#midir [![crates.io](https://img.shields.io/crates/v/midir.svg)](https://crates.io/crates/midir) [![Travis Build Status](https://travis-ci.org/Boddlnagg/midir.svg)](https://travis-ci.org/Boddlnagg/midir?branch=master) [![AppVeyor Build status](https://ci.appveyor.com/api/projects/status/atit0teb38s2am2y/branch/master?svg=true)](https://ci.appveyor.com/project/Boddlnagg/midir)
 
 Cross-platform, realtime MIDI processing in Rust.
 
