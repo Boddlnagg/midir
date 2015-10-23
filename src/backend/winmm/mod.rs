@@ -30,9 +30,9 @@ use winmm_sys::{
     midiOutShortMsg,
 };
 
-use super::{MidiMessage, Ignore};
-use super::{InitError, PortInfoError, ConnectErrorKind, ConnectError, SendError};
-use super::traits::*;
+use ::{MidiMessage, Ignore};
+use ::errors::*;
+use ::traits::*;
 
 mod handler;
 
@@ -327,7 +327,7 @@ impl OutputConnect for MidiOutput {
     
      fn connect(
         self, port_number: u32, port_name: &str
-    ) -> Result<Self::Connection, super::ConnectError<Self>> {
+    ) -> Result<Self::Connection, ConnectError<Self>> {
         self.connect(port_number, port_name)
     }
 }
