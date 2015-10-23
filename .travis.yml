@@ -4,7 +4,7 @@ language: rust
 # run builds for both the nightly and stable branch (no unstable features are used on Linux)
 rust:
   - nightly
-  - stable
+#  - stable
   
 env:
   - FEATURES=''
