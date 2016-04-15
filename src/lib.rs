@@ -63,7 +63,7 @@ impl MidiMessage {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MidiShortMessage {
-	pub status: Status,
+	pub status: u8,
 	pub data1: u8,
 	pub data2: u8,
 }
@@ -71,7 +71,7 @@ impl MidiShortMessage {
 	pub fn to_u32(&self) -> u32 {
 		((((self.data2 as u32) << 16) & 0xFF0000) |
 		  (((self.data1 as u32) << 8) & 0xFF00) |
-		  ((self.status as u8 as u32) & 0xFF)) as u32
+		  ((self.status as u32) & 0xFF)) as u32
 	}
 }
 
@@ -83,13 +83,7 @@ pub enum Status {
     ControlChange = 0xB0,
     PitchBend = 0xE0,
     ProgramChange = 0xC0,
-    Other(u8)
-}
-
-impl Into<u8> for Status {
-    fn into(self) -> u8 {
-        self as u8
-    }
+    // TODO: implement the rest
 }
 
 pub mod os; // include platform-specific behaviour
