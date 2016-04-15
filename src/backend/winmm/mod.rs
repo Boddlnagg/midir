@@ -30,7 +30,7 @@ use winmm_sys::{
     midiOutShortMsg,
 };
 
-use ::{MidiMessage, Ignore};
+use ::{MidiMessage, MidiShortMessage, Ignore};
 use ::errors::*;
 
 mod handler;
@@ -359,9 +359,9 @@ impl MidiOutputConnection {
         }
         Ok(())
     }
-    pub fn send(&mut self, message: MidiShortMessage) -> Result<(), SendError> {
+    pub fn sendShortMessage(&mut self, message: MidiShortMessage) -> Result<(), SendError> {
         loop {
-            let result = unsafe { midiOutShortMsg(self.out_handle, message.to_u32() as DWORD) };
+            let result = unsafe { midiOutShortMsg(self.out_handle, message.to_u32()) };
             if result == MIDIERR_NOTREADY {
                 sleep_ms(1);
                 continue;
