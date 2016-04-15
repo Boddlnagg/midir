@@ -357,7 +357,21 @@ impl MidiOutputConnection {
                 }
             }
         }
-        
+        Ok(())
+    }
+    pub fn send(&mut self, message: MidiShortMessage) -> Result<(), SendError> {
+        loop {
+            let result = unsafe { midiOutShortMsg(self.out_handle, message.to_u32() as DWORD) };
+            if result == MIDIERR_NOTREADY {
+                sleep_ms(1);
+                continue;
+            } else {
+                if result != MMSYSERR_NOERROR {
+                    return Err(SendError::Other("sending non-sysex message failed"));
+                }
+                break;
+            }
+        }
         Ok(())
     }
 }
