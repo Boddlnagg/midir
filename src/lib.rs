@@ -61,6 +61,37 @@ impl MidiMessage {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MidiShortMessage {
+	pub status: Status,
+	pub data1: u8,
+	pub data2: u8,
+}
+impl MidiShortMessage {
+	fn to_i32(&self) -> i32 {
+		((((self.data2 as i32) << 16) & 0xFF0000) |
+		  (((self.data1 as i32) << 8) & 0xFF00) |
+		  ((self.status as u8 as i32) & 0xFF)) as i32
+	}
+}
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Status {
+    NoteOn = 0x90,
+    NoteOff = 0x80,
+    ControlChange = 0xB0,
+    PitchBend = 0xE0,
+    ProgramChange = 0xC0,
+    Other(u8)
+}
+
+impl Into<u8> for Status {
+    fn into(self) -> u8 {
+        self as u8
+    }
+}
+
 pub mod os; // include platform-specific behaviour
 
 mod errors;
