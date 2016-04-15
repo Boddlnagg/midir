@@ -68,10 +68,10 @@ pub struct MidiShortMessage {
 	pub data2: u8,
 }
 impl MidiShortMessage {
-	fn to_i32(&self) -> i32 {
-		((((self.data2 as i32) << 16) & 0xFF0000) |
-		  (((self.data1 as i32) << 8) & 0xFF00) |
-		  ((self.status as u8 as i32) & 0xFF)) as i32
+	pub fn to_u32(&self) -> u32 {
+		((((self.data2 as u32) << 16) & 0xFF0000) |
+		  (((self.data1 as u32) << 8) & 0xFF00) |
+		  ((self.status as u8 as u32) & 0xFF)) as u32
 	}
 }
 
