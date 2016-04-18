@@ -101,7 +101,7 @@ impl MidiInput {
         // Next lines added to add the portNumber to the name so that 
         // the device's names are sure to be listed with individual names
         // even when they have the same brand name
-        let _ = write!(&mut output, " {}", port_number);
+        //let _ = write!(&mut output, " {}", port_number);
         Ok(output)
     }
     
@@ -254,7 +254,7 @@ impl MidiOutput {
         // Next lines added to add the portNumber to the name so that 
         // the device's names are sure to be listed with individual names
         // even when they have the same brand name
-        let _ = write!(&mut output, " {}", port_number);
+        //let _ = write!(&mut output, " {}", port_number);
         Ok(output)
     }
     
