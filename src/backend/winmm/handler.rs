@@ -6,7 +6,7 @@ use winmm_sys::midiInAddBuffer;
 use super::HandlerData;
 use ::Ignore;
 
-pub extern "C" fn handle_input<T>(_: HMIDIIN,
+pub extern "system" fn handle_input<T>(_: HMIDIIN,
                 input_status: UINT, 
                 instance_ptr: DWORD_PTR,
                 midi_message: DWORD_PTR,
