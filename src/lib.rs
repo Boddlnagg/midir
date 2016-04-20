@@ -75,6 +75,14 @@ impl MidiShortMessage {
 	}
 }
 
+use std::fmt;
+impl fmt::Display for MidiShortMessage {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "(0x{:X}, {}, {}, {})", self.status & 0xF0, (self.status & 0x0F) + 1, self.data1, self.data2)
+    }
+}
+
+
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Status {
