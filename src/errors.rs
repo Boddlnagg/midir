@@ -21,12 +21,14 @@ impl fmt::Display for InitError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PortInfoError {
     PortNumberOutOfRange,
+    CannotRetrievePortName,
 }
 
 impl Error for PortInfoError {
     fn description(&self) -> &str {
         match *self {
             PortInfoError::PortNumberOutOfRange => PORT_OUT_OF_RANGE_MSG,
+            PortInfoError::CannotRetrievePortName => "could not retrieve Windows MM MIDI output port name",
         }
     }
 }

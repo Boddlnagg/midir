@@ -1,7 +1,9 @@
-#![cfg_attr(windows, feature(vec_push_all, alloc, heap_api))]
+#![cfg_attr(windows, feature(alloc, heap_api))]
 
 #[macro_use]
 extern crate bitflags;
+#[macro_use]
+extern crate enum_primitive;
 
 #[cfg(target_os="linux")]
 extern crate libc;
@@ -62,12 +64,12 @@ impl MidiMessage {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct MidiShortMessage {
+pub struct ShortMessage {
 	pub status: u8,
 	pub data1: u8,
 	pub data2: u8,
 }
-impl MidiShortMessage {
+impl ShortMessage {
 	pub fn to_u32(&self) -> u32 {
 		((((self.data2 as u32) << 16) & 0xFF0000) |
 		  (((self.data1 as u32) << 8) & 0xFF00) |
@@ -76,22 +78,39 @@ impl MidiShortMessage {
 }
 
 use std::fmt;
-impl fmt::Display for MidiShortMessage {
+impl fmt::Display for ShortMessage {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "(0x{:X}, {}, {}, {})", self.status & 0xF0, (self.status & 0x0F) + 1, self.data1, self.data2)
     }
 }
 
-
+enum_from_primitive! {
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Status {
-    NoteOn = 0x90,
+    // voice
     NoteOff = 0x80,
+    NoteOn = 0x90,
+    PolyphonicAftertouch = 0xA0,
     ControlChange = 0xB0,
-    PitchBend = 0xE0,
     ProgramChange = 0xC0,
-    // TODO: implement the rest
+    ChannelAftertouch = 0xD0,
+    PitchBend = 0xE0,
+
+    // sysex
+    SysExStart = 0xF0,
+    MIDITimeCodeQtrFrame = 0xF1,
+    SongPositionPointer = 0xF2,
+    SongSelect = 0xF3,
+    TuneRequest = 0xF6, // F4 anf 5 are reserved and unused
+    SysExEnd = 0xF7,
+    TimingClock = 0xF8,
+    Start = 0xFA,
+    Continue = 0xFB,
+    Stop = 0xFC,
+    ActiveSensing = 0xFE, // FD also res/unused
+    SystemReset = 0xFF,
+}
 }
 
 pub mod os; // include platform-specific behaviour

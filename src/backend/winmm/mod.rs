@@ -30,7 +30,7 @@ use winmm_sys::{
     midiOutShortMsg,
 };
 
-use ::{MidiMessage, MidiShortMessage, Ignore};
+use ::{MidiMessage, ShortMessage, Ignore};
 use ::errors::*;
 
 mod handler;
@@ -88,15 +88,17 @@ impl MidiInput {
     }
     
     pub fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
-        use std::fmt::Write;
+        //use std::fmt::Write;
         
         let mut device_caps: MIDIINCAPSW = unsafe { mem::uninitialized() };
         let result = unsafe { midiInGetDevCapsW(port_number as UINT_PTR, &mut device_caps, mem::size_of::<MIDIINCAPSW>() as u32) };
         if result == MMSYSERR_BADDEVICEID {
             return Err(PortInfoError::PortNumberOutOfRange)
+        } else if result == MMSYSERR_ERROR {
+            return Err(PortInfoError::CannotRetrievePortName);
         }
-        assert!(result == MMSYSERR_NOERROR, "could not retrieve Windows MM MIDI input port name");
-        let mut output = from_wide_ptr(device_caps.szPname.as_ptr(), device_caps.szPname.len()).to_string_lossy().into_owned();
+        //assert!(result == MMSYSERR_NOERROR, "could not retrieve Windows MM MIDI input port name");
+        let /*mut*/ output = from_wide_ptr(device_caps.szPname.as_ptr(), device_caps.szPname.len()).to_string_lossy().into_owned();
         
         // Next lines added to add the portNumber to the name so that 
         // the device's names are sure to be listed with individual names
@@ -241,15 +243,17 @@ impl MidiOutput {
     }
     
     pub fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
-        use std::fmt::Write;
+        //use std::fmt::Write;
         
         let mut device_caps: MIDIOUTCAPSW = unsafe { mem::uninitialized() };
         let result = unsafe { midiOutGetDevCapsW(port_number as UINT_PTR, &mut device_caps, mem::size_of::<MIDIINCAPSW>() as u32) };
         if result == MMSYSERR_BADDEVICEID {
-            return Err(PortInfoError::PortNumberOutOfRange)
+            return Err(PortInfoError::PortNumberOutOfRange);
+        } else if result == MMSYSERR_ERROR {
+            return Err(PortInfoError::CannotRetrievePortName);
         }
-        assert!(result == MMSYSERR_NOERROR, "could not retrieve Windows MM MIDI output port name");
-        let mut output = from_wide_ptr(device_caps.szPname.as_ptr(), device_caps.szPname.len()).to_string_lossy().into_owned();
+        //assert!(result == MMSYSERR_NOERROR, "could not retrieve Windows MM MIDI output port name");
+        let /*mut*/ output = from_wide_ptr(device_caps.szPname.as_ptr(), device_caps.szPname.len()).to_string_lossy().into_owned();
         
         // Next lines added to add the portNumber to the name so that 
         // the device's names are sure to be listed with individual names
@@ -359,7 +363,7 @@ impl MidiOutputConnection {
         }
         Ok(())
     }
-    pub fn sendShortMessage(&mut self, message: MidiShortMessage) -> Result<(), SendError> {
+    pub fn send_short_message(&mut self, message: ShortMessage) -> Result<(), SendError> {
         loop {
             let result = unsafe { midiOutShortMsg(self.out_handle, message.to_u32()) };
             if result == MIDIERR_NOTREADY {
