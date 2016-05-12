@@ -1,6 +1,7 @@
 extern crate midir;
 
-use std::thread::sleep_ms;
+use std::thread::sleep;
+use std::time::Duration;
 use std::error::Error;
 
 use midir::{MidiInput, MidiOutput, Ignore};
@@ -32,9 +33,9 @@ fn run() -> Result<(), Box<Error>> {
     let mut conn_out = try!(midi_out.connect(previous_count, "midir-test").map_err(|e| e.kind()));
     println!("Starting to send messages ...");
     try!(conn_out.send(&[144, 60, 1]));
-    sleep_ms(200);
+    sleep(Duration::from_millis(200));
     try!(conn_out.send(&[144, 60, 0]));
-    sleep_ms(200);
+    sleep(Duration::from_millis(200));
     println!("Closing output ...");
     let midi_out = conn_out.close();
     println!("Closing virtual input ...");
@@ -53,9 +54,9 @@ fn run() -> Result<(), Box<Error>> {
     }, ()).map_err(|e| e.kind()));
     println!("Starting to send messages ...");
     try!(conn_out.send(&[144, 60, 1]));
-    sleep_ms(200);
+    sleep(Duration::from_millis(200));
     try!(conn_out.send(&[144, 60, 0]));
-    sleep_ms(200);
+    sleep(Duration::from_millis(200));
     println!("Closing input ...");
     let midi_in = conn_in.close().0;
     println!("Closing virtual output ...");

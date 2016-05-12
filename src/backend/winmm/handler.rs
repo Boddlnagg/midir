@@ -48,13 +48,13 @@ pub extern "C" fn handle_input<T>(_: HMIDIIN,
         // Copy bytes to our MIDI message.
         let ptr = (&midi_message) as *const DWORD_PTR as *const u8;
         let bytes: &[u8] = unsafe { slice::from_raw_parts(ptr, nbytes as usize) };
-        data.message.bytes.push_all(bytes);
+        data.message.bytes.extend_from_slice(bytes);
     } else { // Sysex message (MIM_LONGDATA or MIM_LONGERROR)
         let sysex = unsafe { &*(midi_message as *const MIDIHDR) };
         if !data.ignore_flags.contains(Ignore::Sysex) && input_status != MM_MIM_LONGERROR {
             // Sysex message and we're not ignoring it
             let bytes: &[u8] = unsafe { slice::from_raw_parts(sysex.lpData as *const u8, sysex.dwBytesRecorded as usize) };
-            data.message.bytes.push_all(bytes);
+            data.message.bytes.extend_from_slice(bytes);
             // TODO: If sysex messages are longer than RT_SYSEX_BUFFER_SIZE, they
             //       are split in chunks. We could reassemble a single message.
         }

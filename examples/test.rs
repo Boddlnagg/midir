@@ -1,6 +1,7 @@
 extern crate midir;
 
-use std::thread::sleep_ms;
+use std::thread::sleep;
+use std::time::Duration;
 use std::io::{stdin, stdout, Write};
 use std::error::Error;
 
@@ -60,7 +61,7 @@ fn run() -> Result<(), Box<Error>> {
                 break;
             } else {
                 try!(conn_out.send(&[144, 60, 1]));
-                sleep_ms(200);
+                sleep(Duration::from_millis(200));
                 try!(conn_out.send(&[144, 60, 0]));
             }
         }
