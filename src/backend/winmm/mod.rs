@@ -1,11 +1,11 @@
 use std::{mem, ptr, slice};
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
-use std::sync::{Mutex};
+use std::sync::Mutex;
 use std::io::{stderr, Write};
 use std::thread::sleep;
 use std::time::Duration;
-use alloc::heap;
+use memalloc::{allocate, deallocate};
 
 use winapi::*;
 
@@ -136,7 +136,7 @@ impl MidiInput {
         // Allocate and init the sysex buffers.
         for i in 0..RT_SYSEX_BUFFER_COUNT {
             handler_data.sysex_buffer[i] = Box::into_raw(Box::new(MIDIHDR {
-                lpData: unsafe { heap::allocate(RT_SYSEX_BUFFER_SIZE, mem::align_of::<u8>()) } as *mut i8,
+                lpData: unsafe { allocate(RT_SYSEX_BUFFER_SIZE/*, mem::align_of::<u8>()*/) } as *mut i8,
                 dwBufferLength: RT_SYSEX_BUFFER_SIZE as u32,
                 dwBytesRecorded: 0,
                 dwUser: i as DWORD_PTR, // We use the dwUser parameter as buffer indicator
@@ -203,8 +203,9 @@ impl<T> MidiInputConnection<T> {
             let result;
             unsafe {
                 result = midiInUnprepareHeader(*in_handle_lock, self.handler_data.sysex_buffer[i], mem::size_of::<MIDIHDR>() as u32);
-                heap::deallocate((*self.handler_data.sysex_buffer[i]).lpData as *mut u8, RT_SYSEX_BUFFER_SIZE, mem::align_of::<u8>());
-                heap::deallocate(self.handler_data.sysex_buffer[i] as *mut u8, mem::size_of::<MIDIHDR>(), mem::align_of::<MIDIHDR>());
+                deallocate((*self.handler_data.sysex_buffer[i]).lpData as *mut u8, RT_SYSEX_BUFFER_SIZE/*, mem::align_of::<u8>()*/);
+                // recreate the Box so that it will be dropped/deallocated at the end of this scope
+                let _ = Box::from_raw(self.handler_data.sysex_buffer[i]);
             }
             
             if result != MMSYSERR_NOERROR {

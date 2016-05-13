@@ -1,7 +1,5 @@
-#![cfg_attr(windows, feature(alloc, heap_api))]
-
-#[macro_use]
-extern crate bitflags;
+#[macro_use] extern crate bitflags;
+extern crate memalloc;
 
 #[cfg(target_os="linux")]
 extern crate libc;
@@ -12,7 +10,6 @@ extern crate jack_sys;
 
 #[cfg(target_os="windows")] extern crate winapi;
 #[cfg(target_os="windows")] extern crate winmm as winmm_sys;
-#[cfg(target_os="windows")] extern crate alloc;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

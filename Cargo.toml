@@ -1,6 +1,6 @@
 [package]
 name = "midir"
-version = "0.1.2"
+version = "0.2.0"
 authors = ["Patrick Reisert"]
 description = "A cross-platform, realtime MIDI processing library, inspired by RtMidi."
 repository = "https://github.com/Boddlnagg/midir"
@@ -15,6 +15,7 @@ jack = ["jack-sys"]
 
 [dependencies]
 bitflags = "0.3"
+memalloc = "0.1.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 alsa-sys = "0.0.8"
