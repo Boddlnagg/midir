@@ -32,6 +32,8 @@ use alsa_sys::{
     SND_SEQ_EVENT_START
 };
 
+use libc::POLLIN;
+
 use ::{MidiMessage, Ignore};
 use ::errors::*;
 
@@ -45,8 +47,6 @@ use self::wrappers::{
     EventDecoder,
     EventEncoder,
     Event,
-    pollfd,
-    POLLIN,
     poll,
     get_port_info,
     get_port_name,
@@ -548,7 +548,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
     
     let mut coder = EventDecoder::new(false);
     
-    let mut poll_fds: Box<[pollfd]>;
+    let mut poll_fds: Box<[::libc::pollfd]>;
     unsafe {
         let poll_fd_count = (data.seq.poll_descriptors_count(POLLIN) + 1) as usize;
         let mut vec = Vec::with_capacity(poll_fd_count);
@@ -560,7 +560,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
     poll_fds[0].events = POLLIN;
     
     let mut do_input = true;
-    while do_input {
+    while do_input {                        
         if unsafe { snd_seq_event_input_pending(data.seq.as_mut_ptr(), 1) } == 0 {
             // No data pending
             if poll(&mut poll_fds, -1) >= 0 {
@@ -575,7 +575,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
         // If here, there should be data.
         let mut ev = match data.seq.event_input() {
             Ok((ev, _)) => ev,
-            Err(e) if e == -::libc::consts::os::posix88::ENOSPC => {
+            Err(e) if e == -::libc::ENOSPC => {
                 let _ = writeln!(stderr(), "\nError in handle_input: ALSA MIDI input buffer overrun!\n");
                 continue;
             },

@@ -82,24 +82,14 @@ pub const SND_SEQ_PORT_TYPE_APPLICATION: u32 = 1<<20;
 // Define some bindings and types which are not available from alsa-sys or libc
 extern {
   fn snd_seq_poll_descriptors(seq: *mut snd_seq_t,
-    pfds: *mut pollfd,
+    pfds: *mut ::libc::pollfd,
     space: u32,
     events: i16 
     ) -> i32;
 }
 
-#[repr(C)]
-pub struct pollfd {
-    pub fd: i32,
-    pub events: i16,
-    pub revents: i16,
-}
-
-pub const POLLIN: i16 = 1;
-
-pub fn poll(fds: &mut [pollfd], timeout: i32) -> i32 {
-    extern { fn poll(fds: *mut pollfd, nfds: u32, timeout: i32) -> i32; }
-    unsafe { poll(fds.as_mut_ptr(), fds.len() as u32, timeout) }
+pub fn poll(fds: &mut [::libc::pollfd], timeout: i32) -> i32 {
+    unsafe { ::libc::poll(fds.as_mut_ptr(), fds.len() as ::libc::nfds_t, timeout) }
 }
 
 const DEFAULT_SEQ: &'static [u8] = b"default\0";
@@ -224,7 +214,7 @@ impl Sequencer {
         unsafe { snd_seq_poll_descriptors_count(self.p, events) }
     }
     
-    pub fn poll_descriptors(&self, pollfds: &mut [pollfd], events: i16) {
+    pub fn poll_descriptors(&self, pollfds: &mut [::libc::pollfd], events: i16) {
         unsafe { snd_seq_poll_descriptors(self.p, pollfds.as_mut_ptr(), pollfds.len() as u32, events) };   
     }
     

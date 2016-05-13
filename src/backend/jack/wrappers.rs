@@ -138,7 +138,7 @@ impl Drop for Client {
     }
 }
 
-struct PortInfos<'a> {
+pub struct PortInfos<'a> {
     p: &'a[*const i8],
 }
 
