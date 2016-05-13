@@ -5,7 +5,7 @@ use std::time::Duration;
 use std::error::Error;
 
 use midir::{MidiInput, MidiOutput, Ignore};
-use midir::os::nix::{VirtualInput, VirtualOutput};
+use midir::os::unix::{VirtualInput, VirtualOutput};
 
 // TODO: better error handling using try! macro for all possible failures and printing actual error message
 fn main() {

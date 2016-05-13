@@ -40,8 +40,8 @@ impl Ignore {
     }
 }
 
-// A MIDI structure used internally by the class to store incoming
-// messages. Each message represents one and only one MIDI message.
+/// A MIDI structure used internally by the class to store incoming
+/// messages. Each message represents one and only one MIDI message.
 #[derive(Debug, Clone)]
 struct MidiMessage {
     bytes: Vec<u8>,

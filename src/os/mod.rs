@@ -1,1 +1,1 @@
-#[cfg(unix)] pub mod nix;
+#[cfg(unix)] pub mod unix;
