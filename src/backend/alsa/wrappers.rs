@@ -62,6 +62,7 @@ use alsa_sys::{
     snd_seq_query_next_client,
     snd_seq_query_next_port,
 };
+use libc::c_char;
 
 const SND_SEQ_OPEN_OUTPUT: i32 = 1;
 const SND_SEQ_OPEN_INPUT: i32 = 2;
@@ -168,7 +169,7 @@ impl Sequencer {
         let mut seq = unsafe { mem::uninitialized() };
         let result = unsafe { snd_seq_open(
             &mut seq,
-            DEFAULT_SEQ.as_ptr() as *const i8,
+            DEFAULT_SEQ.as_ptr() as *const c_char,
             mode as i32,
             if non_block { SND_SEQ_NONBLOCK } else { 0 }
         ) };
