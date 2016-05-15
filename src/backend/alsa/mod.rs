@@ -32,7 +32,7 @@ use alsa_sys::{
     SND_SEQ_EVENT_START
 };
 
-use libc::POLLIN;
+use libc::{POLLIN, c_char};
 
 use ::{MidiMessage, Ignore};
 use ::errors::*;
@@ -130,7 +130,7 @@ impl MidiInput {
         let mut queue_id = 0;
         // Create the input queue
         if !cfg!(feature = "avoid_timestamping") {
-            queue_id = unsafe { snd_seq_alloc_named_queue(seq.as_mut_ptr(), b"midir queue\0".as_ptr() as *const i8) };
+            queue_id = unsafe { snd_seq_alloc_named_queue(seq.as_mut_ptr(), b"midir queue\0".as_ptr() as *const c_char) };
             // Set arbitrary tempo (mm=100) and resolution (240)
             let mut qtempo = unsafe { QueueTempo::allocate() };
             qtempo.set_tempo(600_000);
