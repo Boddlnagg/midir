@@ -75,6 +75,12 @@ impl ShortMessage {
 		  (((self.data1 as u32) << 8) & 0xFF00) |
 		  ((self.status as u32) & 0xFF)) as u32
 	}
+	pub fn status(&self) -> u8 {
+		self.status & 0xf0
+	}
+	pub fn channel(&self) -> u8 {
+		self.status & 0x0f
+	}
 }
 
 use std::fmt;
