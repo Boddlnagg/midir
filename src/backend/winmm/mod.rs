@@ -122,10 +122,11 @@ impl MidiInput {
         });
         
         let mut in_handle: HMIDIIN = unsafe { mem::uninitialized() };
+        let handler_data_ptr: *mut HandlerData<T> = &mut *handler_data;
         let result = unsafe { midiInOpen(&mut in_handle,
                         port_number,
                         handler::handle_input::<T> as DWORD_PTR,
-                        mem::transmute_copy::<_, *mut HandlerData<T>>(&handler_data) as DWORD_PTR,
+                        handler_data_ptr as DWORD_PTR,
                         CALLBACK_FUNCTION) };
         if result == MMSYSERR_BADDEVICEID {
             return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self));
