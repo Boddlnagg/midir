@@ -40,7 +40,7 @@ const RT_SYSEX_BUFFER_SIZE: usize = 1024;
 const RT_SYSEX_BUFFER_COUNT: usize = 4;
 
 // helper for string conversion
-fn from_wide_ptr<'a>(ptr: *const u16, max_len: usize) -> OsString {
+fn from_wide_ptr(ptr: *const u16, max_len: usize) -> OsString {
     unsafe {
         assert!(!ptr.is_null());
         let len = (0..max_len as isize).position(|i| *ptr.offset(i) == 0).unwrap();

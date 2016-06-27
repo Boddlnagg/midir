@@ -13,7 +13,7 @@ pub extern "system" fn handle_input<T>(_: HMIDIIN,
                 timestamp: DWORD) {
     if input_status != MM_MIM_DATA && input_status != MM_MIM_LONGDATA && input_status != MM_MIM_LONGERROR { return; }
     
-    let data: &mut HandlerData<T> = unsafe { mem::transmute(instance_ptr as *mut HandlerData<T>) };
+    let data: &mut HandlerData<T> = unsafe { &mut *(instance_ptr as *mut HandlerData<T>) };
     
     // Calculate time stamp.
     let timestamp = timestamp as u64;

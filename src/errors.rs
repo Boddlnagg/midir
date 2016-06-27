@@ -108,8 +108,7 @@ pub enum SendError {
 impl Error for SendError {
     fn description(&self) -> &str {
         match *self {
-            SendError::InvalidData(msg) => msg,
-            SendError::Other(msg) => msg
+            SendError::InvalidData(msg) | SendError::Other(msg) => msg
         }
     }
 }
