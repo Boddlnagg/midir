@@ -3,7 +3,8 @@ use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
 use std::sync::{Mutex};
 use std::io::{stderr, Write};
-use std::thread::sleep_ms;
+use std::thread::sleep;
+use std::time::Duration;
 use alloc::heap;
 
 use winapi::*;
@@ -30,7 +31,7 @@ use winmm_sys::{
     midiOutShortMsg,
 };
 
-use ::{MidiMessage, ShortMessage, Ignore};
+use ::{MidiMessage, Ignore};
 use ::errors::*;
 
 mod handler;
@@ -317,7 +318,7 @@ impl MidiOutputConnection {
             loop {
                 let result = unsafe { midiOutLongMsg(self.out_handle, &mut sysex, mem::size_of::<MIDIHDR>() as u32) };
                 if result == MIDIERR_NOTREADY {
-                    sleep_ms(1);
+                    sleep(Duration::from_millis(1));
                     continue;
                 } else {
                     if result != MMSYSERR_NOERROR {
@@ -330,7 +331,7 @@ impl MidiOutputConnection {
             loop {
                 let result = unsafe { midiOutUnprepareHeader(self.out_handle, &mut sysex, mem::size_of::<MIDIHDR>() as u32) };
                 if result == MIDIERR_STILLPLAYING {
-                    sleep_ms(1);
+                    sleep(Duration::from_millis(1));
                     continue;
                 } else { break; }
             }
@@ -351,7 +352,7 @@ impl MidiOutputConnection {
             loop {
                 let result = unsafe { midiOutShortMsg(self.out_handle, packet) };
                 if result == MIDIERR_NOTREADY {
-                    sleep_ms(1);
+                    sleep(Duration::from_millis(1));
                     continue;
                 } else {
                     if result != MMSYSERR_NOERROR {
@@ -363,11 +364,11 @@ impl MidiOutputConnection {
         }
         Ok(())
     }
-    pub fn send_short_message(&mut self, message: ShortMessage) -> Result<(), SendError> {
+    pub fn send_short_message(&mut self, message: u32) -> Result<(), SendError> {
         loop {
-            let result = unsafe { midiOutShortMsg(self.out_handle, message.to_u32()) };
+            let result = unsafe { midiOutShortMsg(self.out_handle, message) };
             if result == MIDIERR_NOTREADY {
-                sleep_ms(1);
+                sleep(Duration::from_millis(1));
                 continue;
             } else {
                 if result != MMSYSERR_NOERROR {

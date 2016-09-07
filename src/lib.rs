@@ -63,62 +63,6 @@ impl MidiMessage {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ShortMessage {
-	pub status: u8,
-	pub data1: u8,
-	pub data2: u8,
-}
-impl ShortMessage {
-	pub fn to_u32(&self) -> u32 {
-		((((self.data2 as u32) << 16) & 0xFF0000) |
-		  (((self.data1 as u32) << 8) & 0xFF00) |
-		  ((self.status as u32) & 0xFF)) as u32
-	}
-	pub fn status(&self) -> u8 {
-		self.status & 0xf0
-	}
-	pub fn channel(&self) -> u8 {
-		self.status & 0x0f
-	}
-}
-
-use std::fmt;
-impl fmt::Display for ShortMessage {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "(0x{:X}, {}, {}, {})", self.status & 0xF0, (self.status & 0x0F) + 1, self.data1, self.data2)
-    }
-}
-
-enum_from_primitive! {
-#[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Status {
-    // voice
-    NoteOff = 0x80,
-    NoteOn = 0x90,
-    PolyphonicAftertouch = 0xA0,
-    ControlChange = 0xB0,
-    ProgramChange = 0xC0,
-    ChannelAftertouch = 0xD0,
-    PitchBend = 0xE0,
-
-    // sysex
-    SysExStart = 0xF0,
-    MIDITimeCodeQtrFrame = 0xF1,
-    SongPositionPointer = 0xF2,
-    SongSelect = 0xF3,
-    TuneRequest = 0xF6, // F4 anf 5 are reserved and unused
-    SysExEnd = 0xF7,
-    TimingClock = 0xF8,
-    Start = 0xFA,
-    Continue = 0xFB,
-    Stop = 0xFC,
-    ActiveSensing = 0xFE, // FD also res/unused
-    SystemReset = 0xFF,
-}
-}
-
 pub mod os; // include platform-specific behaviour
 
 mod errors;

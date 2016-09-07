@@ -127,7 +127,7 @@ impl MidiOutputConnection {
     }
 
     #[cfg(target_os="windows")]
-    pub fn send_short_message(&mut self, message: ::ShortMessage) -> Result<(), SendError> {
+    pub fn send_short_message(&mut self, message: u32) -> Result<(), SendError> {
         self.imp.send_short_message(message)
     }
 }
