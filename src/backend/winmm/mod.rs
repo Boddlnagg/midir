@@ -89,8 +89,6 @@ impl MidiInput {
     }
     
     pub fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
-        //use std::fmt::Write;
-        
         let mut device_caps: MIDIINCAPSW = unsafe { mem::uninitialized() };
         let result = unsafe { midiInGetDevCapsW(port_number as UINT_PTR, &mut device_caps, mem::size_of::<MIDIINCAPSW>() as u32) };
         if result == MMSYSERR_BADDEVICEID {
@@ -98,13 +96,7 @@ impl MidiInput {
         } else if result == MMSYSERR_ERROR {
             return Err(PortInfoError::CannotRetrievePortName);
         }
-        //assert!(result == MMSYSERR_NOERROR, "could not retrieve Windows MM MIDI input port name");
-        let /*mut*/ output = from_wide_ptr(device_caps.szPname.as_ptr(), device_caps.szPname.len()).to_string_lossy().into_owned();
-        
-        // Next lines added to add the portNumber to the name so that 
-        // the device's names are sure to be listed with individual names
-        // even when they have the same brand name
-        //let _ = write!(&mut output, " {}", port_number);
+        let output = from_wide_ptr(device_caps.szPname.as_ptr(), device_caps.szPname.len()).to_string_lossy().into_owned();
         Ok(output)
     }
     
@@ -367,17 +359,14 @@ impl MidiOutputConnection {
     pub fn send_short_message(&mut self, message: u32) -> Result<(), SendError> {
         loop {
             let result = unsafe { midiOutShortMsg(self.out_handle, message) };
-            if result == MIDIERR_NOTREADY {
+            if result == MMSYSERR_NOERROR {
+                return Ok(());
+            } else if result == MIDIERR_NOTREADY {
                 sleep(Duration::from_millis(1));
-                continue;
             } else {
-                if result != MMSYSERR_NOERROR {
-                    return Err(SendError::Other("sending non-sysex message failed"));
-                }
-                break;
+                return Err(SendError::Other("sending short message failed"));
             }
         }
-        Ok(())
     }
 }
 
