@@ -2,6 +2,7 @@ use std::error::Error;
 use std::fmt;
 
 const PORT_OUT_OF_RANGE_MSG: &'static str = "provided port number was out of range";
+const CANNOT_RETRIEVE_PORT_NAME_MSG: &'static str = "unknown error when trying to retrieve the port name";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InitError;
@@ -21,12 +22,14 @@ impl fmt::Display for InitError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PortInfoError {
     PortNumberOutOfRange,
+    CannotRetrievePortName,
 }
 
 impl Error for PortInfoError {
     fn description(&self) -> &str {
         match *self {
             PortInfoError::PortNumberOutOfRange => PORT_OUT_OF_RANGE_MSG,
+            PortInfoError::CannotRetrievePortName => CANNOT_RETRIEVE_PORT_NAME_MSG,
         }
     }
 }
