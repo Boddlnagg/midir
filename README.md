@@ -1,8 +1,8 @@
-#midir [![crates.io](https://img.shields.io/crates/v/midir.svg)](https://crates.io/crates/midir) [![Travis Build Status](https://travis-ci.org/Boddlnagg/midir.svg)](https://travis-ci.org/Boddlnagg/midir?branch=master) [![AppVeyor Build status](https://ci.appveyor.com/api/projects/status/atit0teb38s2am2y/branch/master?svg=true)](https://ci.appveyor.com/project/Boddlnagg/midir)
+# midir [![crates.io](https://img.shields.io/crates/v/midir.svg)](https://crates.io/crates/midir) [![Travis Build Status](https://travis-ci.org/Boddlnagg/midir.svg)](https://travis-ci.org/Boddlnagg/midir?branch=master) [![AppVeyor Build status](https://ci.appveyor.com/api/projects/status/atit0teb38s2am2y/branch/master?svg=true)](https://ci.appveyor.com/project/Boddlnagg/midir)
 
 Cross-platform, realtime MIDI processing in Rust.
 
-##Features
+## Features
 **midir** is inspired by [RtMidi](https://github.com/thestk/rtmidi) and supports the same features*, including virtual ports (except on Windows) and full SysEx support – but with a rust-y API!
 
 <sup>* With the exception of message queues, but these can be implemented on top of callbacks using e.g. Rust's channels.</sup>
