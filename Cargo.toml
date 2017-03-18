@@ -1,12 +1,17 @@
 [package]
 name = "midir"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Patrick Reisert"]
 description = "A cross-platform, realtime MIDI processing library, inspired by RtMidi."
 repository = "https://github.com/Boddlnagg/midir"
 readme = "README.md"
 keywords = ["midi", "audio", "music", "sound"]
+categories = ["multimedia::audio", "api-bindings"]
 license = "MIT"
+
+[badges]
+travis-ci = "https://travis-ci.org/Boddlnagg/midir"
+appveyor = "https://ci.appveyor.com/project/Boddlnagg/midir"
 
 [features]
 default = []
