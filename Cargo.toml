@@ -10,8 +10,8 @@ categories = ["multimedia::audio", "api-bindings"]
 license = "MIT"
 
 [badges]
-travis-ci = "https://travis-ci.org/Boddlnagg/midir"
-appveyor = "https://ci.appveyor.com/project/Boddlnagg/midir"
+travis-ci = { repository = "https://travis-ci.org/Boddlnagg/midir", branch = "master" }
+appveyor = { repository = "https://ci.appveyor.com/project/Boddlnagg/midir", branch = "master" }
 
 [features]
 default = []
