@@ -45,8 +45,6 @@ use self::wrappers::{
     QueueTempo,
     PortSubscription,
     EventDecoder,
-    EventEncoder,
-    Event,
     poll,
     get_port_info,
     get_port_name,
@@ -54,6 +52,11 @@ use self::wrappers::{
     SND_SEQ_PORT_TYPE_APPLICATION
 };
 use self::wrappers::PortInfo as APortInfo;
+
+use std::ffi::{CString, CStr};
+
+use alsa::{Seq, Direction};
+use alsa::seq::{PortSubscribe, Addr, MIDI_GENERIC, APPLICATION, WRITE, SUBS_WRITE, READ, SUBS_READ};
 
 #[inline(always)]
 unsafe fn snd_seq_stop_queue(seq: *mut snd_seq_t, q: i32, ev: *mut snd_seq_event_t) {
@@ -63,6 +66,56 @@ unsafe fn snd_seq_stop_queue(seq: *mut snd_seq_t, q: i32, ev: *mut snd_seq_event
 #[inline(always)]
 unsafe fn snd_seq_start_queue(seq: *mut snd_seq_t, q: i32, ev: *mut snd_seq_event_t) {
     snd_seq_control_queue(seq, q, SND_SEQ_EVENT_START as i32, 0, ev);
+}
+
+mod helpers {
+    use alsa::seq::{Seq, ClientIter, PortIter, PortInfo, PortCap, MidiEvent, MIDI_GENERIC, SYNTH};
+
+    pub fn get_port_count(s: &Seq, capability: PortCap) -> usize {
+        ClientIter::new(s).flat_map(|c| PortIter::new(s, c.get_client()))
+                          .filter(|p| p.get_type().intersects(MIDI_GENERIC | SYNTH))
+                          .filter(|p| p.get_capability().intersects(capability))
+                          .count()
+    }
+
+    pub fn get_port_info(s: &Seq, capability: PortCap, port_number: u32) -> Option<PortInfo> {
+        ClientIter::new(s).flat_map(|c| PortIter::new(s, c.get_client()))
+                          .filter(|p| p.get_type().intersects(MIDI_GENERIC | SYNTH))
+                          .filter(|p| p.get_capability().intersects(capability))
+                          .nth(port_number as usize)
+    }
+
+    pub struct EventEncoder {
+        ev: MidiEvent,
+        buffer_size: u32
+    }
+
+    impl EventEncoder {
+        pub fn new(buffer_size: u32) -> EventEncoder {
+            EventEncoder {
+                ev: MidiEvent::new(buffer_size).unwrap(),
+                buffer_size: buffer_size
+            }
+        }
+
+        pub fn get_buffer_size(&self) -> u32 {
+            self.buffer_size
+        }
+
+        pub fn resize_buffer(&mut self, bufsize: u32) -> Result<(), ()> {
+            match self.ev.resize_buffer(bufsize) {
+                Ok(_) => {
+                    self.buffer_size = bufsize;
+                    Ok(())
+                },
+                Err(_) => Err(())
+            }
+        }
+
+        pub fn get_ev(&mut self) -> &mut MidiEvent {
+            &mut self.ev
+        }
+    }
 }
 
 const SND_SEQ_PORT_CAP_READ: u32 = 1<<0;
@@ -197,8 +250,6 @@ impl MidiInput {
         
         let queue_id = self.init_queue();
         
-        let subscription;
-        
         let mut src_pinfo = unsafe { APortInfo::allocate() };
         
         if get_port_info(self.seq.as_mut().unwrap(), &mut src_pinfo, SND_SEQ_PORT_CAP_READ | SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32).is_none() {
@@ -229,7 +280,7 @@ impl MidiInput {
         if unsafe { snd_seq_subscribe_port(self.seq.as_mut().unwrap().as_mut_ptr(), sub.as_ptr()) } != 0 {
             return Err(ConnectError::other("could not create ALSA input subscription", self));
         }
-        subscription = sub;
+        let subscription = sub;
         
         // Start the input queue
         self.start_input_queue(queue_id);
@@ -376,25 +427,25 @@ impl<T> Drop for MidiInputConnection<T> {
 }
 
 pub struct MidiOutput {
-    seq: Option<Sequencer>, // TODO: if `Sequencer` is marked as non-zero, this should just be pointer-sized 
+    seq: Option<Seq>, // TODO: if `Sequencer` is marked as non-zero, this should just be pointer-sized 
 }
 
 pub struct MidiOutputConnection {
-    seq: Option<Sequencer>,
+    seq: Option<Seq>,
     vport: i32,
-    coder: EventEncoder,
-    subscription: Option<PortSubscription>
+    coder: helpers::EventEncoder,
+    subscription: Option<PortSubscribe>
 }
 
 impl MidiOutput {
     pub fn new(client_name: &str) -> Result<Self, InitError> {
-        let mut seq = match Sequencer::open(SequencerOpenMode::Output, true) {
+        let seq = match Seq::open(unsafe { CStr::from_bytes_with_nul_unchecked(b"default\0") }, Some(Direction::Playback), true) {
             Ok(s) => s,
             Err(_) => { return Err(InitError); }
         };
         
-        // Set client name.
-        seq.set_client_name(client_name);
+        let c_client_name = CString::new(client_name).map_err(|_| InitError)?;
+        seq.set_client_name(&c_client_name).map_err(|_| InitError)?;
         
         Ok(MidiOutput {
             seq: Some(seq),
@@ -402,79 +453,78 @@ impl MidiOutput {
     }
     
     pub fn port_count(&self) -> u32 {
-        unsafe {
-            let mut pinfo = APortInfo::allocate();
-            get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, -1).unwrap() as u32
-        }
+        helpers::get_port_count(self.seq.as_ref().unwrap(), WRITE | SUBS_WRITE) as u32
     }
     
     pub fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
-        match get_port_name(&self.seq.as_ref().unwrap(), SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, port_number as i32) {
-            Ok(s) => Ok(s),
-            Err(()) => Err(PortInfoError::PortNumberOutOfRange)
-        }
+        use std::fmt::Write;
+
+        let pinfo = match helpers::get_port_info(self.seq.as_ref().unwrap(), WRITE | SUBS_WRITE, port_number) {
+            Some(p) => p,
+            None => return Err(PortInfoError::PortNumberOutOfRange)
+        };
+
+        let cinfo = self.seq.as_ref().unwrap().get_any_client_info(pinfo.get_client()).map_err(|_| PortInfoError::CannotRetrievePortName)?;
+        let mut output = String::new();
+        write!(&mut output, "{} {}:{}", 
+            cinfo.get_name().map_err(|_| PortInfoError::CannotRetrievePortName)?,
+            pinfo.get_client(), // These lines added to make sure devices are listed
+            pinfo.get_port()    // with full portnames added to ensure individual device names
+        ).unwrap();
+        Ok(output)
     }
     
     pub fn connect(mut self, port_number: u32, port_name: &str) -> Result<MidiOutputConnection, ConnectError<Self>> {
-        let mut pinfo = unsafe { APortInfo::allocate() };
-        
-        if get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, port_number as i32).is_none() {
-            return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self));
-        }
-        
-        let receiver = snd_seq_addr_t {
-            client: pinfo.get_client() as u8,
-            port: pinfo.get_port() as u8
+        let pinfo = match helpers::get_port_info(self.seq.as_ref().unwrap(), WRITE | SUBS_WRITE, port_number) {
+            Some(p) => p,
+            None => return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self))
         };
-        
-        let vport = match self.seq.as_mut().unwrap().create_simple_port(port_name,
-                            SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ,
-                            SND_SEQ_PORT_TYPE_MIDI_GENERIC|SND_SEQ_PORT_TYPE_APPLICATION) {
+
+        let c_port_name = match CString::new(port_name) {
+            Ok(c_port_name) => c_port_name,
+            Err(_) => return Err(ConnectError::other("port_name must not contain null bytes", self))
+        };
+
+        let vport = match self.seq.as_ref().unwrap().create_simple_port(&c_port_name, READ | SUBS_READ, MIDI_GENERIC | APPLICATION) {
             Ok(vport) => vport,
-            Err(_) => {
-                return Err(ConnectError::other("could not create ALSA output port", self));
-            }
+            Err(_) => return Err(ConnectError::other("could not create ALSA output port", self))
         };
-        
-        let sender = snd_seq_addr_t {
-            client: self.seq.as_ref().unwrap().get_client_id() as u8,
-            port: vport as u8
-        };
-        
+
         // Make subscription
-        let mut sub = unsafe { PortSubscription::allocate() };
-        sub.set_sender(&sender);
-        sub.set_dest(&receiver);
+        let sub = PortSubscribe::empty().unwrap();
+        sub.set_sender(Addr { client: self.seq.as_ref().unwrap().client_id().unwrap(), port: vport });
+        sub.set_dest(Addr { client: pinfo.get_client(), port: pinfo.get_port() });
         sub.set_time_update(true);
         sub.set_time_real(true);
-        if unsafe { snd_seq_subscribe_port(self.seq.as_mut().unwrap().as_mut_ptr(), sub.as_ptr()) } != 0 {
+        if self.seq.as_ref().unwrap().subscribe_port(&sub).is_err() {
             return Err(ConnectError::other("could not create ALSA output subscription", self));
         }
         
         Ok(MidiOutputConnection {
             seq: self.seq.take(),
             vport: vport,
-            coder: EventEncoder::new(INITIAL_CODER_BUFFER_SIZE),
-            subscription: Some(sub)
+            coder: helpers::EventEncoder::new(INITIAL_CODER_BUFFER_SIZE as u32),
+            subscription: Some(unsafe{::std::mem::transmute(sub)})
         })
     }
     
     pub fn create_virtual(
         mut self, port_name: &str
     ) -> Result<MidiOutputConnection, ConnectError<Self>> {
-        let vport = match self.seq.as_mut().unwrap().create_simple_port(port_name,
-                            SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ,
-                            SND_SEQ_PORT_TYPE_MIDI_GENERIC|SND_SEQ_PORT_TYPE_APPLICATION) {
+        let c_port_name = match CString::new(port_name) {
+            Ok(c_port_name) => c_port_name,
+            Err(_) => return Err(ConnectError::other("port_name must not contain null bytes", self))
+        };
+
+        let vport = match self.seq.as_ref().unwrap().create_simple_port(&c_port_name, READ | SUBS_READ, MIDI_GENERIC | APPLICATION) {
             Ok(vport) => vport,
-            Err(_) => {
-                return Err(ConnectError::other("could not create ALSA output port", self));
-            }
+            Err(_) => return Err(ConnectError::other("could not create ALSA output port", self))
         };
         
         Ok(MidiOutputConnection {
             seq: self.seq.take(),
             vport: vport,
-            coder: EventEncoder::new(INITIAL_CODER_BUFFER_SIZE),
+            coder: helpers::EventEncoder::new(INITIAL_CODER_BUFFER_SIZE as u32),
             subscription: None
         })
     }
@@ -490,41 +540,40 @@ impl MidiOutputConnection {
         }
     }
     
-    pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {        
+    pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {  
         let nbytes = message.len();
+        assert!(nbytes <= u32::max_value() as usize);
         
-        if nbytes > self.coder.get_buffer_size() {
-            if self.coder.resize_buffer(nbytes).is_err() {
+        if nbytes > self.coder.get_buffer_size() as usize {
+            if self.coder.resize_buffer(nbytes as u32).is_err() {
                 return Err(SendError::Other("could not resize ALSA encoding buffer"));
             }
         }
         
-        let mut ev = Event::new();
-        ev.set_source(self.vport as u8);
+        let mut ev = match self.coder.get_ev().encode(message) {
+            Ok((_, Some(ev))) => ev,
+            _ => return Err(SendError::InvalidData("ALSA encoder reported invalid data"))
+        };
+
+        ev.set_source(self.vport);
         ev.set_subs();
         ev.set_direct();
         
-        if self.coder.encode(message, &mut ev).is_err() {
-            return Err(SendError::InvalidData("ALSA encoder reported invalid data"));
-        }
-        
         // Send the event.
-        if self.seq.as_mut().unwrap().event_output(&ev).is_err() {
+        if self.seq.as_ref().unwrap().event_output(&mut ev).is_err() {
             return Err(SendError::Other("could not send encoded ALSA message"));
         }
         
-        self.seq.as_mut().unwrap().drain_output();
+        let _ = self.seq.as_mut().unwrap().drain_output();
         Ok(())
     }
     
     fn close_internal(&mut self) {
-        unsafe {
-            let seq = self.seq.as_mut().unwrap();
-            if self.subscription.is_some() {
-                snd_seq_unsubscribe_port(seq.as_mut_ptr(), self.subscription.as_mut().unwrap().as_ptr());
-            }
-            snd_seq_delete_port(seq.as_mut_ptr(), self.vport);
+        let seq = self.seq.as_mut().unwrap();
+        if let Some(ref subscription) = self.subscription {
+            let _ = seq.unsubscribe_port(subscription.get_sender(), subscription.get_dest());
         }
+        let _ = seq.delete_port(self.vport);
     }
 }
 
