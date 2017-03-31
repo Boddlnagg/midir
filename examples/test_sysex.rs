@@ -5,7 +5,7 @@ use std::time::Duration;
 use std::error::Error;
 
 use midir::{MidiInput, MidiOutput, Ignore};
-use midir::os::unix::{VirtualInput, VirtualOutput};
+use midir::os::unix::VirtualInput;
 
 // TODO: better error handling using try! macro for all possible failures and printing actual error message
 fn main() {
@@ -14,6 +14,8 @@ fn main() {
         Err(err) => println!("Error: {}", err.description())
     }
 }
+
+const LARGE_SYSEX_SIZE: usize = 5572; // This is the maximum that worked for me
 
 fn run() -> Result<(), Box<Error>> {
     let mut midi_in = try!(MidiInput::new("My Test Input"));
@@ -36,20 +38,20 @@ fn run() -> Result<(), Box<Error>> {
     try!(conn_out.send(&[144, 60, 1]));
     sleep(Duration::from_millis(200));
     println!("Sending small SysEx message ...");
-    try!(conn_out.send(&[0xF0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xF7]));
+    try!(conn_out.send(&[0xF0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xF7]));
     sleep(Duration::from_millis(200));
     println!("Sending large SysEx message ...");
-    let mut v = Vec::with_capacity(2000);
+    let mut v = Vec::with_capacity(LARGE_SYSEX_SIZE);
     v.push(0xF0u8);
-    for _ in 1..1999 {
+    for _ in 1..LARGE_SYSEX_SIZE-1 {
         v.push(0u8);
     }
-    v.push(0xF708);
-    assert_eq!(v.len(), 2000);
+    v.push(0xF7u8);
+    assert_eq!(v.len(), LARGE_SYSEX_SIZE);
     try!(conn_out.send(&v[..]));
     sleep(Duration::from_millis(200));
     println!("Sending small SysEx message ...");
-    try!(conn_out.send(&[0xF0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xF7]));
+    try!(conn_out.send(&[0xF0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xF7]));
     sleep(Duration::from_millis(200));
     println!("Closing output ...");
     conn_out.close();

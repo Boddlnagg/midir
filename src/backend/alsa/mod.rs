@@ -557,11 +557,9 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
     let mut last_time: Option<u64> = None;
     let mut continue_sysex: bool = false;
     
-    let mut buffer = unsafe {
-        let mut vec = Vec::with_capacity(INITIAL_CODER_BUFFER_SIZE);
-        vec.set_len(INITIAL_CODER_BUFFER_SIZE);
-        vec.into_boxed_slice()
-    };
+    // ALSA documentation says:
+    // The required buffer size for a sequencer event it as most 12 bytes, except for System Exclusive events (which we handle separately)
+    let mut buffer = [0; 12];
     
     let mut coder = helpers::EventDecoder::new(false);
     
@@ -578,6 +576,9 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
     }
     poll_fds[0].fd = data.trigger_rcv_fd;
     poll_fds[0].events = ::libc::POLLIN;
+
+            
+    let mut message = MidiMessage::new();
     
     let mut do_input = true;
     while do_input {
@@ -592,27 +593,49 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
             continue;
         }
 
+        // This is a bit weird, but we now have to decode an ALSA MIDI
+        // event (back) into MIDI bytes. We'll ignore non-MIDI types.
+
+        // The ALSA sequencer has a maximum buffer size for MIDI sysex
+        // events of 256 bytes. If a device sends sysex messages larger
+        // than this, they are segmented into 256 byte chunks.    So,
+        // we'll watch for this and concatenate sysex chunks into a
+        // single sysex message if necessary.
+        //
+        // TODO: Figure out if this is still true (seems to not be the case)
+        //       If not (i.e., each event represents a complete message), we can
+        //       call the user callback with the byte buffer directly, without the
+        //       copying to `message.bytes` first.
+        if !continue_sysex { message.bytes.clear() }
+
+        let ignore_flags = data.ignore_flags;
+
         // If here, there should be data.
-        let mut ev = match data.seq.event_input() {
+        let mut ev = match data.seq.event_input_cb(|ty, buf|{
+            // This callback is called for events carrying external data (sysex and user events)
+            if ty == EventType::Sysex && !ignore_flags.contains(Ignore::Sysex) {
+                // Directly copy the data from the external buffer to our message
+                message.bytes.extend_from_slice(buf);
+                continue_sysex = *message.bytes.last().unwrap() != 0xF7;
+            }
+            None // tell alsa-rs to not copy any data into its own event structure
+        }) {
             Ok(ev) => ev,
             Err(ref e) if e.code() == -::libc::ENOSPC => {
                 let _ = writeln!(stderr(), "\nError in handle_input: ALSA MIDI input buffer overrun!\n");
                 continue;
             },
-            Err(_) => {
-                let _ = writeln!(stderr(), "\nError in handle_input: unknown ALSA MIDI input error!\n");
+            Err(ref e) if e.code() == -::libc::EAGAIN => {
+                let _ = writeln!(stderr(), "\nError in handle_input: no input event from ALSA MIDI input buffer!\n");
+                continue;
+            },
+            Err(ref e) => {
+                let _ = writeln!(stderr(), "\nError in handle_input: unknown ALSA MIDI input error ({})!\n", e.code());
                 //perror("System reports");
                 continue;
             }
         };
         
-        let mut message = MidiMessage::new();
-
-        // This is a bit weird, but we now have to decode an ALSA MIDI
-        // event (back) into MIDI bytes. We'll ignore non-MIDI types.
-        if !continue_sysex { message.bytes.clear() }
-        
-        let ignore_flags = data.ignore_flags;
         let do_decode = match ev.get_type() {
             EventType::PortSubscribed => {
                 if cfg!(debug) { println!("Notice from handle_input: ALSA port connection made!") };
@@ -622,7 +645,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
                 if cfg!(debug) {
                     let _ = writeln!(stderr(), "Notice from handle_input: ALSA port connection has closed!");
                     let connect = ev.get_data::<Connect>().unwrap();
-                    println!("sender = {}:{}, dest = {}:{}",
+                    let _ = writeln!(stderr(), "sender = {}:{}, dest = {}:{}",
                         connect.sender.client,
                         connect.sender.port,
                         connect.dest.client,
@@ -643,70 +666,35 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
             EventType::Sensing => { // Active sensing
                 !ignore_flags.contains(Ignore::ActiveSense)
             },
-            EventType::Sysex => {
-                if ignore_flags.contains(Ignore::Sysex) { false }
-                else {
-                    // FIXME: This clones the data previously collected, leading to unnecessary memcopies.
-                    //        The byte vector should be returned directly instead (does ALSA actually segment SysEx messages larger than 256 bytes?)
-                    let sysex_message = ev.get_data::<Vec<u8>>().unwrap();
-                    let data_len = sysex_message.len();
-                    let buffer_len = buffer.len();
-                    if data_len > buffer_len {
-                        // Resize buffer
-                        buffer = unsafe {
-                            let mut vec = Vec::with_capacity(data_len);
-                            vec.set_len(data_len);
-                            vec.into_boxed_slice()
-                        };
-                        true
-                    } else { true }
-                }
-            }
+            EventType::Sysex => false,
             _ => true
         };
 
+        // NOTE: SysEx messages have already been "decoded" at this point!
         if do_decode {
             if let Ok(nbytes) = coder.get_wrapped().decode(&mut buffer, &mut ev) {
                 if nbytes > 0 {
-                    // The ALSA sequencer has a maximum buffer size for MIDI sysex
-                    // events of 256 bytes. If a device sends sysex messages larger
-                    // than this, they are segmented into 256 byte chunks.    So,
-                    // we'll watch for this and concatenate sysex chunks into a
-                    // single sysex message if necessary.
-                    if !continue_sysex {
-                        message.bytes.clear();
-                    }
-                    
                     message.bytes.extend_from_slice(&buffer[0..nbytes]);
-                    
-                    continue_sysex = ( ev.get_type() == EventType::Sysex ) && ( *message.bytes.last().unwrap() != 0xF7 );
-                    if !continue_sysex {
-                        // Calculate the time stamp:
-                        // Use the ALSA sequencer event time data.
-                        // (thanks to Pedro Lopez-Cabanillas!).
-                        let new_alsa_time = ev.get_time().unwrap();
-                        let secs = new_alsa_time.as_secs();
-                        let nsecs = new_alsa_time.subsec_nanos();
-
-                        //let alsa_time = unsafe { &*ev.time.time() };
-                        let timestamp = ( secs as u64 * 1_000_000 ) + ( nsecs as u64/1_000 );
-                        message.timestamp = match last_time {
-                            None => 0.0,
-                            Some(last) => (timestamp - last) as f64 * 0.000001
-                        };
-                        last_time = Some(timestamp);
-                    } else {
-                        // TODO: this doesn't make sense
-                        if cfg!(debug) {
-                            let _ = writeln!(stderr(), "\nError in handle_input: event parsing error or not a MIDI event!\n");
-                        }
-                    }
                 }
             }
         }
 
-        drop(ev);
         if message.bytes.len() == 0 || continue_sysex { continue; }
+
+        // Calculate the time stamp:
+        // Use the ALSA sequencer event time data.
+        // (thanks to Pedro Lopez-Cabanillas!).
+        let new_alsa_time = ev.get_time().unwrap();
+        let secs = new_alsa_time.as_secs();
+        let nsecs = new_alsa_time.subsec_nanos();
+
+        //let alsa_time = unsafe { &*ev.time.time() };
+        let timestamp = ( secs as u64 * 1_000_000 ) + ( nsecs as u64/1_000 );
+        message.timestamp = match last_time {
+            None => 0.0,
+            Some(last) => (timestamp - last) as f64 * 0.000001
+        };
+        last_time = Some(timestamp);
         
         (data.callback)(message.timestamp, &message.bytes, user_data);
     }
