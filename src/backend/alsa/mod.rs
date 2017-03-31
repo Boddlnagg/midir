@@ -1,48 +1,16 @@
 use std::mem;
-use std::ptr;
 use std::thread::{Builder, JoinHandle};
 use std::io::{stderr, Write};
 use std::ffi::{CString, CStr};
 
-use alsa_sys::{
-    snd_seq_t,
-    snd_seq_event_t,
-    snd_seq_control_queue
-};
-
-use alsa_sys::{
-    SND_SEQ_EVENT_STOP,
-    SND_SEQ_EVENT_START
-};
+use alsa::{Seq, Direction};
+use alsa::seq::{PortInfo, PortSubscribe, Addr, QueueTempo, EventType, MIDI_GENERIC, APPLICATION, WRITE, SUBS_WRITE, READ, SUBS_READ};
 
 use ::{MidiMessage, Ignore};
 use ::errors::*;
 
-use alsa::{Seq, Direction};
-use alsa::seq::{PortInfo, PortSubscribe, Addr, QueueTempo, MIDI_GENERIC, APPLICATION, WRITE, SUBS_WRITE, READ, SUBS_READ};
-
-trait UnsafeAsMutPtr {
-    unsafe fn as_mut_ptr(&mut self) -> *mut snd_seq_t;
-}
-
-impl UnsafeAsMutPtr for Seq {
-    unsafe fn as_mut_ptr(&mut self) -> *mut snd_seq_t {
-        *(::std::mem::transmute::<&mut Seq, &mut *mut snd_seq_t>(self))
-    }
-}
-
-#[inline(always)]
-unsafe fn snd_seq_stop_queue(seq: *mut snd_seq_t, q: i32, ev: *mut snd_seq_event_t) {
-    snd_seq_control_queue(seq, q, SND_SEQ_EVENT_STOP as i32, 0, ev);
-}
-
-#[inline(always)]
-unsafe fn snd_seq_start_queue(seq: *mut snd_seq_t, q: i32, ev: *mut snd_seq_event_t) {
-    snd_seq_control_queue(seq, q, SND_SEQ_EVENT_START as i32, 0, ev);
-}
-
 mod helpers {
-    use alsa::seq::{Seq, ClientIter, PortIter, PortInfo, PortCap, MidiEvent, MIDI_GENERIC, SYNTH};
+    use alsa::seq::{Seq, ClientIter, PortIter, PortInfo, PortCap, MidiEvent, EventType, Event, EvQueueControl, Addr, MIDI_GENERIC, SYNTH};
     use ::errors::PortInfoError;
 
     pub fn poll(fds: &mut [::libc::pollfd], timeout: i32) -> i32 {
@@ -84,13 +52,21 @@ mod helpers {
         Ok(output)
     }
 
+    #[inline]
+    pub fn control_queue(s: &Seq, queue: i32, event_type: EventType) {
+        let mut e = Event::new(event_type, &EvQueueControl { queue: queue, value: () });
+        e.set_direct();
+        e.set_dest(Addr::system_timer()); // Not strictly necessary, because that address is 0:0
+        let _ = s.event_output(&mut e);
+    }
+
     pub struct EventDecoder {
         ev: MidiEvent
     }
 
     impl EventDecoder {
-        pub fn new(buffer_size: u32, merge_commands: bool) -> EventDecoder {
-            let coder = MidiEvent::new(buffer_size).unwrap();
+        pub fn new(merge_commands: bool) -> EventDecoder {
+            let coder = MidiEvent::new(0).unwrap();
             coder.enable_running_status(merge_commands);
             EventDecoder { ev: coder }
         }
@@ -162,7 +138,7 @@ struct HandlerData<T: 'static> {
 
 impl MidiInput {
     pub fn new(client_name: &str) -> Result<Self, InitError> {
-        let seq = match Seq::open(unsafe { CStr::from_bytes_with_nul_unchecked(b"default\0") }, None, true) {
+        let seq = match Seq::open(None, None, true) {
             Ok(s) => s,
             Err(_) => { return Err(InitError); }
         };
@@ -240,9 +216,7 @@ impl MidiInput {
     fn start_input_queue(&mut self, queue_id: i32) {
         if !cfg!(feature = "avoid_timestamping") {
             let seq = self.seq.as_mut().unwrap();
-            unsafe {
-                snd_seq_start_queue(seq.as_mut_ptr(), queue_id, ptr::null_mut());
-            }
+            helpers::control_queue(&seq, queue_id, EventType::Start);
             let _ = seq.drain_output();
         }
     }
@@ -394,7 +368,7 @@ impl<T> MidiInputConnection<T> {
         
         let thread = self.thread.take().unwrap(); 
         // Join the thread to get the handler_data back
-        let (mut handler_data, user_data) = thread.join().unwrap(); // TODO: don't use unwrap here
+        let (handler_data, user_data) = thread.join().unwrap(); // TODO: don't use unwrap here
         
         // TODO: find out why snd_seq_unsubscribe_port takes a long time if there was not yet any input message
         if let Some(ref subscription) = self.subscription {
@@ -409,11 +383,9 @@ impl<T> MidiInputConnection<T> {
         
         // Stop and free the input queue
         if !cfg!(feature = "avoid_timestamping") {
-            unsafe {
-                snd_seq_stop_queue(handler_data.seq.as_mut_ptr(), handler_data.queue_id, ptr::null_mut());
-                let _ = handler_data.seq.drain_output();
-                let _ = handler_data.seq.free_queue(handler_data.queue_id);
-            }
+            helpers::control_queue(&handler_data.seq, handler_data.queue_id, EventType::Stop);
+            let _ = handler_data.seq.drain_output();
+            let _ = handler_data.seq.free_queue(handler_data.queue_id);
         }
         
         // Delete the port
@@ -446,7 +418,7 @@ pub struct MidiOutputConnection {
 
 impl MidiOutput {
     pub fn new(client_name: &str) -> Result<Self, InitError> {
-        let seq = match Seq::open(unsafe { CStr::from_bytes_with_nul_unchecked(b"default\0") }, Some(Direction::Playback), true) {
+        let seq = match Seq::open(None, Some(Direction::Playback), true) {
             Ok(s) => s,
             Err(_) => { return Err(InitError); }
         };
@@ -591,7 +563,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
         vec.into_boxed_slice()
     };
     
-    let mut coder = helpers::EventDecoder::new(INITIAL_CODER_BUFFER_SIZE as u32, false);
+    let mut coder = helpers::EventDecoder::new(false);
     
     let mut poll_fds: Box<[::libc::pollfd]>;
     {

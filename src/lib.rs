@@ -3,8 +3,6 @@ extern crate memalloc;
 #[cfg(target_os="linux")]
 extern crate libc;
 #[cfg(all(target_os="linux", not(feature = "jack")))]
-extern crate alsa_sys;
-#[cfg(all(target_os="linux", not(feature = "jack")))]
 extern crate alsa;
 #[cfg(all(feature = "jack", not(target_os = "windows")))]
 extern crate jack_sys;
