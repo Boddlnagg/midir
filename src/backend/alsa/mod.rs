@@ -1,84 +1,120 @@
-#![allow(dead_code)]
-
 use std::mem;
-use std::ptr;
 use std::thread::{Builder, JoinHandle};
 use std::io::{stderr, Write};
+use std::ffi::{CString, CStr};
 
-use alsa_sys::{
-    snd_seq_t,
-    snd_seq_addr_t,
-    snd_seq_delete_port, // TODO: wrap
-    snd_seq_subscribe_port,
-    snd_seq_unsubscribe_port,
-    snd_seq_event_t,
-    snd_seq_event_input_pending,
-    snd_seq_drain_output,
-    snd_seq_alloc_named_queue,
-    snd_seq_set_queue_tempo,
-    snd_seq_free_queue, // TODO: wrap
-    snd_seq_control_queue
-};
-
-use alsa_sys::{
-    SND_SEQ_EVENT_PORT_SUBSCRIBED,
-    SND_SEQ_EVENT_PORT_UNSUBSCRIBED,
-    SND_SEQ_EVENT_QFRAME,
-    SND_SEQ_EVENT_TICK,
-    SND_SEQ_EVENT_CLOCK,
-    SND_SEQ_EVENT_SENSING,
-    SND_SEQ_EVENT_SYSEX,
-    SND_SEQ_EVENT_STOP,
-    SND_SEQ_EVENT_START
-};
-
-use libc::{POLLIN, c_char};
+use alsa::{Seq, Direction};
+use alsa::seq::{PortInfo, PortSubscribe, Addr, QueueTempo, EventType, MIDI_GENERIC, APPLICATION, WRITE, SUBS_WRITE, READ, SUBS_READ};
 
 use ::{MidiMessage, Ignore};
 use ::errors::*;
 
-// Include ALSA wrappers
-mod wrappers;
-use self::wrappers::{
-    Sequencer,
-    SequencerOpenMode,
-    QueueTempo,
-    PortSubscription,
-    EventDecoder,
-    EventEncoder,
-    Event,
-    poll,
-    get_port_info,
-    get_port_name,
-    SND_SEQ_PORT_TYPE_MIDI_GENERIC,
-    SND_SEQ_PORT_TYPE_APPLICATION
-};
-use self::wrappers::PortInfo as APortInfo;
+mod helpers {
+    use alsa::seq::{Seq, ClientIter, PortIter, PortInfo, PortCap, MidiEvent, MIDI_GENERIC, SYNTH};
+    use ::errors::PortInfoError;
 
-#[inline(always)]
-unsafe fn snd_seq_stop_queue(seq: *mut snd_seq_t, q: i32, ev: *mut snd_seq_event_t) {
-    snd_seq_control_queue(seq, q, SND_SEQ_EVENT_STOP as i32, 0, ev);
+    pub fn poll(fds: &mut [::libc::pollfd], timeout: i32) -> i32 {
+        unsafe { ::libc::poll(fds.as_mut_ptr(), fds.len() as ::libc::nfds_t, timeout) }
+    }
+
+    #[inline]
+    pub fn get_port_count(s: &Seq, capability: PortCap) -> usize {
+        ClientIter::new(s).flat_map(|c| PortIter::new(s, c.get_client()))
+                          .filter(|p| p.get_type().intersects(MIDI_GENERIC | SYNTH))
+                          .filter(|p| p.get_capability().intersects(capability))
+                          .count()
+    }
+
+    #[inline]
+    pub fn get_port_info(s: &Seq, capability: PortCap, port_number: u32) -> Option<PortInfo> {
+        ClientIter::new(s).flat_map(|c| PortIter::new(s, c.get_client()))
+                          .filter(|p| p.get_type().intersects(MIDI_GENERIC | SYNTH))
+                          .filter(|p| p.get_capability().intersects(capability))
+                          .nth(port_number as usize)
+    }
+
+    #[inline]
+    pub fn get_port_name(s: &Seq, capability: PortCap, port_number: u32) -> Result<String, PortInfoError> {
+        use std::fmt::Write;
+
+        let pinfo = match get_port_info(s, capability, port_number) {
+            Some(p) => p,
+            None => return Err(PortInfoError::PortNumberOutOfRange)
+        };
+
+        let cinfo = try!(s.get_any_client_info(pinfo.get_client()).map_err(|_| PortInfoError::CannotRetrievePortName));
+        let mut output = String::new();
+        write!(&mut output, "{} {}:{}", 
+            try!(cinfo.get_name().map_err(|_| PortInfoError::CannotRetrievePortName)),
+            pinfo.get_client(), // These lines added to make sure devices are listed
+            pinfo.get_port()    // with full portnames added to ensure individual device names
+        ).unwrap();
+        Ok(output)
+    }
+
+    pub struct EventDecoder {
+        ev: MidiEvent
+    }
+
+    impl EventDecoder {
+        pub fn new(merge_commands: bool) -> EventDecoder {
+            let coder = MidiEvent::new(0).unwrap();
+            coder.enable_running_status(merge_commands);
+            EventDecoder { ev: coder }
+        }
+
+        #[inline]
+        pub fn get_wrapped(&mut self) -> &mut MidiEvent {
+            &mut self.ev
+        }
+    }
+
+    pub struct EventEncoder {
+        ev: MidiEvent,
+        buffer_size: u32
+    }
+
+    impl EventEncoder {
+        #[inline]
+        pub fn new(buffer_size: u32) -> EventEncoder {
+            EventEncoder {
+                ev: MidiEvent::new(buffer_size).unwrap(),
+                buffer_size: buffer_size
+            }
+        }
+
+        #[inline]
+        pub fn get_buffer_size(&self) -> u32 {
+            self.buffer_size
+        }
+
+        #[inline]
+        pub fn resize_buffer(&mut self, bufsize: u32) -> Result<(), ()> {
+            match self.ev.resize_buffer(bufsize) {
+                Ok(_) => {
+                    self.buffer_size = bufsize;
+                    Ok(())
+                },
+                Err(_) => Err(())
+            }
+        }
+
+        #[inline]
+        pub fn get_wrapped(&mut self) -> &mut MidiEvent {
+            &mut self.ev
+        }
+    }
 }
-
-#[inline(always)]
-unsafe fn snd_seq_start_queue(seq: *mut snd_seq_t, q: i32, ev: *mut snd_seq_event_t) {
-    snd_seq_control_queue(seq, q, SND_SEQ_EVENT_START as i32, 0, ev);
-}
-
-const SND_SEQ_PORT_CAP_READ: u32 = 1<<0;
-const SND_SEQ_PORT_CAP_WRITE: u32 = 1<<1;
-const SND_SEQ_PORT_CAP_SUBS_READ: u32 = 1<<5;
-const SND_SEQ_PORT_CAP_SUBS_WRITE: u32 = 1<<6;
 
 const INITIAL_CODER_BUFFER_SIZE: usize = 32;
 
 pub struct MidiInput {
     ignore_flags: Ignore,
-    seq: Option<Sequencer>,
+    seq: Option<Seq>,
 }
 
 pub struct MidiInputConnection<T: 'static> {
-    subscription: Option<PortSubscription>,
+    subscription: Option<PortSubscribe>,
     thread: Option<JoinHandle<(HandlerData<T>, T)>>,
     vport: i32, // TODO: probably port numbers are only u8, therefore could use Option<u8>
     trigger_send_fd: i32,
@@ -86,7 +122,7 @@ pub struct MidiInputConnection<T: 'static> {
 
 struct HandlerData<T: 'static> {
     ignore_flags: Ignore,
-    seq: Sequencer,
+    seq: Seq,
     trigger_rcv_fd: i32,
     callback: Box<FnMut(f64, &[u8], &mut T)+Send>,
     queue_id: i32, // an input queue is needed to get timestamped events
@@ -94,12 +130,13 @@ struct HandlerData<T: 'static> {
 
 impl MidiInput {
     pub fn new(client_name: &str) -> Result<Self, InitError> {
-        let mut seq = match Sequencer::open(SequencerOpenMode::Duplex, true) {
+        let seq = match Seq::open(None, None, true) {
             Ok(s) => s,
             Err(_) => { return Err(InitError); }
         };
         
-        seq.set_client_name(client_name);
+        let c_client_name = try!(CString::new(client_name).map_err(|_| InitError));
+        try!(seq.set_client_name(&c_client_name).map_err(|_| InitError));
         
         Ok(MidiInput {
             ignore_flags: Ignore::None,
@@ -112,17 +149,11 @@ impl MidiInput {
     }
     
     pub fn port_count(&self) -> u32 {
-        unsafe {
-            let mut pinfo = APortInfo::allocate();
-            get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, -1).unwrap() as u32
-        }
+        helpers::get_port_count(self.seq.as_ref().unwrap(), READ | SUBS_READ) as u32
     }
     
     pub fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
-        match get_port_name(&self.seq.as_ref().unwrap(), SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32) {
-            Ok(s) => Ok(s),
-            Err(()) => Err(PortInfoError::PortNumberOutOfRange)
-        }
+        helpers::get_port_name(self.seq.as_ref().unwrap(), READ | SUBS_READ, port_number)
     }
     
     fn init_queue(&mut self) -> i32 {
@@ -130,15 +161,13 @@ impl MidiInput {
         let mut queue_id = 0;
         // Create the input queue
         if !cfg!(feature = "avoid_timestamping") {
-            queue_id = unsafe { snd_seq_alloc_named_queue(seq.as_mut_ptr(), b"midir queue\0".as_ptr() as *const c_char) };
+            queue_id = seq.alloc_named_queue(unsafe { CStr::from_bytes_with_nul_unchecked(b"midir queue\0") }).unwrap();
             // Set arbitrary tempo (mm=100) and resolution (240)
-            let mut qtempo = unsafe { QueueTempo::allocate() };
+            let qtempo = QueueTempo::empty().unwrap();
             qtempo.set_tempo(600_000);
             qtempo.set_ppq(240);
-            unsafe {
-                snd_seq_set_queue_tempo(seq.as_mut_ptr(), queue_id, qtempo.as_ptr());
-                snd_seq_drain_output(seq.as_mut_ptr());
-            }
+            seq.set_queue_tempo(queue_id, &qtempo).unwrap();
+            let _ = seq.drain_output();
         }
         
         queue_id
@@ -154,12 +183,13 @@ impl MidiInput {
         }
     }
     
-    fn create_port(&mut self, port_name: &str, queue_id: i32) -> Result<i32, ()> {
-        let mut pinfo = unsafe { APortInfo::allocate() };
-        pinfo.set_client(0);
-        pinfo.set_port(0);
-        pinfo.set_capability(SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE);
-        pinfo.set_type(SND_SEQ_PORT_TYPE_MIDI_GENERIC | SND_SEQ_PORT_TYPE_APPLICATION);
+    fn create_port(&mut self, port_name: &CStr, queue_id: i32) -> Result<i32, ()> {
+        let mut pinfo = PortInfo::empty().unwrap();
+        // these functions are private, and the values are zeroed already by `empty()`
+        //pinfo.set_client(0);
+        //pinfo.set_port(0);
+        pinfo.set_capability(WRITE | SUBS_WRITE);
+        pinfo.set_type(MIDI_GENERIC | APPLICATION);
         pinfo.set_midi_channels(16);
         
         if !cfg!(feature = "avoid_timestamping") {
@@ -177,11 +207,9 @@ impl MidiInput {
     
     fn start_input_queue(&mut self, queue_id: i32) {
         if !cfg!(feature = "avoid_timestamping") {
-            unsafe {
-                let seq = self.seq.as_mut().unwrap();
-                snd_seq_start_queue(seq.as_mut_ptr(), queue_id, ptr::null_mut());
-                snd_seq_drain_output(seq.as_mut_ptr());
-            }
+            let seq = self.seq.as_mut().unwrap();
+            let _ = seq.control_queue(queue_id, EventType::Start, 0, None);
+            let _ = seq.drain_output();
         }
     }
     
@@ -196,40 +224,32 @@ impl MidiInput {
         };
         
         let queue_id = self.init_queue();
-        
-        let subscription;
-        
-        let mut src_pinfo = unsafe { APortInfo::allocate() };
-        
-        if get_port_info(self.seq.as_mut().unwrap(), &mut src_pinfo, SND_SEQ_PORT_CAP_READ | SND_SEQ_PORT_CAP_SUBS_READ, port_number as i32).is_none() {
-            return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self));
-        }
-        
-        let sender = snd_seq_addr_t {
-            client: src_pinfo.get_client() as u8,
-            port: src_pinfo.get_port() as u8
+
+        let src_pinfo = match helpers::get_port_info(self.seq.as_ref().unwrap(), READ | SUBS_READ, port_number) {
+            Some(p) => p,
+            None => return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self))
+        };
+
+        let c_port_name = match CString::new(port_name) {
+            Ok(c_port_name) => c_port_name,
+            Err(_) => return Err(ConnectError::other("port_name must not contain null bytes", self))
         };
         
-        let vport = match self.create_port(port_name, queue_id) {
+        let vport = match self.create_port(&c_port_name, queue_id) {
             Ok(vp) => vp,
             Err(_) => {
                 return Err(ConnectError::other("could not create ALSA input port", self));
             }
         };
         
-        let receiver = snd_seq_addr_t {
-            client: self.seq.as_mut().unwrap().get_client_id() as u8,
-            port: vport as u8
-        };
-        
         // Make subscription
-        let mut sub = unsafe { PortSubscription::allocate() };
-        sub.set_sender(&sender);
-        sub.set_dest(&receiver);
-        if unsafe { snd_seq_subscribe_port(self.seq.as_mut().unwrap().as_mut_ptr(), sub.as_ptr()) } != 0 {
+        let sub = PortSubscribe::empty().unwrap();
+        sub.set_sender(Addr { client: src_pinfo.get_client(), port: src_pinfo.get_port()});
+        sub.set_dest(Addr { client: self.seq.as_ref().unwrap().client_id().unwrap(), port: vport});
+        if self.seq.as_ref().unwrap().subscribe_port(&sub).is_err() {
             return Err(ConnectError::other("could not create ALSA input subscription", self));
         }
-        subscription = sub;
+        let subscription = sub;
         
         // Start the input queue
         self.start_input_queue(queue_id);
@@ -276,8 +296,13 @@ impl MidiInput {
         };
         
         let queue_id = self.init_queue();
+
+        let c_port_name = match CString::new(port_name) {
+            Ok(c_port_name) => c_port_name,
+            Err(_) => return Err(ConnectError::other("port_name must not contain null bytes", self))
+        };
         
-        let vport = match self.create_port(port_name, queue_id) {
+        let vport = match self.create_port(&c_port_name, queue_id) {
             Ok(vp) => vp,
             Err(_) => {
                 return Err(ConnectError::other("could not create ALSA input port", self));
@@ -331,16 +356,15 @@ impl<T> MidiInputConnection<T> {
     /// This must only be called if the handler thread has not yet been shut down
     fn close_internal(&mut self) -> (HandlerData<T>, T) {
         // Request the thread to stop.
-        let _res = unsafe { ::libc::write(self.trigger_send_fd, mem::transmute(&false), mem::size_of::<bool>() as ::libc::size_t) };
+        let _res = unsafe { ::libc::write(self.trigger_send_fd, &false as *const bool as *const _, mem::size_of::<bool>() as ::libc::size_t) };
         
         let thread = self.thread.take().unwrap(); 
         // Join the thread to get the handler_data back
-        let (mut handler_data, user_data) = thread.join().unwrap(); // TODO: don't use unwrap here
+        let (handler_data, user_data) = thread.join().unwrap(); // TODO: don't use unwrap here
         
         // TODO: find out why snd_seq_unsubscribe_port takes a long time if there was not yet any input message
-        match self.subscription.as_mut() {
-            Some(sub) => unsafe { snd_seq_unsubscribe_port(handler_data.seq.as_mut_ptr(), sub.as_ptr()); },
-            None => ()
+        if let Some(ref subscription) = self.subscription {
+            let _ = handler_data.seq.unsubscribe_port(subscription.get_sender(), subscription.get_dest());
         }
         
         // Close the trigger fds (TODO: make sure that these are closed even in the presence of panic in thread)
@@ -351,15 +375,13 @@ impl<T> MidiInputConnection<T> {
         
         // Stop and free the input queue
         if !cfg!(feature = "avoid_timestamping") {
-            unsafe {
-                snd_seq_stop_queue(handler_data.seq.as_mut_ptr(), handler_data.queue_id, ptr::null_mut());
-                snd_seq_drain_output(handler_data.seq.as_mut_ptr());
-                snd_seq_free_queue(handler_data.seq.as_mut_ptr(), handler_data.queue_id);
-            }
+            let _ = handler_data.seq.control_queue(handler_data.queue_id, EventType::Stop, 0, None);
+            let _ = handler_data.seq.drain_output();
+            let _ = handler_data.seq.free_queue(handler_data.queue_id);
         }
         
         // Delete the port
-        unsafe { snd_seq_delete_port(handler_data.seq.as_mut_ptr(), self.vport) };
+        let _ = handler_data.seq.delete_port(self.vport);
         
         (handler_data, user_data)
     }
@@ -376,25 +398,25 @@ impl<T> Drop for MidiInputConnection<T> {
 }
 
 pub struct MidiOutput {
-    seq: Option<Sequencer>, // TODO: if `Sequencer` is marked as non-zero, this should just be pointer-sized 
+    seq: Option<Seq>, // TODO: if `Seq` is marked as non-zero, this should just be pointer-sized 
 }
 
 pub struct MidiOutputConnection {
-    seq: Option<Sequencer>,
+    seq: Option<Seq>,
     vport: i32,
-    coder: EventEncoder,
-    subscription: Option<PortSubscription>
+    coder: helpers::EventEncoder,
+    subscription: Option<PortSubscribe>
 }
 
 impl MidiOutput {
     pub fn new(client_name: &str) -> Result<Self, InitError> {
-        let mut seq = match Sequencer::open(SequencerOpenMode::Output, true) {
+        let seq = match Seq::open(None, Some(Direction::Playback), true) {
             Ok(s) => s,
             Err(_) => { return Err(InitError); }
         };
         
-        // Set client name.
-        seq.set_client_name(client_name);
+        let c_client_name = try!(CString::new(client_name).map_err(|_| InitError));
+        try!(seq.set_client_name(&c_client_name).map_err(|_| InitError));
         
         Ok(MidiOutput {
             seq: Some(seq),
@@ -402,59 +424,43 @@ impl MidiOutput {
     }
     
     pub fn port_count(&self) -> u32 {
-        unsafe {
-            let mut pinfo = APortInfo::allocate();
-            get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, -1).unwrap() as u32
-        }
+        helpers::get_port_count(self.seq.as_ref().unwrap(), WRITE | SUBS_WRITE) as u32
     }
     
     pub fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
-        match get_port_name(&self.seq.as_ref().unwrap(), SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, port_number as i32) {
-            Ok(s) => Ok(s),
-            Err(()) => Err(PortInfoError::PortNumberOutOfRange)
-        }
+        helpers::get_port_name(self.seq.as_ref().unwrap(), WRITE | SUBS_WRITE, port_number)
     }
     
     pub fn connect(mut self, port_number: u32, port_name: &str) -> Result<MidiOutputConnection, ConnectError<Self>> {
-        let mut pinfo = unsafe { APortInfo::allocate() };
-        
-        if get_port_info(self.seq.as_ref().unwrap(), &mut pinfo, SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, port_number as i32).is_none() {
-            return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self));
-        }
-        
-        let receiver = snd_seq_addr_t {
-            client: pinfo.get_client() as u8,
-            port: pinfo.get_port() as u8
+        let pinfo = match helpers::get_port_info(self.seq.as_ref().unwrap(), WRITE | SUBS_WRITE, port_number) {
+            Some(p) => p,
+            None => return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self))
         };
-        
-        let vport = match self.seq.as_mut().unwrap().create_simple_port(port_name,
-                            SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ,
-                            SND_SEQ_PORT_TYPE_MIDI_GENERIC|SND_SEQ_PORT_TYPE_APPLICATION) {
+
+        let c_port_name = match CString::new(port_name) {
+            Ok(c_port_name) => c_port_name,
+            Err(_) => return Err(ConnectError::other("port_name must not contain null bytes", self))
+        };
+
+        let vport = match self.seq.as_ref().unwrap().create_simple_port(&c_port_name, READ | SUBS_READ, MIDI_GENERIC | APPLICATION) {
             Ok(vport) => vport,
-            Err(_) => {
-                return Err(ConnectError::other("could not create ALSA output port", self));
-            }
+            Err(_) => return Err(ConnectError::other("could not create ALSA output port", self))
         };
-        
-        let sender = snd_seq_addr_t {
-            client: self.seq.as_ref().unwrap().get_client_id() as u8,
-            port: vport as u8
-        };
-        
+
         // Make subscription
-        let mut sub = unsafe { PortSubscription::allocate() };
-        sub.set_sender(&sender);
-        sub.set_dest(&receiver);
+        let sub = PortSubscribe::empty().unwrap();
+        sub.set_sender(Addr { client: self.seq.as_ref().unwrap().client_id().unwrap(), port: vport });
+        sub.set_dest(Addr { client: pinfo.get_client(), port: pinfo.get_port() });
         sub.set_time_update(true);
         sub.set_time_real(true);
-        if unsafe { snd_seq_subscribe_port(self.seq.as_mut().unwrap().as_mut_ptr(), sub.as_ptr()) } != 0 {
+        if self.seq.as_ref().unwrap().subscribe_port(&sub).is_err() {
             return Err(ConnectError::other("could not create ALSA output subscription", self));
         }
         
         Ok(MidiOutputConnection {
             seq: self.seq.take(),
             vport: vport,
-            coder: EventEncoder::new(INITIAL_CODER_BUFFER_SIZE),
+            coder: helpers::EventEncoder::new(INITIAL_CODER_BUFFER_SIZE as u32),
             subscription: Some(sub)
         })
     }
@@ -462,19 +468,20 @@ impl MidiOutput {
     pub fn create_virtual(
         mut self, port_name: &str
     ) -> Result<MidiOutputConnection, ConnectError<Self>> {
-        let vport = match self.seq.as_mut().unwrap().create_simple_port(port_name,
-                            SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ,
-                            SND_SEQ_PORT_TYPE_MIDI_GENERIC|SND_SEQ_PORT_TYPE_APPLICATION) {
+        let c_port_name = match CString::new(port_name) {
+            Ok(c_port_name) => c_port_name,
+            Err(_) => return Err(ConnectError::other("port_name must not contain null bytes", self))
+        };
+
+        let vport = match self.seq.as_ref().unwrap().create_simple_port(&c_port_name, READ | SUBS_READ, MIDI_GENERIC | APPLICATION) {
             Ok(vport) => vport,
-            Err(_) => {
-                return Err(ConnectError::other("could not create ALSA output port", self));
-            }
+            Err(_) => return Err(ConnectError::other("could not create ALSA output port", self))
         };
         
         Ok(MidiOutputConnection {
             seq: self.seq.take(),
             vport: vport,
-            coder: EventEncoder::new(INITIAL_CODER_BUFFER_SIZE),
+            coder: helpers::EventEncoder::new(INITIAL_CODER_BUFFER_SIZE as u32),
             subscription: None
         })
     }
@@ -490,41 +497,40 @@ impl MidiOutputConnection {
         }
     }
     
-    pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {        
+    pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {  
         let nbytes = message.len();
+        assert!(nbytes <= u32::max_value() as usize);
         
-        if nbytes > self.coder.get_buffer_size() {
-            if self.coder.resize_buffer(nbytes).is_err() {
+        if nbytes > self.coder.get_buffer_size() as usize {
+            if self.coder.resize_buffer(nbytes as u32).is_err() {
                 return Err(SendError::Other("could not resize ALSA encoding buffer"));
             }
         }
         
-        let mut ev = Event::new();
-        ev.set_source(self.vport as u8);
+        let mut ev = match self.coder.get_wrapped().encode(message) {
+            Ok((_, Some(ev))) => ev,
+            _ => return Err(SendError::InvalidData("ALSA encoder reported invalid data"))
+        };
+
+        ev.set_source(self.vport);
         ev.set_subs();
         ev.set_direct();
         
-        if self.coder.encode(message, &mut ev).is_err() {
-            return Err(SendError::InvalidData("ALSA encoder reported invalid data"));
-        }
-        
         // Send the event.
-        if self.seq.as_mut().unwrap().event_output(&ev).is_err() {
+        if self.seq.as_ref().unwrap().event_output(&mut ev).is_err() {
             return Err(SendError::Other("could not send encoded ALSA message"));
         }
         
-        self.seq.as_mut().unwrap().drain_output();
+        let _ = self.seq.as_mut().unwrap().drain_output();
         Ok(())
     }
     
     fn close_internal(&mut self) {
-        unsafe {
-            let seq = self.seq.as_mut().unwrap();
-            if self.subscription.is_some() {
-                snd_seq_unsubscribe_port(seq.as_mut_ptr(), self.subscription.as_mut().unwrap().as_ptr());
-            }
-            snd_seq_delete_port(seq.as_mut_ptr(), self.vport);
+        let seq = self.seq.as_mut().unwrap();
+        if let Some(ref subscription) = self.subscription {
+            let _ = seq.unsubscribe_port(subscription.get_sender(), subscription.get_dest());
         }
+        let _ = seq.delete_port(self.vport);
     }
 }
 
@@ -537,72 +543,96 @@ impl Drop for MidiOutputConnection {
 }
 
 fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T> {
+    use alsa::PollDescriptors;
+    use alsa::seq::{EventType, Connect};
+
     let mut last_time: Option<u64> = None;
     let mut continue_sysex: bool = false;
     
-    let mut buffer = unsafe {
-        let mut vec = Vec::with_capacity(INITIAL_CODER_BUFFER_SIZE);
-        vec.set_len(INITIAL_CODER_BUFFER_SIZE);
-        vec.into_boxed_slice()
-    };
+    // ALSA documentation says:
+    // The required buffer size for a sequencer event it as most 12 bytes, except for System Exclusive events (which we handle separately)
+    let mut buffer = [0; 12];
     
-    let mut coder = EventDecoder::new(false);
+    let mut coder = helpers::EventDecoder::new(false);
     
     let mut poll_fds: Box<[::libc::pollfd]>;
-    unsafe {
-        let poll_fd_count = (data.seq.poll_descriptors_count(POLLIN) + 1) as usize;
+    {
+        let poll_desc_info = (&data.seq, Some(Direction::Capture));
+        let poll_fd_count = poll_desc_info.count() + 1;
         let mut vec = Vec::with_capacity(poll_fd_count);
-        vec.set_len(poll_fd_count);
-        poll_fds = vec.into_boxed_slice();
+        unsafe {    
+            vec.set_len(poll_fd_count);
+            poll_fds = vec.into_boxed_slice();
+        }
+        poll_desc_info.fill(&mut poll_fds[1..]).unwrap();
     }
-    data.seq.poll_descriptors(&mut poll_fds[1..], POLLIN); 
     poll_fds[0].fd = data.trigger_rcv_fd;
-    poll_fds[0].events = POLLIN;
+    poll_fds[0].events = ::libc::POLLIN;
+
+            
+    let mut message = MidiMessage::new();
+
+    { // open scope where we can borrow data.seq
+    let mut seq_input = data.seq.input();
     
     let mut do_input = true;
-    while do_input {                        
-        if unsafe { snd_seq_event_input_pending(data.seq.as_mut_ptr(), 1) } == 0 {
+    while do_input {
+        if let Ok(0) = seq_input.event_input_pending(true) {
             // No data pending
-            if poll(&mut poll_fds, -1) >= 0 {
+            if helpers::poll(&mut poll_fds, -1) >= 0 {
                 // Read from our "channel" whether we should stop the thread 
-                if poll_fds[0].revents & POLLIN != 0 {
+                if poll_fds[0].revents & ::libc::POLLIN != 0 {
                     let _res = unsafe { ::libc::read(poll_fds[0].fd, mem::transmute(&mut do_input), mem::size_of::<bool>() as ::libc::size_t) };
                 }
             }
             continue;
         }
 
+        // This is a bit weird, but we now have to decode an ALSA MIDI
+        // event (back) into MIDI bytes. We'll ignore non-MIDI types.
+
+        // The ALSA sequencer has a maximum buffer size for MIDI sysex
+        // events of 256 bytes. If a device sends sysex messages larger
+        // than this, they are segmented into 256 byte chunks.    So,
+        // we'll watch for this and concatenate sysex chunks into a
+        // single sysex message if necessary.
+        //
+        // TODO: Figure out if this is still true (seems to not be the case)
+        //       If not (i.e., each event represents a complete message), we can
+        //       call the user callback with the byte buffer directly, without the
+        //       copying to `message.bytes` first.
+        if !continue_sysex { message.bytes.clear() }
+
+        let ignore_flags = data.ignore_flags;
+
         // If here, there should be data.
-        let mut ev = match data.seq.event_input() {
-            Ok((ev, _)) => ev,
-            Err(e) if e == -::libc::ENOSPC => {
+        let mut ev = match seq_input.event_input() {
+            Ok(ev) => ev,
+            Err(ref e) if e.code() == -::libc::ENOSPC => {
                 let _ = writeln!(stderr(), "\nError in handle_input: ALSA MIDI input buffer overrun!\n");
                 continue;
             },
-            Err(_) => {
-                let _ = writeln!(stderr(), "\nError in handle_input: unknown ALSA MIDI input error!\n");
+            Err(ref e) if e.code() == -::libc::EAGAIN => {
+                let _ = writeln!(stderr(), "\nError in handle_input: no input event from ALSA MIDI input buffer!\n");
+                continue;
+            },
+            Err(ref e) => {
+                let _ = writeln!(stderr(), "\nError in handle_input: unknown ALSA MIDI input error ({})!\n", e.code());
                 //perror("System reports");
                 continue;
             }
         };
         
-        let mut message = MidiMessage::new();
-
-        // This is a bit weird, but we now have to decode an ALSA MIDI
-        // event (back) into MIDI bytes. We'll ignore non-MIDI types.
-        if !continue_sysex { message.bytes.clear() }
-        
-        let ignore_flags = data.ignore_flags;
-        let do_decode = match ev._type as u32 {
-            SND_SEQ_EVENT_PORT_SUBSCRIBED => {
+        let do_decode = match ev.get_type() {
+            EventType::PortSubscribed => {
                 if cfg!(debug) { println!("Notice from handle_input: ALSA port connection made!") };
                 false
             },
-            SND_SEQ_EVENT_PORT_UNSUBSCRIBED => {
+            EventType::PortUnsubscribed => {
                 if cfg!(debug) {
                     let _ = writeln!(stderr(), "Notice from handle_input: ALSA port connection has closed!");
-                    let connect = unsafe { &*ev.data.connect() };
-                    println!("sender = {}:{}, dest = {}:{}",
+                    let connect = ev.get_data::<Connect>().unwrap();
+                    let _ = writeln!(stderr(), "sender = {}:{}, dest = {}:{}",
                         connect.sender.client,
                         connect.sender.port,
                         connect.dest.client,
@@ -611,80 +641,57 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
                 }
                 false
             },
-            SND_SEQ_EVENT_QFRAME => { // MIDI time code
+            EventType::Qframe => { // MIDI time code
                 !ignore_flags.contains(Ignore::Time)
             },
-            SND_SEQ_EVENT_TICK => { // 0xF9 ... MIDI timing tick
+            EventType::Tick => { // 0xF9 ... MIDI timing tick
                 !ignore_flags.contains(Ignore::Time)
             },
-            SND_SEQ_EVENT_CLOCK => { // 0xF8 ... MIDI timing (clock) tick
+            EventType::Clock => { // 0xF8 ... MIDI timing (clock) tick
                 !ignore_flags.contains(Ignore::Time)
             },
-            SND_SEQ_EVENT_SENSING => { // Active sensing
+            EventType::Sensing => { // Active sensing
                 !ignore_flags.contains(Ignore::ActiveSense)
             },
-            SND_SEQ_EVENT_SYSEX => {
-                if ignore_flags.contains(Ignore::Sysex) { false }
-                else {
-                    let data_len = unsafe { (*ev.data.ext()).len } as usize;
-                    let buffer_len = buffer.len();
-                    if data_len > buffer_len {
-                        // Resize buffer
-                        buffer = unsafe {
-                            let mut vec = Vec::with_capacity(data_len);
-                            vec.set_len(data_len);
-                            vec.into_boxed_slice()
-                        };
-                        true
-                    } else { true }
+            EventType::Sysex => {
+                if !ignore_flags.contains(Ignore::Sysex) {
+                    // Directly copy the data from the external buffer to our message
+                    message.bytes.extend_from_slice(ev.get_ext().unwrap());
+                    continue_sysex = *message.bytes.last().unwrap() != 0xF7;
                 }
-            }
+                false // don't ever decode sysex messages (it would unnecessarily copy the message content to another buffer)
+            },
             _ => true
         };
 
+        // NOTE: SysEx messages have already been "decoded" at this point!
         if do_decode {
-            let nbytes = coder.decode(&mut buffer, &mut *ev);
-            
-            if nbytes > 0 {
-                // The ALSA sequencer has a maximum buffer size for MIDI sysex
-                // events of 256 bytes. If a device sends sysex messages larger
-                // than this, they are segmented into 256 byte chunks.    So,
-                // we'll watch for this and concatenate sysex chunks into a
-                // single sysex message if necessary.
-                if !continue_sysex {
-                    message.bytes.clear();
-                }
-                
-                // TODO: use push_all or whatever it gets replaced with, when stable 
-                for b in &buffer[0..nbytes] {
-                    message.bytes.push(*b);
-                }
-                
-                continue_sysex = ( ev._type as u32 == SND_SEQ_EVENT_SYSEX ) && ( *message.bytes.last().unwrap() != 0xF7 );
-                if !continue_sysex {
-                    // Calculate the time stamp:
-                    // Use the ALSA sequencer event time data.
-                    // (thanks to Pedro Lopez-Cabanillas!).
-                    let alsa_time = unsafe { &*ev.time.time() };
-                    let timestamp = ( alsa_time.tv_sec as u64 * 1_000_000 ) + ( alsa_time.tv_nsec as u64/1_000 );
-                    message.timestamp = match last_time {
-                        None => 0.0,
-                        Some(last) => (timestamp - last) as f64 * 0.000001
-                    };
-                    last_time = Some(timestamp);
-                } else {
-                    // TODO: this doesn't make sense
-                    if cfg!(debug) {
-                        let _ = writeln!(stderr(), "\nError in handle_input: event parsing error or not a MIDI event!\n");
-                    }
+            if let Ok(nbytes) = coder.get_wrapped().decode(&mut buffer, &mut ev) {
+                if nbytes > 0 {
+                    message.bytes.extend_from_slice(&buffer[0..nbytes]);
                 }
             }
         }
 
-        drop(ev);
         if message.bytes.len() == 0 || continue_sysex { continue; }
+
+        // Calculate the time stamp:
+        // Use the ALSA sequencer event time data.
+        // (thanks to Pedro Lopez-Cabanillas!).
+        let alsa_time = ev.get_time().unwrap();
+        let secs = alsa_time.as_secs();
+        let nsecs = alsa_time.subsec_nanos();
+
+        let timestamp = ( secs as u64 * 1_000_000 ) + ( nsecs as u64/1_000 );
+        message.timestamp = match last_time {
+            None => 0.0,
+            Some(last) => (timestamp - last) as f64 * 0.000001
+        };
+        last_time = Some(timestamp);
         
         (data.callback)(message.timestamp, &message.bytes, user_data);
     }
+    
+    } // close scope where data.seq is borrowed
     data // return data back to thread owner
 }

@@ -1,12 +1,13 @@
-#[macro_use] extern crate bitflags;
 extern crate memalloc;
 
 #[cfg(target_os="linux")]
 extern crate libc;
 #[cfg(all(target_os="linux", not(feature = "jack")))]
-extern crate alsa_sys;
+extern crate alsa;
 #[cfg(all(feature = "jack", not(target_os = "windows")))]
 extern crate jack_sys;
+#[cfg(feature = "jack")]
+#[macro_use] extern crate bitflags;
 
 #[cfg(target_os="windows")] extern crate winapi;
 #[cfg(target_os="windows")] extern crate winmm as winmm_sys;
