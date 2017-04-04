@@ -356,7 +356,7 @@ impl<T> MidiInputConnection<T> {
     /// This must only be called if the handler thread has not yet been shut down
     fn close_internal(&mut self) -> (HandlerData<T>, T) {
         // Request the thread to stop.
-        let _res = unsafe { ::libc::write(self.trigger_send_fd, mem::transmute(&false), mem::size_of::<bool>() as ::libc::size_t) };
+        let _res = unsafe { ::libc::write(self.trigger_send_fd, &false as *const bool as *const _, mem::size_of::<bool>() as ::libc::size_t) };
         
         let thread = self.thread.take().unwrap(); 
         // Join the thread to get the handler_data back
@@ -461,7 +461,7 @@ impl MidiOutput {
             seq: self.seq.take(),
             vport: vport,
             coder: helpers::EventEncoder::new(INITIAL_CODER_BUFFER_SIZE as u32),
-            subscription: Some(unsafe{::std::mem::transmute(sub)})
+            subscription: Some(sub)
         })
     }
     
@@ -682,7 +682,6 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
         let secs = alsa_time.as_secs();
         let nsecs = alsa_time.subsec_nanos();
 
-        //let alsa_time = unsafe { &*ev.time.time() };
         let timestamp = ( secs as u64 * 1_000_000 ) + ( nsecs as u64/1_000 );
         message.timestamp = match last_time {
             None => 0.0,
