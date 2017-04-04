@@ -100,7 +100,7 @@ mod helpers {
         }
 
         #[inline]
-        pub fn get_ev(&mut self) -> &mut MidiEvent {
+        pub fn get_wrapped(&mut self) -> &mut MidiEvent {
             &mut self.ev
         }
     }
@@ -507,7 +507,7 @@ impl MidiOutputConnection {
             }
         }
         
-        let mut ev = match self.coder.get_ev().encode(message) {
+        let mut ev = match self.coder.get_wrapped().encode(message) {
             Ok((_, Some(ev))) => ev,
             _ => return Err(SendError::InvalidData("ALSA encoder reported invalid data"))
         };
@@ -678,9 +678,9 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
         // Calculate the time stamp:
         // Use the ALSA sequencer event time data.
         // (thanks to Pedro Lopez-Cabanillas!).
-        let new_alsa_time = ev.get_time().unwrap();
-        let secs = new_alsa_time.as_secs();
-        let nsecs = new_alsa_time.subsec_nanos();
+        let alsa_time = ev.get_time().unwrap();
+        let secs = alsa_time.as_secs();
+        let nsecs = alsa_time.subsec_nanos();
 
         //let alsa_time = unsafe { &*ev.time.time() };
         let timestamp = ( secs as u64 * 1_000_000 ) + ( nsecs as u64/1_000 );
