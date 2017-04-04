@@ -23,7 +23,7 @@ bitflags = "0.3"
 memalloc = "0.1.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-alsa = "0.1.7"
+alsa = "0.1.8"
 libc = "0.2.7"
 
 [target.'cfg(windows)'.dependencies]

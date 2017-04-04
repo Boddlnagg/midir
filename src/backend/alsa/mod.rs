@@ -10,7 +10,7 @@ use ::{MidiMessage, Ignore};
 use ::errors::*;
 
 mod helpers {
-    use alsa::seq::{Seq, ClientIter, PortIter, PortInfo, PortCap, MidiEvent, EventType, Event, EvQueueControl, Addr, MIDI_GENERIC, SYNTH};
+    use alsa::seq::{Seq, ClientIter, PortIter, PortInfo, PortCap, MidiEvent, MIDI_GENERIC, SYNTH};
     use ::errors::PortInfoError;
 
     pub fn poll(fds: &mut [::libc::pollfd], timeout: i32) -> i32 {
@@ -50,14 +50,6 @@ mod helpers {
             pinfo.get_port()    // with full portnames added to ensure individual device names
         ).unwrap();
         Ok(output)
-    }
-
-    #[inline]
-    pub fn control_queue(s: &Seq, queue: i32, event_type: EventType) {
-        let mut e = Event::new(event_type, &EvQueueControl { queue: queue, value: () });
-        e.set_direct();
-        e.set_dest(Addr::system_timer()); // Not strictly necessary, because that address is 0:0
-        let _ = s.event_output(&mut e);
     }
 
     pub struct EventDecoder {
@@ -216,7 +208,7 @@ impl MidiInput {
     fn start_input_queue(&mut self, queue_id: i32) {
         if !cfg!(feature = "avoid_timestamping") {
             let seq = self.seq.as_mut().unwrap();
-            helpers::control_queue(&seq, queue_id, EventType::Start);
+            let _ = seq.control_queue(queue_id, EventType::Start, 0, None);
             let _ = seq.drain_output();
         }
     }
@@ -383,7 +375,7 @@ impl<T> MidiInputConnection<T> {
         
         // Stop and free the input queue
         if !cfg!(feature = "avoid_timestamping") {
-            helpers::control_queue(&handler_data.seq, handler_data.queue_id, EventType::Stop);
+            let _ = handler_data.seq.control_queue(handler_data.queue_id, EventType::Stop, 0, None);
             let _ = handler_data.seq.drain_output();
             let _ = handler_data.seq.free_queue(handler_data.queue_id);
         }
@@ -579,10 +571,13 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
 
             
     let mut message = MidiMessage::new();
+
+    { // open scope where we can borrow data.seq
+    let mut seq_input = data.seq.input();
     
     let mut do_input = true;
     while do_input {
-        if let Ok(0) = data.seq.event_input_pending(true) {
+        if let Ok(0) = seq_input.event_input_pending(true) {
             // No data pending
             if helpers::poll(&mut poll_fds, -1) >= 0 {
                 // Read from our "channel" whether we should stop the thread 
@@ -611,15 +606,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
         let ignore_flags = data.ignore_flags;
 
         // If here, there should be data.
-        let mut ev = match data.seq.event_input_cb(|ty, buf|{
-            // This callback is called for events carrying external data (sysex and user events)
-            if ty == EventType::Sysex && !ignore_flags.contains(Ignore::Sysex) {
-                // Directly copy the data from the external buffer to our message
-                message.bytes.extend_from_slice(buf);
-                continue_sysex = *message.bytes.last().unwrap() != 0xF7;
-            }
-            None // tell alsa-rs to not copy any data into its own event structure
-        }) {
+        let mut ev = match seq_input.event_input() {
             Ok(ev) => ev,
             Err(ref e) if e.code() == -::libc::ENOSPC => {
                 let _ = writeln!(stderr(), "\nError in handle_input: ALSA MIDI input buffer overrun!\n");
@@ -666,7 +653,14 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
             EventType::Sensing => { // Active sensing
                 !ignore_flags.contains(Ignore::ActiveSense)
             },
-            EventType::Sysex => false,
+            EventType::Sysex => {
+                if !ignore_flags.contains(Ignore::Sysex) {
+                    // Directly copy the data from the external buffer to our message
+                    message.bytes.extend_from_slice(ev.get_ext().unwrap());
+                    continue_sysex = *message.bytes.last().unwrap() != 0xF7;
+                }
+                false // don't ever decode sysex messages (it would unnecessarily copy the message content to another buffer)
+            },
             _ => true
         };
 
@@ -698,5 +692,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
         
         (data.callback)(message.timestamp, &message.bytes, user_data);
     }
+    
+    } // close scope where data.seq is borrowed
     data // return data back to thread owner
 }
