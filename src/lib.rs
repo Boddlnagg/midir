@@ -14,6 +14,8 @@ extern crate jack_sys;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// An enum that is used to specify what kind of MIDI messages should
+/// be ignored when receiving messages.
 pub enum Ignore {
     None = 0x00,
     Sysex = 0x01,

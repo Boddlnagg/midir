@@ -5,6 +5,8 @@ const PORT_OUT_OF_RANGE_MSG: &'static str = "provided port number was out of ran
 const CANNOT_RETRIEVE_PORT_NAME_MSG: &'static str = "unknown error when trying to retrieve the port name";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// An error that can occur during initialization (i.e., while
+/// creating a `MidiInput` or `MidiOutput` object).
 pub struct InitError;
 
 impl Error for InitError {
@@ -20,6 +22,8 @@ impl fmt::Display for InitError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// An error that can occur when retrieving information about
+/// available ports.
 pub enum PortInfoError {
     PortNumberOutOfRange,
     CannotRetrievePortName,
@@ -41,6 +45,7 @@ impl fmt::Display for PortInfoError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// The kind of error for a `ConnectError`.
 pub enum ConnectErrorKind {
     PortNumberOutOfRange,
     Other(&'static str)
@@ -61,6 +66,7 @@ impl fmt::Display for ConnectErrorKind {
     }
 }
 
+/// An error that can occur when trying to connect to a port.
 pub struct ConnectError<T> {
     kind: ConnectErrorKind,
     inner: T
@@ -103,6 +109,7 @@ impl<T> fmt::Display for ConnectError<T> {
 //impl<T: Reflect> Error for ConnectError<T>
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// An error that can occur when sending MIDI messages.
 pub enum SendError {
     InvalidData(&'static str),
     Other(&'static str)
