@@ -7,16 +7,20 @@ use ::Ignore;
 use ::coremidi::*;
 
 pub struct MidiInput {
+    client: Client,
     ignore_flags: Ignore
 }
 
 impl MidiInput {
     pub fn new(client_name: &str) -> Result<Self, InitError> {
-        unimplemented!()
+        match Client::new(client_name) {
+            Ok(cl) => Ok(MidiInput { client: cl, ignore_flags: Ignore::None }),
+            Err(_) => Err(InitError)
+        }
     }
 
     pub fn ignore(&mut self, flags: Ignore) {
-        unimplemented!()
+        self.ignore_flags = flags;
     }
     
     pub fn port_count(&self) -> usize {
@@ -30,23 +34,52 @@ impl MidiInput {
         }
     }
     
-    pub fn connect<F, T: Send>(
+    pub fn connect<F, T: Send + 'static>(
         self, port_number: usize, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
         where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
-        unimplemented!()
+        // TODO: handle failure of from_index for invalid index
+        let src = Source::from_index(port_number);
+        let data_ref = &mut data;
+        let port = match self.client.input_port(port_name, move |packets| {
+            // TODO: filtering; maybe merge SysEx (if they can be split)
+            for p in packets.iter() {
+                callback(0.0, p.data(), data_ref)
+            }
+        }) {
+            Ok(p) => p,
+            Err(_) => return Err(ConnectError::other("error creating MIDI input port", self))
+        };
+        if let Err(_) = port.connect_source(&src) {
+            return Err(ConnectError::other("error connecting MIDI input port", self));
+        }
+        Ok(MidiInputConnection {
+            client: self.client,
+            details: InputConnectionDetails::Explicit(port),
+            handler_data: HandlerData {
+                ignore_flags: self.ignore_flags,
+                user_data: data
+            }
+        })
     }
 
     pub fn create_virtual<F, T: Send>(
         self, port_name: &str, callback: F, data: T
-    ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
+    ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
     where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
         unimplemented!()
     }
 }
 
+enum InputConnectionDetails {
+    Explicit(InputPort),
+    Virtual(VirtualDestination)
+}
+
 pub struct MidiInputConnection<T> {
-    handler_data: Box<HandlerData<T>>,
+    client: Client,
+    details: InputConnectionDetails,
+    handler_data: HandlerData<T>
 }
 
 /// This is all the data that is stored on the heap as long as a connection
@@ -55,15 +88,15 @@ pub struct MidiInputConnection<T> {
 /// It is important that `user_data` is the last field to not influence
 /// offsets after monomorphization.
 struct HandlerData<T> {
-    last_time: Option<u64>,
+    //last_time: Option<u64>,
     ignore_flags: Ignore,
     //callback: Box<FnMut(f64, &[u8], &mut T)+Send>,
-    user_data: Option<T>
+    user_data: T //Option<T>
 }
 
 impl<T> MidiInputConnection<T> {
     pub fn close(self) -> (MidiInput, T) {
-        unimplemented!()
+        (MidiInput { client: self.client, ignore_flags: self.handler_data.ignore_flags }, self.handler_data.user_data)
     }
 }
 
@@ -77,7 +110,6 @@ impl MidiOutput {
             Ok(cl) => Ok(MidiOutput { client: cl }),
             Err(_) => Err(InitError)
         }
-        
     }
     
     pub fn port_count(&self) -> usize {
@@ -92,9 +124,11 @@ impl MidiOutput {
     }
     
     pub fn connect(self, port_number: usize, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
+        // TODO: handle failure of from_index for invalid index
+        let dest = Destination::from_index(port_number as usize);
         let port = match self.client.output_port(port_name) {
             Ok(p) => p,
-            Err(_) => return Err(ConnectError::other("failed to create output port", self))
+            Err(_) => return Err(ConnectError::other("error creating MIDI output port", self))
         };
         // TODO: handle failure of from_index for invalid index
         let dest = Destination::from_index(port_number);
@@ -107,7 +141,7 @@ impl MidiOutput {
     pub fn create_virtual(self, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
         let vrt = match self.client.virtual_source(port_name) {
             Ok(p) => p,
-            Err(_) => return Err(ConnectError::other("failed to create virtual MIDI source", self))
+            Err(_) => return Err(ConnectError::other("error creating virtual MIDI source", self))
         };
         Ok(MidiOutputConnection {
             client: self.client,
