@@ -5,14 +5,14 @@ use ::{MidiInputConnection, MidiOutputConnection};
 
 /// Trait that is implemented by `MidiInput` on platforms that
 /// support virtual ports (currently every platform but Windows).
-pub trait VirtualInput<T: Send> where Self: Sized {
+pub trait VirtualInput where Self: Sized {
     /// Creates a virtual input port. Once it has been created,
     /// other applications can connect to this port and send MIDI
     /// messages which will be received by this port.
     fn create_virtual<F>(
-        self, port_name: &str, callback: F, data: T
-    ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
-    where F: FnMut(f64, &[u8], &mut T) + Send + 'static;
+        self, port_name: &str, callback: F
+    ) -> Result<MidiInputConnection, ConnectError<Self>>
+    where F: FnMut(f64, &[u8]) + Send + 'static;
 }
 
 /// Trait that is implemented by `MidiOutput` on platforms that

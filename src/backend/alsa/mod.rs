@@ -267,9 +267,7 @@ impl MidiInput {
         let name = format!("midir ALSA input handler (port '{}')", port_name);
         let threadbuilder = threadbuilder.name(name);
         let thread = match threadbuilder.spawn(move || {
-            let mut d = data;
-            let h = handle_input(handler_data, &mut d);
-            (h, d) // return both the handler data and the user data 
+            handle_input(handler_data)
         }) {
             Ok(handle) => handle,
             Err(_) => {
@@ -323,9 +321,7 @@ impl MidiInput {
         
         let threadbuilder = Builder::new();
         let thread = match threadbuilder.spawn(move || {
-            let mut d = data;
-            let h = handle_input(handler_data, &mut d);
-            (h, d) // return both the handler data and the user data 
+            handle_input(handler_data)
         }) {
             Ok(handle) => handle,
             Err(_) => {

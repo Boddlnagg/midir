@@ -60,11 +60,11 @@ impl MidiInput {
 }
 
 #[cfg(unix)]
-impl<T: Send> ::os::unix::VirtualInput<T> for MidiInput {
+impl ::os::unix::VirtualInput for MidiInput {
     fn create_virtual<F>(
         self, port_name: &str, callback: F
-    ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
-    where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
+    ) -> Result<MidiInputConnection, ConnectError<Self>>
+    where F: FnMut(f64, &[u8]) + Send + 'static {
         match self.imp.create_virtual(port_name, callback) {
             Ok(imp) => Ok(MidiInputConnection { imp: imp }),
             Err(imp) => {
