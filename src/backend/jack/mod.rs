@@ -164,7 +164,7 @@ impl<T> Drop for MidiInputConnection<T> {
 }
 
 extern "C" fn handle_input<T>(nframes: jack_nframes_t, arg: *mut ::libc::c_void) -> i32 {
-    let data: &mut InputHandlerData<T> = unsafe { mem::transmute(arg) }; 
+    let data: &mut InputHandlerData<T> = unsafe { mem::transmute(arg) }; // TODO: get rid of transmute?
     
     // Is port created?
     if let Some(ref port) = data.port {

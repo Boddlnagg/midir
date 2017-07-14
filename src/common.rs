@@ -7,6 +7,8 @@ use ::backend::{
 };
 use ::Ignore;
 
+// TODO: make sure that these structs are all `Send` and implement `Debug` (?)
+
 /// An instance of `MidiInput` is required for anything related to MIDI input.
 /// Create one with `MidiInput::new`.
 pub struct MidiInput {
