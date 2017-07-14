@@ -56,23 +56,20 @@ pub struct MidiInput {
     ignore_flags: Ignore
 }
 
-pub struct MidiInputConnection<T> {
-    handler_data: Box<HandlerData<T>>,
+pub struct MidiInputConnection {
+    handler_data: Box<HandlerData>,
 }
 
 /// This is all the data that is stored on the heap as long as a connection
 /// is opened and passed to the callback handler.
-///
-/// It is important that `user_data` is the last field to not influence
-/// offsets after monomorphization.
-struct HandlerData<T> {
+struct HandlerData {
     message: MidiMessage,
     last_time: Option<u64>,
     sysex_buffer: [LPMIDIHDR; RT_SYSEX_BUFFER_COUNT],
     in_handle: Option<Mutex<HMIDIIN>>,
     ignore_flags: Ignore,
-    callback: Box<FnMut(f64, &[u8], &mut T)+Send>,
-    user_data: Option<T>
+    callback: Box<FnMut(f64, &[u8]) + Send>,
+    is_closed: bool
 }
 
 impl MidiInput {
@@ -100,10 +97,10 @@ impl MidiInput {
         Ok(output)
     }
     
-    pub fn connect<F, T: Send>(
-        self, port_number: usize, _port_name: &str, callback: F, data: T
-    ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
-        where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
+    pub fn connect<F>(
+        self, port_number: usize, _port_name: &str, callback: F
+    ) -> Result<MidiInputConnection, ConnectError<MidiInput>>
+        where F: FnMut(f64, &[u8]) + Send + 'static {
         
         let mut handler_data = Box::new(HandlerData {
             message: MidiMessage::new(),
@@ -112,14 +109,14 @@ impl MidiInput {
             in_handle: None,
             ignore_flags: self.ignore_flags,
             callback: Box::new(callback),
-            user_data: Some(data)
+            is_closed: false
         });
         
         let mut in_handle: HMIDIIN = unsafe { mem::uninitialized() };
-        let handler_data_ptr: *mut HandlerData<T> = &mut *handler_data;
+        let handler_data_ptr: *mut HandlerData = &mut *handler_data;
         let result = unsafe { midiInOpen(&mut in_handle,
                         port_number as UINT,
-                        handler::handle_input::<T> as DWORD_PTR,
+                        handler::handle_input as DWORD_PTR,
                         handler_data_ptr as DWORD_PTR,
                         CALLBACK_FUNCTION) };
         if result == MMSYSERR_BADDEVICEID {
@@ -174,13 +171,14 @@ impl MidiInput {
     }
 }
 
-impl<T> MidiInputConnection<T> {
-    pub fn close(mut self) -> (MidiInput, T) {
+impl MidiInputConnection {
+    pub fn close(mut self) -> MidiInput {
         self.close_internal();
+        self.handler_data.is_closed = true;
         
-        (MidiInput {
+        MidiInput {
             ignore_flags: self.handler_data.ignore_flags,
-        }, self.handler_data.user_data.take().unwrap())
+        }
     }
     
     fn close_internal(&mut self) {
@@ -212,10 +210,10 @@ impl<T> MidiInputConnection<T> {
     }
 }
 
-impl<T> Drop for MidiInputConnection<T> {
+impl Drop for MidiInputConnection {
     fn drop(&mut self) {
-        // If user_data has been emptied, we know that we already have closed the connection
-        if self.handler_data.user_data.is_some() {
+        // `is_closed` is true if `close()` has already been called
+        if !self.handler_data.is_closed {
             self.close_internal()
         }
     }

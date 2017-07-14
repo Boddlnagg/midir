@@ -37,21 +37,19 @@ impl MidiInput {
     }
     
     /// Connect to a specified MIDI input port in order to receive messages.
-    /// For each incoming MIDI message, the provided `callback` function will
-    /// be called. Additional data that should be passed whenever the callback
-    /// is invoked can be specified by `data`. Use the empty tuple `()` if you
-    /// do not want to pass any additional data.
+    /// For each incoming MIDI message, the provided `callback` closure will
+    /// be called.
     ///
     /// The connection will be kept open as long as the returned
     /// `MidiInputConnection` is kept alive.
     ///
     /// The `port_name` is an additional name that will be assigned to the
     /// connection. It is only used by some backends.
-    pub fn connect<F, T: Send>(
-        self, port_number: usize, port_name: &str, callback: F, data: T
-    ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
-        where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
-        match self.imp.connect(port_number, port_name, callback, data) {
+    pub fn connect<F>(
+        self, port_number: usize, port_name: &str, callback: F
+    ) -> Result<MidiInputConnection, ConnectError<MidiInput>>
+        where F: FnMut(f64, &[u8]) + Send + 'static {
+        match self.imp.connect(port_number, port_name, callback) {
             Ok(imp) => Ok(MidiInputConnection { imp: imp }),
             Err(imp) => {
                 let kind = imp.kind();
@@ -64,10 +62,10 @@ impl MidiInput {
 #[cfg(unix)]
 impl<T: Send> ::os::unix::VirtualInput<T> for MidiInput {
     fn create_virtual<F>(
-        self, port_name: &str, callback: F, data: T
+        self, port_name: &str, callback: F
     ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
     where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
-        match self.imp.create_virtual(port_name, callback, data) {
+        match self.imp.create_virtual(port_name, callback) {
             Ok(imp) => Ok(MidiInputConnection { imp: imp }),
             Err(imp) => {
                 let kind = imp.kind();
@@ -78,18 +76,18 @@ impl<T: Send> ::os::unix::VirtualInput<T> for MidiInput {
 }
 
 /// Represents an open connection to a MIDI input port.
-pub struct MidiInputConnection<T: 'static> {
-    imp: MidiInputConnectionImpl<T>
+pub struct MidiInputConnection {
+    imp: MidiInputConnectionImpl
 }
 
-impl<T> MidiInputConnection<T> {
+impl MidiInputConnection {
     /// Closes the connection. The returned values allow you to
     /// inspect the additional data passed to the callback (the `data`
     /// parameter of `connect`), or to reuse the `MidiInput` object,
     /// but they can be safely ignored.
-    pub fn close(self) -> (MidiInput, T) {
-        let (imp, data) = self.imp.close();
-        (MidiInput { imp: imp }, data)
+    pub fn close(self) -> MidiInput {
+        let imp = self.imp.close();
+        MidiInput { imp: imp }
     }
 }
 

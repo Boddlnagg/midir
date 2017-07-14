@@ -113,18 +113,18 @@ pub struct MidiInput {
     seq: Option<Seq>,
 }
 
-pub struct MidiInputConnection<T: 'static> {
+pub struct MidiInputConnection {
     subscription: Option<PortSubscribe>,
-    thread: Option<JoinHandle<(HandlerData<T>, T)>>,
+    thread: Option<JoinHandle<HandlerData>>,
     vport: i32, // TODO: probably port numbers are only u8, therefore could use Option<u8>
     trigger_send_fd: i32,
 }
 
-struct HandlerData<T: 'static> {
+struct HandlerData {
     ignore_flags: Ignore,
     seq: Seq,
     trigger_rcv_fd: i32,
-    callback: Box<FnMut(f64, &[u8], &mut T)+Send>,
+    callback: Box<FnMut(f64, &[u8])+Send>,
     queue_id: i32, // an input queue is needed to get timestamped events
 }
 
@@ -213,10 +213,10 @@ impl MidiInput {
         }
     }
     
-    pub fn connect<F, T: Send>(
-        mut self, port_number: usize, port_name: &str, callback: F, data: T
-    ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
-        where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
+    pub fn connect<F>(
+        mut self, port_number: usize, port_name: &str, callback: F
+    ) -> Result<MidiInputConnection, ConnectError<Self>>
+        where F: FnMut(f64, &[u8]) + Send + 'static {
         
         let trigger_fds = match self.init_trigger() {
             Ok(fds) => fds,
@@ -286,10 +286,10 @@ impl MidiInput {
         })
     }
     
-    pub fn create_virtual<F, T: Send>(
-        mut self, port_name: &str, callback: F, data: T
-    ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
-    where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
+    pub fn create_virtual<F>(
+        mut self, port_name: &str, callback: F
+    ) -> Result<MidiInputConnection, ConnectError<Self>>
+    where F: FnMut(f64, &[u8]) + Send + 'static {
         let trigger_fds = match self.init_trigger() {
             Ok(fds) => fds,
             Err(()) => { return Err(ConnectError::other("could not create communication pipe for ALSA handler", self)); }
@@ -343,24 +343,24 @@ impl MidiInput {
     }
 }
 
-impl<T> MidiInputConnection<T> {
-    pub fn close(mut self) -> (MidiInput, T) {
-        let (handler_data, user_data) = self.close_internal();
+impl MidiInputConnection {
+    pub fn close(mut self) -> MidiInput {
+        let handler_data = self.close_internal();
         
-        (MidiInput {
+        MidiInput {
             ignore_flags: handler_data.ignore_flags,
             seq: Some(handler_data.seq),
-        }, user_data)
+        }
     }
     
     /// This must only be called if the handler thread has not yet been shut down
-    fn close_internal(&mut self) -> (HandlerData<T>, T) {
+    fn close_internal(&mut self) -> HandlerData {
         // Request the thread to stop.
         let _res = unsafe { ::libc::write(self.trigger_send_fd, &false as *const bool as *const _, mem::size_of::<bool>() as ::libc::size_t) };
         
         let thread = self.thread.take().unwrap(); 
         // Join the thread to get the handler_data back
-        let (handler_data, user_data) = thread.join().unwrap(); // TODO: don't use unwrap here
+        let handler_data = thread.join().unwrap(); // TODO: don't use unwrap here
         
         // TODO: find out why snd_seq_unsubscribe_port takes a long time if there was not yet any input message
         if let Some(ref subscription) = self.subscription {
@@ -383,12 +383,12 @@ impl<T> MidiInputConnection<T> {
         // Delete the port
         let _ = handler_data.seq.delete_port(self.vport);
         
-        (handler_data, user_data)
+        handler_data
     }
 }
 
 
-impl<T> Drop for MidiInputConnection<T> {
+impl Drop for MidiInputConnection {
     fn drop(&mut self) {
         // Use `self.thread` as a flag whether the connection has already been dropped
         if self.thread.is_some() {
@@ -542,7 +542,7 @@ impl Drop for MidiOutputConnection {
     }
 }
 
-fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T> {
+fn handle_input(mut data: HandlerData) -> HandlerData {
     use alsa::PollDescriptors;
     use alsa::seq::{EventType, Connect};
 
@@ -689,7 +689,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
         };
         last_time = Some(timestamp);
         
-        (data.callback)(message.timestamp, &message.bytes, user_data);
+        (data.callback)(message.timestamp, &message.bytes);
     }
     
     } // close scope where data.seq is borrowed

@@ -6,14 +6,14 @@ use winmm_sys::midiInAddBuffer;
 use super::HandlerData;
 use ::Ignore;
 
-pub extern "system" fn handle_input<T>(_: HMIDIIN,
+pub extern "system" fn handle_input(_: HMIDIIN,
                 input_status: UINT, 
                 instance_ptr: DWORD_PTR,
                 midi_message: DWORD_PTR,
                 timestamp: DWORD) {
     if input_status != MM_MIM_DATA && input_status != MM_MIM_LONGDATA && input_status != MM_MIM_LONGERROR { return; }
     
-    let data: &mut HandlerData<T> = unsafe { &mut *(instance_ptr as *mut HandlerData<T>) };
+    let data: &mut HandlerData = unsafe { &mut *(instance_ptr as *mut HandlerData) };
     
     // Calculate time stamp.
     let timestamp = timestamp as u64;
@@ -80,7 +80,7 @@ pub extern "system" fn handle_input<T>(_: HMIDIIN,
         } else { return; }
     }
     
-    (data.callback)(data.message.timestamp, &data.message.bytes, data.user_data.as_mut().unwrap());   
+    (data.callback)(data.message.timestamp, &data.message.bytes);   
     
     // Clear the vector for the next input message.
     data.message.bytes.clear();

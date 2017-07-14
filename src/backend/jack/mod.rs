@@ -10,12 +10,11 @@ use ::errors::*;
 
 const OUTPUT_RINGBUFFER_SIZE: usize = 16384;
 
-struct InputHandlerData<T> {
+struct InputHandlerData {
     port: Option<MidiPort>,
     last_time: Option<u64>,
     ignore_flags: Ignore,
-    callback: Box<FnMut(f64, &[u8], &mut T)+Send>,
-    user_data: Option<T>
+    callback: Box<FnMut(f64, &[u8]) + Send>,
 }
 
 pub struct MidiInput {
@@ -23,8 +22,8 @@ pub struct MidiInput {
     client: Option<Client>,
 }
 
-pub struct MidiInputConnection<T> {
-    handler_data: Box<InputHandlerData<T>>,
+pub struct MidiInputConnection {
+    handler_data: Box<InputHandlerData>,
     client: Option<Client>
 }
 
@@ -58,9 +57,9 @@ impl MidiInput {
         }
     }
     
-    fn activate_callback<F, T: Send>(&mut self, callback: F, data: T)
-            -> Box<InputHandlerData<T>>
-            where F: FnMut(f64, &[u8], &mut T) + Send + 'static
+    fn activate_callback<F>(&mut self, callback: F)
+            -> Box<InputHandlerData>
+            where F: FnMut(f64, &[u8]) + Send + 'static
     {
         let handler_data = Box::new(InputHandlerData {
             port: None,
@@ -70,17 +69,17 @@ impl MidiInput {
             user_data: Some(data)
         });
         
-        let data_ptr = unsafe { mem::transmute_copy::<_, *mut InputHandlerData<T>>(&handler_data) };
+        let data_ptr = unsafe { mem::transmute_copy::<_, *mut InputHandlerData>(&handler_data) };
         
-        self.client.as_mut().unwrap().set_process_callback(handle_input::<T>, data_ptr as *mut ::libc::c_void);
+        self.client.as_mut().unwrap().set_process_callback(handle_input, data_ptr as *mut ::libc::c_void);
         self.client.as_mut().unwrap().activate();
         handler_data
     }
     
-    pub fn connect<F, T: Send>(
-        mut self, port_number: usize, port_name: &str, callback: F, data: T
-    ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
-        where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
+    pub fn connect<F>(
+        mut self, port_number: usize, port_name: &str, callback: F
+    ) -> Result<MidiInputConnection, ConnectError<MidiInput>>
+        where F: FnMut(f64, &[u8]) + Send + 'static {
         
         let source_port_name = {
             let ports = self.client.as_ref().unwrap().get_midi_ports(PortIsOutput);
@@ -117,9 +116,9 @@ impl MidiInput {
     }
     
     pub fn create_virtual<F, T: Send>(
-        mut self, port_name: &str, callback: F, data: T
-    ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
-    where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
+        mut self, port_name: &str, callback: F
+    ) -> Result<MidiInputConnection, ConnectError<Self>>
+    where F: FnMut(f64, &[u8]) + Send + 'static {
     
         let mut handler_data = self.activate_callback(callback, data);
         
@@ -138,8 +137,8 @@ impl MidiInput {
     }
 }
 
-impl<T> MidiInputConnection<T> {
-    pub fn close(mut self) -> (MidiInput, T) {
+impl MidiInputConnection {
+    pub fn close(mut self) -> MidiInput {
         self.close_internal();
         
         (MidiInput {
@@ -155,7 +154,7 @@ impl<T> MidiInputConnection<T> {
     }
 }
 
-impl<T> Drop for MidiInputConnection<T> {
+impl Drop for MidiInputConnection {
     fn drop(&mut self) {
         if self.client.is_some() {
             self.close_internal();
@@ -163,8 +162,8 @@ impl<T> Drop for MidiInputConnection<T> {
     }
 }
 
-extern "C" fn handle_input<T>(nframes: jack_nframes_t, arg: *mut ::libc::c_void) -> i32 {
-    let data: &mut InputHandlerData<T> = unsafe { mem::transmute(arg) }; 
+extern "C" fn handle_input(nframes: jack_nframes_t, arg: *mut ::libc::c_void) -> i32 {
+    let data: &mut InputHandlerData = unsafe { mem::transmute(arg) }; 
     
     // Is port created?
     if let Some(ref port) = data.port {
