@@ -18,7 +18,7 @@ fn run() -> Result<(), Box<Error>> {
     let midi_out = try!(MidiOutput::new("My Test Output"));
     
     // Get an output port (read from console if multiple are available)
-    let out_port: u32 = match midi_out.port_count() {
+    let out_port = match midi_out.port_count() {
         0 => return Err("no output port found".into()),
         1 => {
             println!("Choosing the only available output port: {}", midi_out.port_name(0).unwrap());

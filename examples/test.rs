@@ -28,7 +28,7 @@ fn run() -> Result<(), Box<Error>> {
     print!("Please select input port: ");
     try!(stdout().flush());
     try!(stdin().read_line(&mut input));
-    let in_port: u32 = try!(input.trim().parse());
+    let in_port: usize = try!(input.trim().parse());
     
     println!("\nAvailable output ports:");
     for i in 0..midi_out.port_count() {
@@ -38,7 +38,7 @@ fn run() -> Result<(), Box<Error>> {
     try!(stdout().flush());
     input.clear();
     try!(stdin().read_line(&mut input));
-    let out_port: u32 = try!(input.trim().parse());
+    let out_port: usize = try!(input.trim().parse());
     
     println!("\nOpening connections");
     let conn_in = try!(midi_in.connect(in_port, "midir-test", |stamp, message, _| {

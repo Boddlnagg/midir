@@ -84,11 +84,11 @@ impl MidiInput {
         self.ignore_flags = flags;
     }
     
-    pub fn port_count(&self) -> u32 {
-        unsafe { midiInGetNumDevs() }
+    pub fn port_count(&self) -> usize {
+        unsafe { midiInGetNumDevs() as usize }
     }
     
-    pub fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
+    pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
         let mut device_caps: MIDIINCAPSW = unsafe { mem::uninitialized() };
         let result = unsafe { midiInGetDevCapsW(port_number as UINT_PTR, &mut device_caps, mem::size_of::<MIDIINCAPSW>() as u32) };
         if result == MMSYSERR_BADDEVICEID {
@@ -101,7 +101,7 @@ impl MidiInput {
     }
     
     pub fn connect<F, T: Send>(
-        self, port_number: u32, _port_name: &str, callback: F, data: T
+        self, port_number: usize, _port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
         where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
         
@@ -118,7 +118,7 @@ impl MidiInput {
         let mut in_handle: HMIDIIN = unsafe { mem::uninitialized() };
         let handler_data_ptr: *mut HandlerData<T> = &mut *handler_data;
         let result = unsafe { midiInOpen(&mut in_handle,
-                        port_number,
+                        port_number as UINT,
                         handler::handle_input::<T> as DWORD_PTR,
                         handler_data_ptr as DWORD_PTR,
                         CALLBACK_FUNCTION) };
@@ -233,11 +233,11 @@ impl MidiOutput {
         Ok(MidiOutput)
     }
     
-    pub fn port_count(&self) -> u32 {
-        unsafe { midiOutGetNumDevs() }
+    pub fn port_count(&self) -> usize {
+        unsafe { midiOutGetNumDevs() as usize }
     }
     
-    pub fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
+    pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
         let mut device_caps: MIDIOUTCAPSW = unsafe { mem::uninitialized() };
         let result = unsafe { midiOutGetDevCapsW(port_number as UINT_PTR, &mut device_caps, mem::size_of::<MIDIINCAPSW>() as u32) };
         if result == MMSYSERR_BADDEVICEID {
@@ -249,10 +249,10 @@ impl MidiOutput {
         Ok(output)
     }
     
-    pub fn connect(self, port_number: u32, _port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
+    pub fn connect(self, port_number: usize, _port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
         let mut out_handle = unsafe { mem::uninitialized() };
         
-        let result = unsafe { midiOutOpen(&mut out_handle, port_number, 0, 0, CALLBACK_NULL) };
+        let result = unsafe { midiOutOpen(&mut out_handle, port_number as UINT, 0, 0, CALLBACK_NULL) };
         if result == MMSYSERR_BADDEVICEID {
             return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self));
         } else if result != MMSYSERR_NOERROR {

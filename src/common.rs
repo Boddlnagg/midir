@@ -27,12 +27,12 @@ impl MidiInput {
     }
     
     /// Get the number of available MIDI input ports that *midir* can connect to.
-    pub fn port_count(&self) -> u32 {
+    pub fn port_count(&self) -> usize {
         self.imp.port_count()
     }
     
     /// Get the name of a specified MIDI input port.
-    pub fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
+    pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
         self.imp.port_name(port_number)
     }
     
@@ -48,7 +48,7 @@ impl MidiInput {
     /// The `port_name` is an additional name that will be assigned to the
     /// connection. It is only used by some backends.
     pub fn connect<F, T: Send>(
-        self, port_number: u32, port_name: &str, callback: F, data: T
+        self, port_number: usize, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
         where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
         match self.imp.connect(port_number, port_name, callback, data) {
@@ -106,12 +106,12 @@ impl MidiOutput {
     }
     
     /// Get the number of available MIDI output ports that *midir* can connect to.
-    pub fn port_count(&self) -> u32 {
+    pub fn port_count(&self) -> usize {
         self.imp.port_count()
     }
     
     /// Get the name of a specified MIDI output port.
-    pub fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
+    pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
         self.imp.port_name(port_number)
     }
     
@@ -121,7 +121,7 @@ impl MidiOutput {
     ///
     /// The `port_name` is an additional name that will be assigned to the
     /// connection. It is only used by some backends.
-    pub fn connect(self, port_number: u32, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
+    pub fn connect(self, port_number: usize, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
         match self.imp.connect(port_number, port_name) {
             Ok(imp) => Ok(MidiOutputConnection { imp: imp }),
             Err(imp) => {

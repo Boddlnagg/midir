@@ -45,13 +45,12 @@ impl MidiInput {
         self.ignore_flags = flags;
     }
     
-    pub fn port_count(&self) -> u32 {
-        self.client.as_ref().unwrap().get_midi_ports(PortIsOutput).count() as u32
+    pub fn port_count(&self) -> usize {
+        self.client.as_ref().unwrap().get_midi_ports(PortIsOutput).count()
     }
     
-    pub fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
+    pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
         let midi_ports = self.client.as_ref().unwrap().get_midi_ports(PortIsOutput);
-        let port_number = port_number as usize;
         if port_number >= midi_ports.count() {
             Err(PortInfoError::PortNumberOutOfRange)
         } else {
@@ -79,7 +78,7 @@ impl MidiInput {
     }
     
     pub fn connect<F, T: Send>(
-        mut self, port_number: u32, port_name: &str, callback: F, data: T
+        mut self, port_number: usize, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
         where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
         
@@ -228,13 +227,13 @@ impl MidiOutput {
         })
     }
     
-    pub fn port_count(&self) -> u32 {
-        self.client.as_ref().unwrap().get_midi_ports(PortIsInput).count() as u32
+    pub fn port_count(&self) -> usize {
+        self.client.as_ref().unwrap().get_midi_ports(PortIsInput).count()
     }
     
-    pub fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
+    pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
         let midi_ports = self.client.as_ref().unwrap().get_midi_ports(PortIsInput);
-        let port_number = port_number as usize;
+        let port_number = port_number;
         if port_number >= midi_ports.count() {
             Err(PortInfoError::PortNumberOutOfRange)
         } else {
@@ -256,10 +255,9 @@ impl MidiOutput {
         handler_data
     }
     
-    pub fn connect(mut self, port_number: u32, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
+    pub fn connect(mut self, port_number: usize, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
         let dest_port_name = {
             let ports = self.client.as_ref().unwrap().get_midi_ports(PortIsInput);
-            let port_number = port_number as usize;
             if port_number >= ports.count() {
                 None
             } else {

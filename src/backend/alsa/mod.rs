@@ -26,15 +26,15 @@ mod helpers {
     }
 
     #[inline]
-    pub fn get_port_info(s: &Seq, capability: PortCap, port_number: u32) -> Option<PortInfo> {
+    pub fn get_port_info(s: &Seq, capability: PortCap, port_number: usize) -> Option<PortInfo> {
         ClientIter::new(s).flat_map(|c| PortIter::new(s, c.get_client()))
                           .filter(|p| p.get_type().intersects(MIDI_GENERIC | SYNTH))
                           .filter(|p| p.get_capability().intersects(capability))
-                          .nth(port_number as usize)
+                          .nth(port_number)
     }
 
     #[inline]
-    pub fn get_port_name(s: &Seq, capability: PortCap, port_number: u32) -> Result<String, PortInfoError> {
+    pub fn get_port_name(s: &Seq, capability: PortCap, port_number: usize) -> Result<String, PortInfoError> {
         use std::fmt::Write;
 
         let pinfo = match get_port_info(s, capability, port_number) {
@@ -148,11 +148,11 @@ impl MidiInput {
         self.ignore_flags = flags;
     }
     
-    pub fn port_count(&self) -> u32 {
-        helpers::get_port_count(self.seq.as_ref().unwrap(), READ | SUBS_READ) as u32
+    pub fn port_count(&self) -> usize {
+        helpers::get_port_count(self.seq.as_ref().unwrap(), READ | SUBS_READ)
     }
     
-    pub fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
+    pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
         helpers::get_port_name(self.seq.as_ref().unwrap(), READ | SUBS_READ, port_number)
     }
     
@@ -214,7 +214,7 @@ impl MidiInput {
     }
     
     pub fn connect<F, T: Send>(
-        mut self, port_number: u32, port_name: &str, callback: F, data: T
+        mut self, port_number: usize, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
         where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
         
@@ -423,15 +423,15 @@ impl MidiOutput {
         })
     }
     
-    pub fn port_count(&self) -> u32 {
-        helpers::get_port_count(self.seq.as_ref().unwrap(), WRITE | SUBS_WRITE) as u32
+    pub fn port_count(&self) -> usize {
+        helpers::get_port_count(self.seq.as_ref().unwrap(), WRITE | SUBS_WRITE)
     }
     
-    pub fn port_name(&self, port_number: u32) -> Result<String, PortInfoError> {
+    pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
         helpers::get_port_name(self.seq.as_ref().unwrap(), WRITE | SUBS_WRITE, port_number)
     }
     
-    pub fn connect(mut self, port_number: u32, port_name: &str) -> Result<MidiOutputConnection, ConnectError<Self>> {
+    pub fn connect(mut self, port_number: usize, port_name: &str) -> Result<MidiOutputConnection, ConnectError<Self>> {
         let pinfo = match helpers::get_port_info(self.seq.as_ref().unwrap(), WRITE | SUBS_WRITE, port_number) {
             Some(p) => p,
             None => return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self))
