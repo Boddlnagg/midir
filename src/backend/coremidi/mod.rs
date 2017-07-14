@@ -30,7 +30,8 @@ impl MidiInput {
     }
     
     pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
-        match Source::from_index(port_number).display_name() {
+        let endpoint = try!(Source::from_index(port_number).ok_or(PortInfoError::PortNumberOutOfRange));
+        match endpoint.display_name() {
             Some(name) => Ok(name),
             None => Err(PortInfoError::CannotRetrievePortName)
         }
@@ -41,7 +42,10 @@ impl MidiInput {
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
         where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
         // TODO: handle failure of from_index for invalid index
-        let src = Source::from_index(port_number);
+        let src = match Source::from_index(port_number) {
+            Some(src) => src,
+            None => return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self))
+        };
 
         let handler_data = Arc::new(Mutex::new(HandlerData {
             ignore_flags: self.ignore_flags,
@@ -164,7 +168,8 @@ impl MidiOutput {
     }
     
     pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
-        match Destination::from_index(port_number).display_name() {
+        let endpoint = try!(Destination::from_index(port_number).ok_or(PortInfoError::PortNumberOutOfRange));
+        match endpoint.display_name() {
             Some(name) => Ok(name),
             None => Err(PortInfoError::CannotRetrievePortName)
         }
@@ -172,13 +177,15 @@ impl MidiOutput {
     
     pub fn connect(self, port_number: usize, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
         // TODO: handle failure of from_index for invalid index
-        let dest = Destination::from_index(port_number as usize);
+        let dest = match Destination::from_index(port_number) {
+            Some(dest) => dest,
+            None => return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self))
+        };
+
         let port = match self.client.output_port(port_name) {
             Ok(p) => p,
             Err(_) => return Err(ConnectError::other("error creating MIDI output port", self))
         };
-        // TODO: handle failure of from_index for invalid index
-        let dest = Destination::from_index(port_number);
         Ok(MidiOutputConnection {
             client: self.client,
             details: OutputConnectionDetails::Explicit(port, dest)
