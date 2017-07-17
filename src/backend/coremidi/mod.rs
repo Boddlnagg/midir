@@ -1,12 +1,17 @@
-#![allow(dead_code)]
-#![allow(unused_variables)]
-
 use std::sync::{Arc, Mutex};
 
 use ::errors::*;
 use ::Ignore;
 
 use ::coremidi::*;
+
+mod external {
+    #[link(name = "CoreAudio", kind = "framework")]
+    extern "C" {
+        pub fn AudioConvertHostTimeToNanos(inHostTime: u64) -> u64;
+        pub fn AudioGetCurrentHostTime() -> u64;
+    }
+}
 
 pub struct MidiInput {
     client: Client,
@@ -36,36 +41,50 @@ impl MidiInput {
             None => Err(PortInfoError::CannotRetrievePortName)
         }
     }
+
+    fn handle_input<T>(packets: &PacketList, handler_data: &mut HandlerData<T>) {
+        // TODO: implement message filtering
+        // TODO: maybe merge SysEx (if they can be split)
+        let data = &mut handler_data.user_data.as_mut().unwrap();
+        for p in packets.iter() {
+            let pdata = p.data();
+            if pdata.len() == 0 { continue; }
+
+            let mut timestamp = p.timestamp();
+            if timestamp == 0 { // this might happen for asnychronous sysex messages (?)
+                timestamp = unsafe { external::AudioGetCurrentHostTime() };
+            }
+
+            let relative_timestamp = match handler_data.last_time {
+                None => 0,
+                Some(last) => timestamp - last
+            };
+            handler_data.last_time = Some(timestamp);
+
+            let relative_timestamp = unsafe { external::AudioConvertHostTimeToNanos(relative_timestamp) } as f64 * 0.000000001;
+
+            (handler_data.callback)(relative_timestamp, pdata, data)
+        }
+    }
     
     pub fn connect<F, T: Send + 'static>(
         self, port_number: usize, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
         where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
-        // TODO: handle failure of from_index for invalid index
         let src = match Source::from_index(port_number) {
             Some(src) => src,
             None => return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self))
         };
 
         let handler_data = Arc::new(Mutex::new(HandlerData {
+            last_time: None,
             ignore_flags: self.ignore_flags,
             callback: Box::new(callback),
             user_data: Some(data)
         }));
         let handler_data2 = handler_data.clone();
         let port = match self.client.input_port(port_name, move |packets| {
-            // TODO: implement message filtering
-            // TODO: calculate timestamps
-            // TODO: maybe merge SysEx (if they can be split)
-            // TODO: synchronization is required because the borrow checker does not
-            //       know that the callback we're in here is never called concurrently
-            //       (always in sequence)
-            let mut data_locked = handler_data2.lock().unwrap();
-            let dataref: &mut HandlerData<T> = &mut *data_locked;
-            let data = &mut dataref.user_data.as_mut().unwrap();
-            for p in packets.iter() {
-                (dataref.callback)(0.0, p.data(), data)
-            }
+            MidiInput::handle_input(packets, &mut *handler_data2.lock().unwrap())
         }) {
             Ok(p) => p,
             Err(_) => return Err(ConnectError::other("error creating MIDI input port", self))
@@ -80,32 +99,20 @@ impl MidiInput {
         })
     }
 
-    // FIXME: get rid of code duplication with above method
-    // FIXME: the test_virtual example currently fails for some reason 
     pub fn create_virtual<F, T: Send + 'static>(
         self, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
     where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
 
         let handler_data = Arc::new(Mutex::new(HandlerData {
+            last_time: None,
             ignore_flags: self.ignore_flags,
             callback: Box::new(callback),
             user_data: Some(data)
         }));
         let handler_data2 = handler_data.clone();
         let vrt = match self.client.virtual_destination(port_name, move |packets| {
-            // TODO: implement message filtering
-            // TODO: calculate timestamps
-            // TODO: maybe merge SysEx (if they can be split)
-            // TODO: synchronization is required because the borrow checker does not
-            //       know that the callback we're in here is never called concurrently
-            //       (always in sequence)
-            let mut data_locked = handler_data2.lock().unwrap();
-            let dataref: &mut HandlerData<T> = &mut *data_locked;
-            let data = &mut dataref.user_data.as_mut().unwrap();
-            for p in packets.iter() {
-                (dataref.callback)(0.0, p.data(), data)
-            }
+            MidiInput::handle_input(packets, &mut *handler_data2.lock().unwrap())
         }) {
             Ok(p) => p,
             Err(_) => return Err(ConnectError::other("error creating MIDI input port", self))
@@ -125,8 +132,13 @@ enum InputConnectionDetails {
 
 pub struct MidiInputConnection<T> {
     client: Client,
+    #[allow(dead_code)]
     details: InputConnectionDetails,
-    handler_data: Arc<Mutex<HandlerData<T>>> // TODO: get rid of Arc & Mutex?
+    // TODO: get rid of Arc & Mutex?
+    //       synchronization is required because the borrow checker does not
+    //       know that the callback we're in here is never called concurrently
+    //       (always in sequence)
+    handler_data: Arc<Mutex<HandlerData<T>>>
 }
 
 impl<T> MidiInputConnection<T> {
@@ -145,7 +157,7 @@ impl<T> MidiInputConnection<T> {
 /// It is important that `user_data` is the last field to not influence
 /// offsets after monomorphization.
 struct HandlerData<T> {
-    //last_time: Option<u64>,
+    last_time: Option<u64>,
     ignore_flags: Ignore,
     callback: Box<FnMut(f64, &[u8], &mut T)+Send>,
     user_data: Option<T>
@@ -176,7 +188,6 @@ impl MidiOutput {
     }
     
     pub fn connect(self, port_number: usize, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
-        // TODO: handle failure of from_index for invalid index
         let dest = match Destination::from_index(port_number) {
             Some(dest) => dest,
             None => return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self))
