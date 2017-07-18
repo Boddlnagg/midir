@@ -54,7 +54,6 @@ struct MidiMessage {
 }
 
 impl MidiMessage {
-    // TODO: probably not needed
     pub fn new() -> MidiMessage {
         MidiMessage {
             bytes: vec![],

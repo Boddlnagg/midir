@@ -33,6 +33,7 @@ fn run() -> Result<(), Box<Error>> {
     println!("Connecting to port '{}' ...", midi_out.port_name(previous_count).unwrap());
     let mut conn_out = try!(midi_out.connect(previous_count, "midir-test").map_err(|e| e.kind()));
     println!("Starting to send messages ...");
+    //sleep(Duration::from_millis(2000));
     println!("Sending NoteOn message");
     try!(conn_out.send(&[144, 60, 1]));
     sleep(Duration::from_millis(200));
@@ -47,7 +48,12 @@ fn run() -> Result<(), Box<Error>> {
     }
     v.push(0xF7u8);
     assert_eq!(v.len(), LARGE_SYSEX_SIZE);
-    try!(conn_out.send(&v[..]));
+    try!(conn_out.send(&v));
+    sleep(Duration::from_millis(200));
+    println!("Sending large SysEx message (chunked)...");
+    for ch in v.chunks(4) {
+        try!(conn_out.send(ch));
+    }
     sleep(Duration::from_millis(200));
     println!("Sending small SysEx message ...");
     try!(conn_out.send(&[0xF0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xF7]));

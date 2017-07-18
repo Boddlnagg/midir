@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use ::errors::*;
 use ::Ignore;
+use ::MidiMessage;
 
 use ::coremidi::*;
 
@@ -43,8 +44,9 @@ impl MidiInput {
     }
 
     fn handle_input<T>(packets: &PacketList, handler_data: &mut HandlerData<T>) {
-        // TODO: implement message filtering
-        // TODO: maybe merge SysEx (if they can be split)
+        let continue_sysex =  &mut handler_data.continue_sysex;
+        let ignore = handler_data.ignore_flags;
+        let message = &mut handler_data.message;
         let data = &mut handler_data.user_data.as_mut().unwrap();
         for p in packets.iter() {
             let pdata = p.data();
@@ -61,9 +63,82 @@ impl MidiInput {
             };
             handler_data.last_time = Some(timestamp);
 
-            let relative_timestamp = unsafe { external::AudioConvertHostTimeToNanos(relative_timestamp) } as f64 * 0.000000001;
+            if !*continue_sysex {
+                message.timestamp = unsafe { external::AudioConvertHostTimeToNanos(relative_timestamp) } as f64 * 0.000000001;
+            }
 
-            (handler_data.callback)(relative_timestamp, pdata, data)
+            let mut cur_byte = 0;
+            if *continue_sysex {
+                // We have a continuing, segmented sysex message.
+                if !ignore.contains(Ignore::Sysex) {
+                    // If we're not ignoring sysex messages, copy the entire packet.
+                    message.bytes.extend_from_slice(pdata);
+                }
+                *continue_sysex = pdata[pdata.len() - 1] != 0xF7;
+
+                if !ignore.contains(Ignore::Sysex) && !*continue_sysex {
+                    // If we reached the end of the sysex, invoke the user callback
+                    (handler_data.callback)(message.timestamp, &message.bytes, data);
+                    message.bytes.clear();
+                }
+            } else {
+                while cur_byte < pdata.len() {
+                    // We are expecting that the next byte in the packet is a status byte.
+                    let status = pdata[cur_byte];
+                    if status & 0x80 == 0 { break; }
+                    // Determine the number of bytes in the MIDI message.
+                    let size;
+                    if status < 0xC0 { size = 3; }
+                    else if status < 0xE0 { size = 2; }
+                    else if status < 0xF0 { size = 3; }
+                    else if status == 0xF0 {
+                        // A MIDI sysex
+                        if ignore.contains(Ignore::Sysex) {
+                            size = 0;
+                            cur_byte = pdata.len();
+                        } else {
+                            size = pdata.len() - cur_byte;
+                        }
+                        *continue_sysex = pdata[pdata.len() - 1] != 0xF7;
+                    }
+                    else if status == 0xF1 {
+                        // A MIDI time code message
+                        if ignore.contains(Ignore::Time) {
+                            size = 0;
+                            cur_byte += 2;
+                        } else {
+                            size = 2;
+                        }
+                    }
+                    else if status == 0xF2 { size = 3; }
+                    else if status == 0xF3 { size = 2; }
+                    else if status == 0xF8 && ignore.contains(Ignore::Time) {
+                        // A MIDI timing tick message and we're ignoring it.
+                        size = 0;
+                        cur_byte += 1;
+                    }
+                    else if status == 0xFE && ignore.contains(Ignore::ActiveSense) {
+                        // A MIDI active sensing message and we're ignoring it.
+                        size = 0;
+                        cur_byte += 1;
+                    }
+                    else { size = 1; }
+
+                    // Copy the MIDI data to our vector.
+                    if size > 0 {
+                        let message_bytes = &pdata[cur_byte..(cur_byte + size)];
+                        if !*continue_sysex {
+                            // This is either a non-sysex message or a non-segmented sysex message
+                            (handler_data.callback)(message.timestamp, message_bytes, data);
+                            message.bytes.clear();
+                        } else {
+                            // This is the beginning of a segmented sysex message
+                            message.bytes.extend_from_slice(message_bytes);
+                        }
+                        cur_byte += size;
+                    }
+                }
+            }
         }
     }
     
@@ -77,8 +152,10 @@ impl MidiInput {
         };
 
         let handler_data = Arc::new(Mutex::new(HandlerData {
+            message: MidiMessage::new(),
             last_time: None,
             ignore_flags: self.ignore_flags,
+            continue_sysex: false,
             callback: Box::new(callback),
             user_data: Some(data)
         }));
@@ -105,8 +182,10 @@ impl MidiInput {
     where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
 
         let handler_data = Arc::new(Mutex::new(HandlerData {
+            message: MidiMessage::new(),
             last_time: None,
             ignore_flags: self.ignore_flags,
+            continue_sysex: false,
             callback: Box::new(callback),
             user_data: Some(data)
         }));
@@ -157,8 +236,10 @@ impl<T> MidiInputConnection<T> {
 /// It is important that `user_data` is the last field to not influence
 /// offsets after monomorphization.
 struct HandlerData<T> {
+    message: MidiMessage,
     last_time: Option<u64>,
     ignore_flags: Ignore,
+    continue_sysex: bool,
     callback: Box<FnMut(f64, &[u8], &mut T)+Send>,
     user_data: Option<T>
 }
