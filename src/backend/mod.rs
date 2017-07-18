@@ -6,8 +6,8 @@
 #[cfg(target_os="windows")] mod winmm;
 #[cfg(target_os="windows")] pub use self::winmm::*;
 
-#[cfg(target_os="macos")] mod coremidi;
-#[cfg(target_os="macos")] pub use self::coremidi::*;
+#[cfg(all(target_os="macos", not(feature = "jack")))] mod coremidi;
+#[cfg(all(target_os="macos", not(feature = "jack")))] pub use self::coremidi::*;
 
 #[cfg(all(target_os="linux", not(feature = "jack")))] mod alsa;
 #[cfg(all(target_os="linux", not(feature = "jack")))] pub use self::alsa::*;

@@ -1,12 +1,12 @@
 #![allow(non_upper_case_globals, dead_code)]
 
-extern crate jack_sys;
-
 use std::{ptr, slice, str};
 use std::ffi::{CStr, CString};
 use std::ops::Index;
 
-use jack_sys::{
+use super::libc::{c_void, size_t};
+
+use super::jack_sys::{
     jack_get_time,
     jack_client_t,
     jack_client_open,
@@ -59,7 +59,7 @@ bitflags! {
 }
 
 // TODO: hide this type
-pub type ProcessCallback = extern "C" fn(nframes: jack_nframes_t, arg: *mut ::libc::c_void) -> i32;
+pub type ProcessCallback = extern "C" fn(nframes: jack_nframes_t, arg: *mut c_void) -> i32;
 
 pub struct Client {
     p: *mut jack_client_t
@@ -123,7 +123,7 @@ impl Client {
     /// for a long time. This includes all I/O functions (disk, TTY, network),
     /// malloc, free, printf, pthread_mutex_lock, sleep, wait, poll, select,
     /// pthread_join, pthread_cond_wait, etc, etc.
-    pub fn set_process_callback(&mut self, callback: ProcessCallback, data: *mut ::libc::c_void) {
+    pub fn set_process_callback(&mut self, callback: ProcessCallback, data: *mut c_void) {
         unsafe { jack_set_process_callback(self.p, Some(callback), data) };
     }
     
@@ -190,7 +190,7 @@ impl MidiPort {
 }
 
 pub struct MidiBuffer {
-    p: *mut ::libc::c_void
+    p: *mut c_void
 }
 
 impl MidiBuffer {
@@ -207,7 +207,7 @@ impl MidiBuffer {
     }
     
     pub fn event_reserve(&mut self, time: jack_nframes_t, data_size: usize) -> *mut jack_midi_data_t {
-        unsafe { jack_midi_event_reserve(self.p, time, data_size as ::libc::size_t) }
+        unsafe { jack_midi_event_reserve(self.p, time, data_size as size_t) }
     }
 }
 
@@ -219,7 +219,7 @@ unsafe impl Send for Ringbuffer {}
 
 impl Ringbuffer {
     pub fn new(size: usize) -> Ringbuffer {
-        let result = unsafe { jack_ringbuffer_create(size as ::libc::size_t) };
+        let result = unsafe { jack_ringbuffer_create(size as size_t) };
         Ringbuffer { p: result }
     }
     
@@ -228,12 +228,12 @@ impl Ringbuffer {
     }
     
     pub fn read(&mut self, destination: *mut u8, count: usize) -> usize {
-        let bytes_read = unsafe { jack_ringbuffer_read(self.p, destination as *mut i8, count as ::libc::size_t) };
+        let bytes_read = unsafe { jack_ringbuffer_read(self.p, destination as *mut i8, count as size_t) };
         bytes_read as usize 
     }
     
     pub fn write(&mut self, source: &[u8]) -> usize {
-        unsafe { jack_ringbuffer_write(self.p, source.as_ptr() as *const i8, source.len() as ::libc::size_t) as usize }
+        unsafe { jack_ringbuffer_write(self.p, source.as_ptr() as *const i8, source.len() as size_t) as usize }
     }
 }
 

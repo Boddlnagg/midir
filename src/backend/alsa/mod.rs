@@ -1,20 +1,23 @@
+extern crate libc;
+extern crate alsa;
+
 use std::mem;
 use std::thread::{Builder, JoinHandle};
 use std::io::{stderr, Write};
 use std::ffi::{CString, CStr};
 
-use alsa::{Seq, Direction};
-use alsa::seq::{PortInfo, PortSubscribe, Addr, QueueTempo, EventType, MIDI_GENERIC, APPLICATION, WRITE, SUBS_WRITE, READ, SUBS_READ};
+use self::alsa::{Seq, Direction};
+use self::alsa::seq::{PortInfo, PortSubscribe, Addr, QueueTempo, EventType, MIDI_GENERIC, APPLICATION, WRITE, SUBS_WRITE, READ, SUBS_READ};
 
 use ::{MidiMessage, Ignore};
 use ::errors::*;
 
 mod helpers {
-    use alsa::seq::{Seq, ClientIter, PortIter, PortInfo, PortCap, MidiEvent, MIDI_GENERIC, SYNTH};
+    use super::alsa::seq::{Seq, ClientIter, PortIter, PortInfo, PortCap, MidiEvent, MIDI_GENERIC, SYNTH};
     use ::errors::PortInfoError;
 
-    pub fn poll(fds: &mut [::libc::pollfd], timeout: i32) -> i32 {
-        unsafe { ::libc::poll(fds.as_mut_ptr(), fds.len() as ::libc::nfds_t, timeout) }
+    pub fn poll(fds: &mut [super::libc::pollfd], timeout: i32) -> i32 {
+        unsafe { super::libc::poll(fds.as_mut_ptr(), fds.len() as super::libc::nfds_t, timeout) }
     }
 
     #[inline]
@@ -176,7 +179,7 @@ impl MidiInput {
     fn init_trigger(&mut self) -> Result<[i32; 2], ()> {
         let mut trigger_fds = [-1, -1];
         
-        if unsafe { ::libc::pipe(trigger_fds.as_mut_ptr()) } == -1 {
+        if unsafe { self::libc::pipe(trigger_fds.as_mut_ptr()) } == -1 {
             Err(())
         } else {
             Ok(trigger_fds)
@@ -356,7 +359,7 @@ impl<T> MidiInputConnection<T> {
     /// This must only be called if the handler thread has not yet been shut down
     fn close_internal(&mut self) -> (HandlerData<T>, T) {
         // Request the thread to stop.
-        let _res = unsafe { ::libc::write(self.trigger_send_fd, &false as *const bool as *const _, mem::size_of::<bool>() as ::libc::size_t) };
+        let _res = unsafe { self::libc::write(self.trigger_send_fd, &false as *const bool as *const _, mem::size_of::<bool>() as self::libc::size_t) };
         
         let thread = self.thread.take().unwrap(); 
         // Join the thread to get the handler_data back
@@ -369,8 +372,8 @@ impl<T> MidiInputConnection<T> {
         
         // Close the trigger fds (TODO: make sure that these are closed even in the presence of panic in thread)
         unsafe {
-            ::libc::close(handler_data.trigger_rcv_fd);
-            ::libc::close(self.trigger_send_fd);
+            self::libc::close(handler_data.trigger_rcv_fd);
+            self::libc::close(self.trigger_send_fd);
         }
         
         // Stop and free the input queue
@@ -543,8 +546,8 @@ impl Drop for MidiOutputConnection {
 }
 
 fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T> {
-    use alsa::PollDescriptors;
-    use alsa::seq::{EventType, Connect};
+    use self::alsa::PollDescriptors;
+    use self::alsa::seq::{EventType, Connect};
 
     let mut last_time: Option<u64> = None;
     let mut continue_sysex: bool = false;
@@ -555,7 +558,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
     
     let mut coder = helpers::EventDecoder::new(false);
     
-    let mut poll_fds: Box<[::libc::pollfd]>;
+    let mut poll_fds: Box<[self::libc::pollfd]>;
     {
         let poll_desc_info = (&data.seq, Some(Direction::Capture));
         let poll_fd_count = poll_desc_info.count() + 1;
@@ -567,7 +570,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
         poll_desc_info.fill(&mut poll_fds[1..]).unwrap();
     }
     poll_fds[0].fd = data.trigger_rcv_fd;
-    poll_fds[0].events = ::libc::POLLIN;
+    poll_fds[0].events = self::libc::POLLIN;
 
             
     let mut message = MidiMessage::new();
@@ -581,8 +584,8 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
             // No data pending
             if helpers::poll(&mut poll_fds, -1) >= 0 {
                 // Read from our "channel" whether we should stop the thread 
-                if poll_fds[0].revents & ::libc::POLLIN != 0 {
-                    let _res = unsafe { ::libc::read(poll_fds[0].fd, mem::transmute(&mut do_input), mem::size_of::<bool>() as ::libc::size_t) };
+                if poll_fds[0].revents & self::libc::POLLIN != 0 {
+                    let _res = unsafe { self::libc::read(poll_fds[0].fd, mem::transmute(&mut do_input), mem::size_of::<bool>() as self::libc::size_t) };
                 }
             }
             continue;
@@ -608,11 +611,11 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
         // If here, there should be data.
         let mut ev = match seq_input.event_input() {
             Ok(ev) => ev,
-            Err(ref e) if e.code() == -::libc::ENOSPC => {
+            Err(ref e) if e.code() == -self::libc::ENOSPC => {
                 let _ = writeln!(stderr(), "\nError in handle_input: ALSA MIDI input buffer overrun!\n");
                 continue;
             },
-            Err(ref e) if e.code() == -::libc::EAGAIN => {
+            Err(ref e) if e.code() == -self::libc::EAGAIN => {
                 let _ = writeln!(stderr(), "\nError in handle_input: no input event from ALSA MIDI input buffer!\n");
                 continue;
             },

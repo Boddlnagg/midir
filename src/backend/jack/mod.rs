@@ -1,6 +1,10 @@
-use std::{mem, slice};
+extern crate jack_sys;
+extern crate libc;
 
-use jack_sys::jack_nframes_t;
+use self::jack_sys::jack_nframes_t;
+use self::libc::c_void;
+
+use std::{mem, slice};
 
 mod wrappers;
 use self::wrappers::*;
@@ -72,7 +76,7 @@ impl MidiInput {
         
         let data_ptr = unsafe { mem::transmute_copy::<_, *mut InputHandlerData<T>>(&handler_data) };
         
-        self.client.as_mut().unwrap().set_process_callback(handle_input::<T>, data_ptr as *mut ::libc::c_void);
+        self.client.as_mut().unwrap().set_process_callback(handle_input::<T>, data_ptr as *mut c_void);
         self.client.as_mut().unwrap().activate();
         handler_data
     }
@@ -163,7 +167,7 @@ impl<T> Drop for MidiInputConnection<T> {
     }
 }
 
-extern "C" fn handle_input<T>(nframes: jack_nframes_t, arg: *mut ::libc::c_void) -> i32 {
+extern "C" fn handle_input<T>(nframes: jack_nframes_t, arg: *mut c_void) -> i32 {
     let data: &mut InputHandlerData<T> = unsafe { mem::transmute(arg) }; // TODO: get rid of transmute?
     
     // Is port created?
@@ -250,7 +254,7 @@ impl MidiOutput {
         
         let data_ptr = unsafe { mem::transmute_copy::<_, *mut OutputHandlerData>(&handler_data) };
         
-        self.client.as_mut().unwrap().set_process_callback(handle_output, data_ptr as *mut ::libc::c_void);
+        self.client.as_mut().unwrap().set_process_callback(handle_output, data_ptr as *mut c_void);
         self.client.as_mut().unwrap().activate();
         handler_data
     }
@@ -345,7 +349,7 @@ impl Drop for MidiOutputConnection {
     }
 }
 
-extern "C" fn handle_output(nframes: jack_nframes_t, arg: *mut ::libc::c_void) -> i32 {
+extern "C" fn handle_output(nframes: jack_nframes_t, arg: *mut c_void) -> i32 {
     let data: &mut OutputHandlerData = unsafe { mem::transmute(arg) }; 
     
     // Is port created?
