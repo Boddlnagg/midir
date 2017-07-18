@@ -9,8 +9,6 @@ extern crate jack_sys;
 #[cfg(feature = "jack")]
 #[macro_use] extern crate bitflags;
 
-#[cfg(target_os="macos")] extern crate coremidi;
-
 #[cfg(target_os="windows")] extern crate winapi;
 #[cfg(target_os="windows")] extern crate winmm as winmm_sys;
 

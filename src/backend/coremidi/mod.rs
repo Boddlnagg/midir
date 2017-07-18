@@ -1,10 +1,12 @@
+extern crate coremidi;
+
 use std::sync::{Arc, Mutex};
 
 use ::errors::*;
 use ::Ignore;
 use ::MidiMessage;
 
-use ::coremidi::*;
+use self::coremidi::*;
 
 mod external {
     #[link(name = "CoreAudio", kind = "framework")]

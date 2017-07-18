@@ -10,8 +10,8 @@ Cross-platform, realtime MIDI processing in Rust.
 **midir** currently supports the following platforms/backends: 
 - [x] ALSA (Linux)
 - [x] WinMM (Windows)
-- [ ] CoreMIDI (OS X, iOS), see [this issue](https://github.com/Boddlnagg/midir/issues/1)
-- [x] Jack (Linux, OS X), use the `jack` feature
+- [x] CoreMIDI (macOS, iOS (untested))
+- [x] Jack (Linux, macOS), use the `jack` feature
 
 A higher-level API for parsing and assembling MIDI messages might be added in the future.
 
