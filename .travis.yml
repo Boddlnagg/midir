@@ -13,18 +13,15 @@ rust:
 env:
   - FEATURES=''
   - FEATURES='jack'
-
-# Testing JACK on macOS is currently not set up
-matrix:
-  exclude:
-  - os: osx
-    env: FEATURES='jack'
   
 addons:
   apt:
     packages:
     - libasound2-dev
     - libjack-jackd2-dev
+
+install:
+  - if [ "$TRAVIS_OS_NAME" == "osx" ] && [ "$FEATURES" == "jack" ]; then curl -LOS https://github.com/jackaudio/jackaudio.github.com/releases/download/1.9.11/JackOSX.0.92_b3.zip && unzip JackOSX.0.92_b3.zip && sudo installer -pkg JackOSX.0.92_b3.pkg -target /; fi
 
 # the main build (we can't run tests since Travis doesn't have an audio driver)
 script:
