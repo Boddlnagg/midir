@@ -314,8 +314,7 @@ impl MidiOutputConnection {
     }
     
     pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
-        // TODO: get rid of to_vec(), there should be no need to allocate here
-        let packets = PacketBuffer::from_data(0, message.to_vec());
+        let packets = PacketBuffer::new(0, message);
         match self.details {
             OutputConnectionDetails::Explicit(ref port, ref dest) => {
                 port.send(&dest, &packets).map_err(|_| SendError::Other("error sending MIDI message to port"))

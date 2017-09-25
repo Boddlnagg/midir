@@ -29,7 +29,7 @@ alsa = "0.1.8"
 libc = "0.2.7"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-coremidi = "0.2.0"
+coremidi = "0.3.0"
 
 [target.'cfg(windows)'.dependencies]
 winapi = "0.2.4"
