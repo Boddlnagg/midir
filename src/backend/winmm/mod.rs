@@ -1,3 +1,6 @@
+extern crate winapi;
+extern crate winmm as winmm_sys;
+
 use std::{mem, ptr, slice};
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
@@ -7,9 +10,9 @@ use std::thread::sleep;
 use std::time::Duration;
 use memalloc::{allocate, deallocate};
 
-use winapi::*;
+use self::winapi::*;
 
-use winmm_sys::{
+use self::winmm_sys::{
     midiInGetNumDevs,
     midiInGetDevCapsW,
     midiInOpen,

@@ -1,6 +1,10 @@
 sudo: false
 language: rust
 
+os:
+  - linux
+  - osx
+
 # run builds for both the nightly and stable branch (no unstable features are used on Linux)
 rust:
   - nightly
@@ -15,6 +19,9 @@ addons:
     packages:
     - libasound2-dev
     - libjack-jackd2-dev
+
+install:
+  - if [ "$TRAVIS_OS_NAME" == "osx" ] && [ "$FEATURES" == "jack" ]; then curl -LOS https://github.com/jackaudio/jackaudio.github.com/releases/download/1.9.11/JackOSX.0.92_b3.zip && unzip JackOSX.0.92_b3.zip && sudo installer -pkg JackOSX.0.92_b3.pkg -target /; fi
 
 # the main build (we can't run tests since Travis doesn't have an audio driver)
 script:

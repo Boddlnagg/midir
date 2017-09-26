@@ -1,8 +1,8 @@
 use std::{mem, slice};
 use std::io::{Write, stderr}; 
 
-use winapi::*;
-use winmm_sys::midiInAddBuffer;
+use super::winapi::*;
+use super::winmm_sys::midiInAddBuffer;
 use super::HandlerData;
 use ::Ignore;
 
