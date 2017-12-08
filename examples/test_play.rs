@@ -15,7 +15,7 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<Error>> {
-    let midi_out = try!(MidiOutput::new("My Test Output"));
+    let midi_out = MidiOutput::new("My Test Output")?;
     
     // Get an output port (read from console if multiple are available)
     let out_port = match midi_out.port_count() {
@@ -30,15 +30,15 @@ fn run() -> Result<(), Box<Error>> {
                 println!("{}: {}", i, midi_out.port_name(i).unwrap());
             }
             print!("Please select output port: ");
-            try!(stdout().flush());
+            stdout().flush()?;
             let mut input = String::new();
-            try!(stdin().read_line(&mut input));
-            try!(input.trim().parse())
+            stdin().read_line(&mut input)?;
+            input.trim().parse()?
         }
     };
     
     println!("\nOpening connection");
-    let mut conn_out = try!(midi_out.connect(out_port, "midir-test").map_err(|e| e.kind()));
+    let mut conn_out = midi_out.connect(out_port, "midir-test")?;
     println!("Connection open. Listen!");
     {
         // Define a new scope in which the closure `play_note` borrows conn_out, so it can be called easily

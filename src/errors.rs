@@ -51,7 +51,7 @@ pub enum ConnectErrorKind {
     Other(&'static str)
 }
 
-impl Error for ConnectErrorKind {
+impl ConnectErrorKind {
     fn description(&self) -> &str {
         match *self {
             ConnectErrorKind::PortNumberOutOfRange => PORT_OUT_OF_RANGE_MSG,
@@ -103,10 +103,11 @@ impl<T> fmt::Display for ConnectError<T> {
     }
 }
 
-// This is currently not possible in stable Rust, but instead we can directly
-// implement a conversion to Box<Error> by boxing just the error kind.
-
-//impl<T: Reflect> Error for ConnectError<T>
+impl<T> Error for ConnectError<T> {
+    fn description(&self) -> &str {
+        self.kind.description()
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// An error that can occur when sending MIDI messages.
