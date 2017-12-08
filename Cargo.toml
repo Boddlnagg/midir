@@ -33,5 +33,4 @@ libc = "0.2.21"
 coremidi = "0.3.0"
 
 [target.'cfg(windows)'.dependencies]
-winapi = "0.2.4"
-winmm-sys = "0.2.0"
+winapi = { version = "0.3", features = ["mmsystem", "mmeapi"] }

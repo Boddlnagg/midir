@@ -1,10 +1,13 @@
 use std::{mem, slice};
-use std::io::{Write, stderr}; 
+use std::io::{Write, stderr};
 
-use super::winapi::*;
-use super::winmm_sys::midiInAddBuffer;
+use super::winapi::shared::basetsd::DWORD_PTR;
+use super::winapi::shared::minwindef::{DWORD, UINT};
+use super::winapi::um::mmeapi::midiInAddBuffer;
+use super::winapi::um::mmsystem::{HMIDIIN, MIDIHDR, MMSYSERR_NOERROR, MM_MIM_DATA,
+                                  MM_MIM_LONGDATA, MM_MIM_LONGERROR};
 use super::HandlerData;
-use ::Ignore;
+use Ignore;
 
 pub extern "system" fn handle_input<T>(_: HMIDIIN,
                 input_status: UINT, 

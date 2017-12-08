@@ -1,41 +1,30 @@
 extern crate winapi;
-extern crate winmm as winmm_sys;
 
 use std::{mem, ptr, slice};
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
 use std::sync::Mutex;
-use std::io::{stderr, Write};
+use std::io::{Write, stderr};
 use std::thread::sleep;
 use std::time::Duration;
 use memalloc::{allocate, deallocate};
 
-use self::winapi::*;
+use self::winapi::shared::basetsd::{DWORD_PTR, UINT_PTR};
+use self::winapi::shared::minwindef::{DWORD, UINT};
 
-use self::winmm_sys::{
-    midiInGetNumDevs,
-    midiInGetDevCapsW,
-    midiInOpen,
-    midiInStart,
-    midiInClose,
-    midiInReset,
-    midiInStop,
-    midiInAddBuffer,
-    midiInPrepareHeader,
-    midiInUnprepareHeader,
-    midiOutGetNumDevs,
-    midiOutGetDevCapsW,
-    midiOutOpen,
-    midiOutReset,
-    midiOutClose,
-    midiOutPrepareHeader,
-    midiOutUnprepareHeader,
-    midiOutLongMsg,
-    midiOutShortMsg,
-};
+use self::winapi::um::mmeapi::{midiInAddBuffer, midiInClose, midiInGetDevCapsW, midiInGetNumDevs,
+                               midiInOpen, midiInPrepareHeader, midiInReset, midiInStart,
+                               midiInStop, midiInUnprepareHeader, midiOutClose,
+                               midiOutGetDevCapsW, midiOutGetNumDevs, midiOutLongMsg, midiOutOpen,
+                               midiOutPrepareHeader, midiOutReset, midiOutShortMsg,
+                               midiOutUnprepareHeader};
 
-use ::{MidiMessage, Ignore};
-use ::errors::*;
+use self::winapi::um::mmsystem::{CALLBACK_FUNCTION, CALLBACK_NULL, HMIDIIN, HMIDIOUT, LPMIDIHDR,
+                                 MIDIERR_NOTREADY, MIDIERR_STILLPLAYING, MIDIHDR, MIDIINCAPSW,
+                                 MIDIOUTCAPSW, MMSYSERR_BADDEVICEID, MMSYSERR_NOERROR};
+
+use {Ignore, MidiMessage};
+use errors::*;
 
 mod handler;
 
