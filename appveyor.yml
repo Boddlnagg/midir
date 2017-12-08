@@ -1,3 +1,7 @@
+branches:
+  only:
+    - master
+
 environment:
   matrix:
   - TARGET: x86_64-pc-windows-msvc

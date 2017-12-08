@@ -1,5 +1,15 @@
 extern crate midir;
 
+fn main() {
+    match example::run() {
+        Ok(_) => (),
+        Err(err) => println!("Error: {}", err.description())
+    }
+}
+
+#[cfg(not(windows))] // virtual ports are not supported on Windows
+mod example {
+
 use std::thread::sleep;
 use std::time::Duration;
 use std::error::Error;
@@ -7,16 +17,9 @@ use std::error::Error;
 use midir::{MidiInput, MidiOutput, Ignore};
 use midir::os::unix::VirtualInput;
 
-fn main() {
-    match run() {
-        Ok(_) => (),
-        Err(err) => println!("Error: {}", err.description())
-    }
-}
-
 const LARGE_SYSEX_SIZE: usize = 5572; // This is the maximum that worked for me
 
-fn run() -> Result<(), Box<Error>> {
+pub fn run() -> Result<(), Box<Error>> {
     let mut midi_in = MidiInput::new("My Test Input")?;
     midi_in.ignore(Ignore::None);
     let midi_out = MidiOutput::new("My Test Output")?;
@@ -63,4 +66,11 @@ fn run() -> Result<(), Box<Error>> {
     println!("Closing virtual input ...");
     conn_in.close().0;
     Ok(())
+}
+}
+
+ // needed to compile successfully
+#[cfg(windows)] mod example {
+    use std::error::Error;
+    pub fn run() -> Result<(), Box<Error>> { Ok(()) }
 }
