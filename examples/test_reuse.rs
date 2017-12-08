@@ -49,10 +49,10 @@ fn run() -> Result<(), Box<Error>> {
             // The last of the three callback parameters is the object that we pass in as last parameter of `connect`.
             println!("{}: {:?} (len = {})", stamp, message, message.len());
             log.extend_from_slice(message);
-        }, log_all_bytes).map_err(|e| e.kind()));
+        }, log_all_bytes));
         
         // One could get the log back here out of the error
-        let mut conn_out = try!(midi_out.connect(out_port, "midir-test").map_err(|e| e.kind()));
+        let mut conn_out = try!(midi_out.connect(out_port, "midir-test"));
         
         println!("Connections open, enter `q` to exit ...");
         

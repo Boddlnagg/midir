@@ -38,7 +38,7 @@ fn run() -> Result<(), Box<Error>> {
     };
     
     println!("\nOpening connection");
-    let mut conn_out = try!(midi_out.connect(out_port, "midir-test").map_err(|e| e.kind()));
+    let mut conn_out = try!(midi_out.connect(out_port, "midir-test"));
     println!("Connection open. Listen!");
     {
         // Define a new scope in which the closure `play_note` borrows conn_out, so it can be called easily

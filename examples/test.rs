@@ -43,9 +43,9 @@ fn run() -> Result<(), Box<Error>> {
     println!("\nOpening connections");
     let conn_in = try!(midi_in.connect(in_port, "midir-test", |stamp, message, _| {
         println!("{}: {:?} (len = {})", stamp, message, message.len());
-    }, ()).map_err(|e| e.kind()));
+    }, ()));
     
-    let mut conn_out = try!(midi_out.connect(out_port, "midir-test").map_err(|e| e.kind()));
+    let mut conn_out = try!(midi_out.connect(out_port, "midir-test"));
     
     println!("Connections open, enter `q` to exit ...");
     

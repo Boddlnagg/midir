@@ -24,12 +24,12 @@ fn run() -> Result<(), Box<Error>> {
     println!("Creating virtual input port ...");
     let conn_in = try!(midi_in.create_virtual("midir-test", |stamp, message, _| {
         println!("{}: {:?} (len = {})", stamp, message, message.len());
-    }, ()).map_err(|e| e.kind()));
+    }, ()));
     
     assert_eq!(midi_out.port_count(), previous_count + 1);
     
     println!("Connecting to port '{}' ...", midi_out.port_name(previous_count).unwrap());
-    let mut conn_out = try!(midi_out.connect(previous_count, "midir-test").map_err(|e| e.kind()));
+    let mut conn_out = try!(midi_out.connect(previous_count, "midir-test"));
     println!("Starting to send messages ...");
     try!(conn_out.send(&[144, 60, 1]));
     sleep(Duration::from_millis(200));
@@ -44,13 +44,13 @@ fn run() -> Result<(), Box<Error>> {
     let previous_count = midi_in.port_count();
     
     println!("\nCreating virtual output port ...");
-    let mut conn_out = try!(midi_out.create_virtual("midir-test").map_err(|e| e.kind()));
+    let mut conn_out = try!(midi_out.create_virtual("midir-test"));
     assert_eq!(midi_in.port_count(), previous_count + 1);
     
     println!("Connecting to port '{}' ...", midi_in.port_name(previous_count).unwrap());
     let conn_in = try!(midi_in.connect(previous_count, "midir-test", |stamp, message, _| {
         println!("{}: {:?} (len = {})", stamp, message, message.len());
-    }, ()).map_err(|e| e.kind()));
+    }, ()));
     println!("Starting to send messages ...");
     try!(conn_out.send(&[144, 60, 1]));
     sleep(Duration::from_millis(200));
