@@ -1,29 +1,47 @@
 sudo: false
 language: rust
 
+# test only the master branch
+branches:
+  only:
+  - master
+
 os:
   - linux
   - osx
 
-# run builds for both the nightly and stable branch (no unstable features are used on Linux)
+# run builds for both nightly and stable Rust
 rust:
   - nightly
   - stable
-  
+
+# build with and without 'jack' feature (supported on both Linux and MacOS)
 env:
   - FEATURES=''
   - FEATURES='jack'
-  
+
+# build only on nightly for MacOS (takes too long otherwise)
+matrix:
+  exclude:
+  - os: osx
+    rust: stable
+
+# install dependencies on Linux (ALSA and JACK)
 addons:
   apt:
     packages:
     - libasound2-dev
     - libjack-jackd2-dev
 
+# install dependencies on MacOS (JACK)
 install:
   - if [ "$TRAVIS_OS_NAME" == "osx" ] && [ "$FEATURES" == "jack" ]; then curl -LOS https://github.com/jackaudio/jackaudio.github.com/releases/download/1.9.11/JackOSX.0.92_b3.zip && unzip JackOSX.0.92_b3.zip && sudo installer -pkg JackOSX.0.92_b3.pkg -target /; fi
 
-# the main build (we can't run tests since Travis doesn't have an audio driver)
+# the main build & test
+# (actually connecting to the sound driver in Travis only works on macOS without JACK)
 script:
+  - cargo build --verbose --features "$FEATURES"
   - |
-      cargo build --verbose --features "$FEATURES"
+    if [ "$TRAVIS_OS_NAME" == "osx" ] && [[ "$FEATURES" != *"jack"* ]]; then
+      cargo test --verbose --features "$FEATURES"
+    fi
