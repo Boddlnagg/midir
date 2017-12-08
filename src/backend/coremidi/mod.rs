@@ -38,7 +38,7 @@ impl MidiInput {
     }
     
     pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
-        let endpoint = try!(Source::from_index(port_number).ok_or(PortInfoError::PortNumberOutOfRange));
+        let endpoint = Source::from_index(port_number).ok_or(PortInfoError::PortNumberOutOfRange)?;
         match endpoint.display_name() {
             Some(name) => Ok(name),
             None => Err(PortInfoError::CannotRetrievePortName)
@@ -263,7 +263,7 @@ impl MidiOutput {
     }
     
     pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
-        let endpoint = try!(Destination::from_index(port_number).ok_or(PortInfoError::PortNumberOutOfRange));
+        let endpoint = Destination::from_index(port_number).ok_or(PortInfoError::PortNumberOutOfRange)?;
         match endpoint.display_name() {
             Some(name) => Ok(name),
             None => Err(PortInfoError::CannotRetrievePortName)

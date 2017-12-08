@@ -45,10 +45,10 @@ mod helpers {
             None => return Err(PortInfoError::PortNumberOutOfRange)
         };
 
-        let cinfo = try!(s.get_any_client_info(pinfo.get_client()).map_err(|_| PortInfoError::CannotRetrievePortName));
+        let cinfo = s.get_any_client_info(pinfo.get_client()).map_err(|_| PortInfoError::CannotRetrievePortName)?;
         let mut output = String::new();
         write!(&mut output, "{} {}:{}", 
-            try!(cinfo.get_name().map_err(|_| PortInfoError::CannotRetrievePortName)),
+            cinfo.get_name().map_err(|_| PortInfoError::CannotRetrievePortName)?,
             pinfo.get_client(), // These lines added to make sure devices are listed
             pinfo.get_port()    // with full portnames added to ensure individual device names
         ).unwrap();
@@ -138,8 +138,8 @@ impl MidiInput {
             Err(_) => { return Err(InitError); }
         };
         
-        let c_client_name = try!(CString::new(client_name).map_err(|_| InitError));
-        try!(seq.set_client_name(&c_client_name).map_err(|_| InitError));
+        let c_client_name = CString::new(client_name).map_err(|_| InitError)?;
+        seq.set_client_name(&c_client_name).map_err(|_| InitError)?;
         
         Ok(MidiInput {
             ignore_flags: Ignore::None,
@@ -418,8 +418,8 @@ impl MidiOutput {
             Err(_) => { return Err(InitError); }
         };
         
-        let c_client_name = try!(CString::new(client_name).map_err(|_| InitError));
-        try!(seq.set_client_name(&c_client_name).map_err(|_| InitError));
+        let c_client_name = CString::new(client_name).map_err(|_| InitError)?;
+        seq.set_client_name(&c_client_name).map_err(|_| InitError)?;
         
         Ok(MidiOutput {
             seq: Some(seq),
