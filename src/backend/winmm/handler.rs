@@ -16,12 +16,7 @@ pub extern "system" fn handle_input<T>(_: HMIDIIN,
     let data: &mut HandlerData<T> = unsafe { &mut *(instance_ptr as *mut HandlerData<T>) };
     
     // Calculate time stamp.
-    let timestamp = timestamp as u64;
-    data.message.timestamp = match data.last_time {
-        None => 0.0,
-        Some(last) => (timestamp - last) as f64 * 0.001
-    };
-    data.last_time = Some(timestamp);
+    data.message.timestamp = timestamp as u64 * 1000; // milliseconds -> microseconds
     
     if input_status == MM_MIM_DATA { // Channel or system message
         // Make sure the first byte is a status byte.
