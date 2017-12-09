@@ -127,7 +127,7 @@ struct HandlerData<T: 'static> {
     ignore_flags: Ignore,
     seq: Seq,
     trigger_rcv_fd: i32,
-    callback: Box<FnMut(f64, &[u8], &mut T)+Send>,
+    callback: Box<FnMut(u64, &[u8], &mut T) + Send>,
     queue_id: i32, // an input queue is needed to get timestamped events
 }
 
@@ -219,7 +219,7 @@ impl MidiInput {
     pub fn connect<F, T: Send>(
         mut self, port_number: usize, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
-        where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
+        where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
         
         let trigger_fds = match self.init_trigger() {
             Ok(fds) => fds,
@@ -292,7 +292,7 @@ impl MidiInput {
     pub fn create_virtual<F, T: Send>(
         mut self, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
-    where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
+    where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
         let trigger_fds = match self.init_trigger() {
             Ok(fds) => fds,
             Err(()) => { return Err(ConnectError::other("could not create communication pipe for ALSA handler", self)); }
@@ -549,7 +549,6 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
     use self::alsa::PollDescriptors;
     use self::alsa::seq::{EventType, Connect};
 
-    let mut last_time: Option<u64> = None;
     let mut continue_sysex: bool = false;
     
     // ALSA documentation says:
@@ -685,13 +684,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
         let secs = alsa_time.as_secs();
         let nsecs = alsa_time.subsec_nanos();
 
-        let timestamp = ( secs as u64 * 1_000_000 ) + ( nsecs as u64/1_000 );
-        message.timestamp = match last_time {
-            None => 0.0,
-            Some(last) => (timestamp - last) as f64 * 0.000001
-        };
-        last_time = Some(timestamp);
-        
+        message.timestamp = ( secs as u64 * 1_000_000 ) + ( nsecs as u64 / 1_000 );        
         (data.callback)(message.timestamp, &message.bytes, user_data);
     }
     
