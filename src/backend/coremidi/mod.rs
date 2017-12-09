@@ -59,14 +59,8 @@ impl MidiInput {
                 timestamp = unsafe { external::AudioGetCurrentHostTime() };
             }
 
-            let relative_timestamp = match handler_data.last_time {
-                None => 0,
-                Some(last) => timestamp - last
-            };
-            handler_data.last_time = Some(timestamp);
-
             if !*continue_sysex {
-                message.timestamp = unsafe { external::AudioConvertHostTimeToNanos(relative_timestamp) } as f64 * 0.000000001;
+                message.timestamp = unsafe { external::AudioConvertHostTimeToNanos(timestamp) } as u64 / 1000;
             }
 
             let mut cur_byte = 0;
@@ -147,7 +141,7 @@ impl MidiInput {
     pub fn connect<F, T: Send + 'static>(
         self, port_number: usize, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
-        where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
+        where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
         let src = match Source::from_index(port_number) {
             Some(src) => src,
             None => return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self))
@@ -155,7 +149,6 @@ impl MidiInput {
 
         let handler_data = Arc::new(Mutex::new(HandlerData {
             message: MidiMessage::new(),
-            last_time: None,
             ignore_flags: self.ignore_flags,
             continue_sysex: false,
             callback: Box::new(callback),
@@ -181,11 +174,10 @@ impl MidiInput {
     pub fn create_virtual<F, T: Send + 'static>(
         self, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
-    where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
+    where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
 
         let handler_data = Arc::new(Mutex::new(HandlerData {
             message: MidiMessage::new(),
-            last_time: None,
             ignore_flags: self.ignore_flags,
             continue_sysex: false,
             callback: Box::new(callback),
@@ -239,10 +231,9 @@ impl<T> MidiInputConnection<T> {
 /// offsets after monomorphization.
 struct HandlerData<T> {
     message: MidiMessage,
-    last_time: Option<u64>,
     ignore_flags: Ignore,
     continue_sysex: bool,
-    callback: Box<FnMut(f64, &[u8], &mut T)+Send>,
+    callback: Box<FnMut(u64, &[u8], &mut T) + Send>,
     user_data: Option<T>
 }
 
@@ -307,6 +298,8 @@ pub struct MidiOutputConnection {
     client: Client,
     details: OutputConnectionDetails
 }
+
+unsafe impl Send for MidiOutputConnection {}
 
 impl MidiOutputConnection {
     pub fn close(self) -> MidiOutput {
