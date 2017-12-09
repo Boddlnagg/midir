@@ -40,9 +40,15 @@ impl MidiInput {
     
     /// Connect to a specified MIDI input port in order to receive messages.
     /// For each incoming MIDI message, the provided `callback` function will
-    /// be called. Additional data that should be passed whenever the callback
-    /// is invoked can be specified by `data`. Use the empty tuple `()` if you
-    /// do not want to pass any additional data.
+    /// be called. The first parameter of the callback function is a timestamp
+    /// (in microseconds) designating the time since some unspecified point in
+    /// the past (which will not change during the lifetime of a
+    /// `MidiInputConnection`). The second parameter contains the actual bytes
+    /// of the MIDI message.
+    ///
+    /// Additional data that should be passed whenever the callback is
+    /// invoked can be specified by `data`. Use the empty tuple `()` if
+    /// you do not want to pass any additional data.
     ///
     /// The connection will be kept open as long as the returned
     /// `MidiInputConnection` is kept alive.
