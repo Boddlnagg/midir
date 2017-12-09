@@ -68,11 +68,10 @@ pub struct MidiInputConnection<T> {
 /// offsets after monomorphization.
 struct HandlerData<T> {
     message: MidiMessage,
-    last_time: Option<u64>,
     sysex_buffer: [LPMIDIHDR; RT_SYSEX_BUFFER_COUNT],
     in_handle: Option<Mutex<HMIDIIN>>,
     ignore_flags: Ignore,
-    callback: Box<FnMut(f64, &[u8], &mut T)+Send>,
+    callback: Box<FnMut(u64, &[u8], &mut T) + Send + 'static>,
     user_data: Option<T>
 }
 
@@ -104,11 +103,10 @@ impl MidiInput {
     pub fn connect<F, T: Send>(
         self, port_number: usize, _port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
-        where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
+        where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
         
         let mut handler_data = Box::new(HandlerData {
             message: MidiMessage::new(),
-            last_time: None,
             sysex_buffer: unsafe { mem::uninitialized() },
             in_handle: None,
             ignore_flags: self.ignore_flags,
