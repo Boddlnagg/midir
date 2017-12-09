@@ -227,6 +227,8 @@ pub struct MidiOutputConnection {
     out_handle: HMIDIOUT,
 }
 
+unsafe impl Send for MidiOutputConnection {}
+
 impl MidiOutput {
     pub fn new(_client_name: &str) -> Result<Self, InitError> {
         Ok(MidiOutput)
