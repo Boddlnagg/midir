@@ -1,6 +1,6 @@
 [package]
 name = "midir"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Patrick Reisert"]
 description = "A cross-platform, realtime MIDI processing library, inspired by RtMidi."
 repository = "https://github.com/Boddlnagg/midir"

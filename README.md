@@ -15,5 +15,5 @@ Cross-platform, realtime MIDI processing in Rust.
 
 A higher-level API for parsing and assembling MIDI messages might be added in the future.
 
-## Example
-Have a look at [`examples/test.rs`](examples/test.rs) and run it directly using `cargo run --example test`.
+## Documentation & Example
+API docs can be found at [docs.rs](https://docs.rs/crate/midir/). You can find some examples in the [`examples`](examples/) directory. Or simply run `cargo run --example test_play` after cloning this repository.
