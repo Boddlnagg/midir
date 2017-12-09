@@ -16,9 +16,8 @@ const OUTPUT_RINGBUFFER_SIZE: usize = 16384;
 
 struct InputHandlerData<T> {
     port: Option<MidiPort>,
-    last_time: Option<u64>,
     ignore_flags: Ignore,
-    callback: Box<FnMut(f64, &[u8], &mut T)+Send>,
+    callback: Box<FnMut(u64, &[u8], &mut T) + Send>,
     user_data: Option<T>
 }
 
@@ -64,11 +63,10 @@ impl MidiInput {
     
     fn activate_callback<F, T: Send>(&mut self, callback: F, data: T)
             -> Box<InputHandlerData<T>>
-            where F: FnMut(f64, &[u8], &mut T) + Send + 'static
+            where F: FnMut(u64, &[u8], &mut T) + Send + 'static
     {
         let handler_data = Box::new(InputHandlerData {
             port: None,
-            last_time: None,
             ignore_flags: self.ignore_flags,
             callback: Box::new(callback),
             user_data: Some(data)
@@ -84,7 +82,7 @@ impl MidiInput {
     pub fn connect<F, T: Send>(
         mut self, port_number: usize, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
-        where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
+        where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
         
         let source_port_name = {
             let ports = self.client.as_ref().unwrap().get_midi_ports(PortIsOutput);
@@ -123,7 +121,7 @@ impl MidiInput {
     pub fn create_virtual<F, T: Send>(
         mut self, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
-    where F: FnMut(f64, &[u8], &mut T) + Send + 'static {
+    where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
     
         let mut handler_data = self.activate_callback(callback, data);
         
@@ -189,14 +187,7 @@ extern "C" fn handle_input<T>(nframes: jack_nframes_t, arg: *mut c_void) -> i32 
                 message.bytes.push(unsafe { *event.buffer.offset(i as isize) });
             }
             
-            // Compute the delta time.
-            let time = Client::get_time();
-            message.timestamp = match data.last_time {
-                None => 0.0,
-                Some(last) => (time - last) as f64 * 0.000001
-            };
-            data.last_time = Some(time);
-            
+            message.timestamp = Client::get_time(); // this is in microseconds
             (data.callback)(message.timestamp, &message.bytes, data.user_data.as_mut().unwrap());
         }
     }
