@@ -13,7 +13,7 @@ use ::{MidiMessage, Ignore};
 use ::errors::*;
 
 mod helpers {
-    use super::alsa::seq::{Seq, ClientIter, PortIter, PortInfo, PortCap, MidiEvent, MIDI_GENERIC, SYNTH};
+    use super::alsa::seq::{Seq, ClientIter, PortIter, PortInfo, PortCap, MidiEvent, MIDI_GENERIC, SYNTH, APPLICATION};
     use ::errors::PortInfoError;
 
     pub fn poll(fds: &mut [super::libc::pollfd], timeout: i32) -> i32 {
@@ -23,7 +23,7 @@ mod helpers {
     #[inline]
     pub fn get_port_count(s: &Seq, capability: PortCap) -> usize {
         ClientIter::new(s).flat_map(|c| PortIter::new(s, c.get_client()))
-                          .filter(|p| p.get_type().intersects(MIDI_GENERIC | SYNTH))
+                          .filter(|p| p.get_type().intersects(MIDI_GENERIC | SYNTH | APPLICATION))
                           .filter(|p| p.get_capability().intersects(capability))
                           .count()
     }
@@ -31,7 +31,7 @@ mod helpers {
     #[inline]
     pub fn get_port_info(s: &Seq, capability: PortCap, port_number: usize) -> Option<PortInfo> {
         ClientIter::new(s).flat_map(|c| PortIter::new(s, c.get_client()))
-                          .filter(|p| p.get_type().intersects(MIDI_GENERIC | SYNTH))
+                          .filter(|p| p.get_type().intersects(MIDI_GENERIC | SYNTH | APPLICATION))
                           .filter(|p| p.get_capability().intersects(capability))
                           .nth(port_number)
     }
