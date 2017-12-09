@@ -77,6 +77,8 @@ mod helpers {
         buffer_size: u32
     }
 
+    unsafe impl Send for EventEncoder {}
+
     impl EventEncoder {
         #[inline]
         pub fn new(buffer_size: u32) -> EventEncoder {
@@ -363,7 +365,17 @@ impl<T> MidiInputConnection<T> {
         
         let thread = self.thread.take().unwrap(); 
         // Join the thread to get the handler_data back
-        let (handler_data, user_data) = thread.join().unwrap(); // TODO: don't use unwrap here
+        let (handler_data, user_data) = match thread.join() {
+            Ok(data) => data,
+            // TODO: handle this more gracefully?
+            Err(e) => {
+                if let Some(e) = e.downcast_ref::<&'static str>() {
+                    panic!("Error when joining ALSA thread: {}", e);
+                } else {
+                    panic!("Unknown error when joining ALSA thread: {:?}", e);
+                }
+            }
+        };
         
         // TODO: find out why snd_seq_unsubscribe_port takes a long time if there was not yet any input message
         if let Some(ref subscription) = self.subscription {
