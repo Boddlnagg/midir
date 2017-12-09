@@ -33,6 +33,7 @@ fn end_to_end() {
     conn_out.send(&[144, 60, 1]).unwrap();
     sleep(Duration::from_millis(200));
     conn_out.send(&[144, 60, 0]).unwrap();
+    sleep(Duration::from_millis(50));
     println!("Closing output ...");
     let midi_out = conn_out.close();
     println!("Closing virtual input ...");
@@ -58,6 +59,7 @@ fn end_to_end() {
     conn_out.send(&[144, 60, 1]).unwrap();
     sleep(Duration::from_millis(200));
     conn_out.send(&[144, 60, 0]).unwrap();
+    sleep(Duration::from_millis(50));
     println!("Closing input ...");
     let midi_in = conn_in.close().0;
     println!("Closing virtual output ...");
