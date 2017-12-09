@@ -1,5 +1,6 @@
 extern crate libc;
 extern crate alsa;
+extern crate nix;
 
 use std::mem;
 use std::thread::{Builder, JoinHandle};
@@ -622,16 +623,16 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
         // If here, there should be data.
         let mut ev = match seq_input.event_input() {
             Ok(ev) => ev,
-            Err(ref e) if e.code() == -self::libc::ENOSPC => {
+            Err(ref e) if e.errno() == Some(self::nix::errno::ENOSPC) => {
                 let _ = writeln!(stderr(), "\nError in handle_input: ALSA MIDI input buffer overrun!\n");
                 continue;
             },
-            Err(ref e) if e.code() == -self::libc::EAGAIN => {
+            Err(ref e) if e.errno() == Some(self::nix::errno::EAGAIN) => {
                 let _ = writeln!(stderr(), "\nError in handle_input: no input event from ALSA MIDI input buffer!\n");
                 continue;
             },
             Err(ref e) => {
-                let _ = writeln!(stderr(), "\nError in handle_input: unknown ALSA MIDI input error ({})!\n", e.code());
+                let _ = writeln!(stderr(), "\nError in handle_input: unknown ALSA MIDI input error ({})!\n", e);
                 //perror("System reports");
                 continue;
             }
