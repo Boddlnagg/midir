@@ -22,7 +22,9 @@ install:
   - rustc -V
   - cargo -V
 
-build: false
+build_script:
+  - cargo build --verbose --features "%FEATURES%"
 
 test_script:
-  - cargo build --verbose --features "%FEATURES%"
+  - cargo test --features "%FEATURES%"
+  - cargo run --features "%FEATURES%" --example test_list_ports
