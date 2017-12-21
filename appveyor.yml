@@ -14,6 +14,8 @@ environment:
     FEATURES: "winrt"
   - TARGET: i686-pc-windows-gnu
     FEATURES: "winrt"
+  - TARGET: x86_64-pc-windows-gnu
+    FEATURES: "winrt"
 install:
   - ps: Start-FileDownload "https://static.rust-lang.org/dist/rust-nightly-${env:TARGET}.exe"
   - rust-nightly-%TARGET%.exe /VERYSILENT /NORESTART /DIR="C:\Program Files (x86)\Rust"
@@ -27,4 +29,4 @@ build_script:
 
 test_script:
   - cargo test --features "%FEATURES%"
-  - cargo run --features "%FEATURES%" --example test_list_ports
+  - cargo build --features "%FEATURES%" --example test_list_ports
