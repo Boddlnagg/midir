@@ -5,8 +5,15 @@ branches:
 environment:
   matrix:
   - TARGET: x86_64-pc-windows-msvc
+    FEATURES: " "
   - TARGET: i686-pc-windows-msvc
+    FEATURES: " "
   - TARGET: i686-pc-windows-gnu
+    FEATURES: " "
+  - TARGET: x86_64-pc-windows-msvc
+    FEATURES: "winrt"
+  - TARGET: i686-pc-windows-gnu
+    FEATURES: "winrt"
 install:
   - ps: Start-FileDownload "https://static.rust-lang.org/dist/rust-nightly-${env:TARGET}.exe"
   - rust-nightly-%TARGET%.exe /VERYSILENT /NORESTART /DIR="C:\Program Files (x86)\Rust"
@@ -18,4 +25,4 @@ install:
 build: false
 
 test_script:
-  - cargo build --verbose
+  - cargo build --verbose --features "%FEATURES%"
