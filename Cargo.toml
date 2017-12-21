@@ -23,6 +23,7 @@ bitflags = "0.3"
 memalloc = "0.1.0"
 jack-sys = { version = "0.1.0", optional = true }
 libc = { version = "0.2.21", optional = true }
+winrt = { git = "https://github.com/Boddlnagg/winrt-rust/", branch = "master", features = ["windows-devices", "windows-storage"], optional = true}
 
 [target.'cfg(target_os = "linux")'.dependencies]
 alsa = "0.2"
