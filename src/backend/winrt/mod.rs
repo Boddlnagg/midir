@@ -29,12 +29,12 @@ impl MidiInput {
     }
     
     pub fn port_count(&self) -> usize {
-        let device_collection = DeviceInformation::find_all_async_aqs_filter(&self.selector.make_reference()).expect("find_all_async failed").blocking_get();
+        let device_collection = DeviceInformation::find_all_async_aqs_filter(&self.selector.make_reference()).unwrap().blocking_get().expect("find_all_async failed");
         unsafe { device_collection.get_size().expect("get_size failed") as usize }
     }
     
     pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
-        let device_collection = DeviceInformation::find_all_async_aqs_filter(&self.selector.make_reference()).expect("find_all_async failed").blocking_get();
+        let device_collection = DeviceInformation::find_all_async_aqs_filter(&self.selector.make_reference()).unwrap().blocking_get().expect("find_all_async failed");
         let device_name;
         unsafe {
             let device_info = device_collection.get_at(port_number as u32).map_err(|_| PortInfoError::PortNumberOutOfRange)?;
@@ -75,7 +75,7 @@ impl MidiInput {
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
         where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
 
-        let device_collection = DeviceInformation::find_all_async_aqs_filter(&self.selector.make_reference()).expect("find_all_async failed").blocking_get();
+        let device_collection = DeviceInformation::find_all_async_aqs_filter(&self.selector.make_reference()).unwrap().blocking_get().expect("find_all_async failed");
         unsafe {
             let device_info = match device_collection.get_at(port_number as u32) {
                 Ok(info) => info,
@@ -86,7 +86,10 @@ impl MidiInput {
                 Err(_) => return Err(ConnectError::other("get_id failed", self))
             };
             let in_port = match MidiInPort::from_id_async(&device_id.make_reference()) {
-                Ok(port) => port.blocking_get(),
+                Ok(port_async) => match port_async.blocking_get() {
+                    Ok(port) => port,
+                    Err(_) => return Err(ConnectError::other("getting result from MidiInPort::from_id_async failed", self))
+                }
                 Err(_) => return Err(ConnectError::other("MidiInPort::from_id_async failed", self))
             };
 
@@ -157,12 +160,12 @@ impl MidiOutput {
     }
     
     pub fn port_count(&self) -> usize {
-        let device_collection = DeviceInformation::find_all_async_aqs_filter(&self.selector.make_reference()).expect("find_all_async failed").blocking_get();
+        let device_collection = DeviceInformation::find_all_async_aqs_filter(&self.selector.make_reference()).unwrap().blocking_get().expect("find_all_async failed");
         unsafe { device_collection.get_size().expect("get_size failed") as usize }
     }
     
     pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
-        let device_collection = DeviceInformation::find_all_async_aqs_filter(&self.selector.make_reference()).expect("find_all_async failed").blocking_get();
+        let device_collection = DeviceInformation::find_all_async_aqs_filter(&self.selector.make_reference()).unwrap().blocking_get().expect("find_all_async failed");
         let device_name;
         unsafe {
             let device_info = device_collection.get_at(port_number as u32).map_err(|_| PortInfoError::PortNumberOutOfRange)?;
@@ -172,7 +175,7 @@ impl MidiOutput {
     }
     
     pub fn connect(self, port_number: usize, _port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
-        let device_collection = DeviceInformation::find_all_async_aqs_filter(&self.selector.make_reference()).expect("find_all_async failed").blocking_get();
+        let device_collection = DeviceInformation::find_all_async_aqs_filter(&self.selector.make_reference()).unwrap().blocking_get().expect("find_all_async failed");
         unsafe {
             let device_info = match device_collection.get_at(port_number as u32) {
                 Ok(info) => info,
@@ -183,7 +186,10 @@ impl MidiOutput {
                 Err(_) => return Err(ConnectError::other("get_id failed", self))
             };
             let out_port = match MidiOutPort::from_id_async(&device_id.make_reference()) {
-                Ok(port) => port.blocking_get(),
+                Ok(port_async) => match port_async.blocking_get() {
+                    Ok(port) => port,
+                    Err(_) => return Err(ConnectError::other("getting result from MidiOutPort::from_id_async failed", self))
+                }
                 Err(_) => return Err(ConnectError::other("MidiOutPort::from_id_async failed", self))
             };
             Ok(MidiOutputConnection { rt: self.rt, port: out_port })
