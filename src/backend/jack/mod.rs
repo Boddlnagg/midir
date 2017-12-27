@@ -166,13 +166,13 @@ impl<T> Drop for MidiInputConnection<T> {
 }
 
 extern "C" fn handle_input<T>(nframes: jack_nframes_t, arg: *mut c_void) -> i32 {
-    let data: &mut InputHandlerData<T> = unsafe { mem::transmute(arg) }; // TODO: get rid of transmute?
+    let data: &mut InputHandlerData<T> = unsafe { &mut *(arg as *mut InputHandlerData<T>) };
     
     // Is port created?
     if let Some(ref port) = data.port {
         let buff = port.get_midi_buffer(nframes);
         
-        let mut message = MidiMessage::new();
+        let mut message = MidiMessage::new(); // TODO: create MidiMessage once and reuse its buffer for every handle_input call
         
         // We have midi events in buffer
         let evcount = buff.get_event_count();
