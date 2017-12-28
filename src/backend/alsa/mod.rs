@@ -48,8 +48,9 @@ mod helpers {
 
         let cinfo = s.get_any_client_info(pinfo.get_client()).map_err(|_| PortInfoError::CannotRetrievePortName)?;
         let mut output = String::new();
-        write!(&mut output, "{} {}:{}", 
+        write!(&mut output, "{}:{} {}:{}", 
             cinfo.get_name().map_err(|_| PortInfoError::CannotRetrievePortName)?,
+            pinfo.get_name().map_err(|_| PortInfoError::CannotRetrievePortName)?,
             pinfo.get_client(), // These lines added to make sure devices are listed
             pinfo.get_port()    // with full portnames added to ensure individual device names
         ).unwrap();
