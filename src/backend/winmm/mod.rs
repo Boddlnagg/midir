@@ -229,7 +229,7 @@ impl MidiOutput {
     
     pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
         let mut device_caps: MIDIOUTCAPSW = unsafe { mem::uninitialized() };
-        let result = unsafe { midiOutGetDevCapsW(port_number as UINT_PTR, &mut device_caps, mem::size_of::<MIDIINCAPSW>() as u32) };
+        let result = unsafe { midiOutGetDevCapsW(port_number as UINT_PTR, &mut device_caps, mem::size_of::<MIDIOUTCAPSW>() as u32) };
         if result == MMSYSERR_BADDEVICEID {
             return Err(PortInfoError::PortNumberOutOfRange)
         } else if result != MMSYSERR_NOERROR {
