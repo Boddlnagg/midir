@@ -83,15 +83,16 @@ impl Client {
     }
     
     pub fn get_midi_ports(&self, flags: PortFlags) -> PortInfos {
-        unsafe {
-            let ports_ptr = jack_get_ports(self.p, ptr::null_mut(), JACK_DEFAULT_MIDI_TYPE.as_ptr() as *const i8, flags.bits() as u64);
-            let count = if ports_ptr.is_null() {
-                0
-            } else {
-                (0isize..).find(|i| (*ports_ptr.offset(*i)).is_null()).unwrap() as usize    
-            };
-            PortInfos { p: slice::from_raw_parts(ports_ptr, count) }
-        }
+        let ports_ptr = unsafe { jack_get_ports(self.p, ptr::null_mut(), JACK_DEFAULT_MIDI_TYPE.as_ptr() as *const i8, flags.bits() as u64) };
+        let slice = if ports_ptr.is_null() {
+            &[]
+        } else {
+            unsafe { 
+                let count = (0isize..).find(|i| (*ports_ptr.offset(*i)).is_null()).unwrap() as usize;
+                slice::from_raw_parts(ports_ptr, count)
+            }
+        };
+        PortInfos { p: slice }
     }
     
     pub fn register_midi_port(&mut self, name: &str, flags: PortFlags) -> Result<MidiPort, ()> {
@@ -166,7 +167,7 @@ impl<'a> Index<usize> for PortInfos<'a> {
 
 impl<'a> Drop for PortInfos<'a> {
     fn drop(&mut self) {
-        if !self.p.as_ptr().is_null() {
+        if self.p.len() > 0 {
             unsafe { jack_free(self.p.as_ptr() as *mut _) }
         }
     }
