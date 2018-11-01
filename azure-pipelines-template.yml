@@ -7,32 +7,35 @@ jobs:
       stable:
         rustup_toolchain: stable-${{ parameters.target }}
         features: ""
-#      beta:
-#        rustup_toolchain: beta-${{ parameters.target }}
-#        features: ""
-#      nightly:
-#        rustup_toolchain: nightly-${{ parameters.target }}
-#        features: ""
+      ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/master') }}:
+        beta:
+          rustup_toolchain: beta-${{ parameters.target }}
+          features: ""
+        nightly:
+          rustup_toolchain: nightly-${{ parameters.target }}
+          features: ""
       ${{ if startsWith(parameters.name, 'Windows') }}:
         stable-winrt:
           rustup_toolchain: stable-${{ parameters.target }}
           features: "winrt"
-#        beta-winrt:
-#          rustup_toolchain: beta-${{ parameters.target }}
-#          features: "winrt"
-#        nightly-winrt:
-#          rustup_toolchain: nightly-${{ parameters.target }}
-#          features: "winrt"
+        ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/master') }}:
+          beta-winrt:
+            rustup_toolchain: beta-${{ parameters.target }}
+            features: "winrt"
+          nightly-winrt:
+            rustup_toolchain: nightly-${{ parameters.target }}
+            features: "winrt"
       ${{ if not(startsWith(parameters.name, 'Windows')) }}:
         stable-jack:
           rustup_toolchain: stable-${{ parameters.target }}
           features: "jack"
-#        beta-jack:
-#          rustup_toolchain: beta-${{ parameters.target }}
-#          features: "jack"
-#        nightly-jack:
-#          rustup_toolchain: nightly-${{ parameters.target }}
-#          features: "jack"
+        ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/master') }}:
+          beta-jack:
+            rustup_toolchain: beta-${{ parameters.target }}
+            features: "jack"
+          nightly-jack:
+            rustup_toolchain: nightly-${{ parameters.target }}
+            features: "jack"
   steps:
   - ${{ if not(startsWith(parameters.name, 'Windows')) }}:
     # Linux and macOS
