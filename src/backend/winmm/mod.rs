@@ -127,7 +127,7 @@ impl MidiInput {
                 lpNext: ptr::null_mut(),
                 reserved: 0,
                 dwOffset: 0,
-                dwReserved: [0; 4],
+                dwReserved: unsafe { mem::zeroed() },
             }));
             
             // TODO: are those buffers ever freed if an error occurs here (altough these calls probably only fail with out-of-memory)?
@@ -281,7 +281,7 @@ impl MidiOutputConnection {
                 lpNext: ptr::null_mut(),
                 reserved: 0,
                 dwOffset: 0,
-                dwReserved: [0; 4],
+                dwReserved: unsafe { mem::zeroed() },
             };
             
             let result = unsafe { midiOutPrepareHeader(self.out_handle, &mut sysex, mem::size_of::<MIDIHDR>() as u32) };

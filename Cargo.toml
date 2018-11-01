@@ -9,10 +9,6 @@ keywords = ["midi", "audio", "music", "sound"]
 categories = ["multimedia::audio", "api-bindings"]
 license = "MIT"
 
-[badges]
-travis-ci = { repository = "Boddlnagg/midir" }
-appveyor = { repository = "Boddlnagg/midir" }
-
 [features]
 default = []
 avoid_timestamping = []
