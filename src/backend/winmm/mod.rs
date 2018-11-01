@@ -85,7 +85,8 @@ impl MidiInput {
         } else if result != MMSYSERR_NOERROR {
             return Err(PortInfoError::CannotRetrievePortName)
         }
-        let output = from_wide_ptr(device_caps.szPname.as_ptr(), device_caps.szPname.len()).to_string_lossy().into_owned();
+        let pname: &[u16] = unsafe { &device_caps.szPname }; // requires unsafe because of packed alignment ...
+        let output = from_wide_ptr(pname.as_ptr(), pname.len()).to_string_lossy().into_owned();
         Ok(output)
     }
     
@@ -235,7 +236,8 @@ impl MidiOutput {
         } else if result != MMSYSERR_NOERROR {
             return Err(PortInfoError::CannotRetrievePortName)
         }
-        let output = from_wide_ptr(device_caps.szPname.as_ptr(), device_caps.szPname.len()).to_string_lossy().into_owned();
+        let pname: &[u16] = unsafe { &device_caps.szPname }; // requires unsafe because of packed alignment ...
+        let output = from_wide_ptr(pname.as_ptr(), pname.len()).to_string_lossy().into_owned();
         Ok(output)
     }
     
