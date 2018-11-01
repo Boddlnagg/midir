@@ -6,10 +6,10 @@ jobs:
     matrix:
       stable:
         rustup_toolchain: stable
-      beta:
-        rustup_toolchain: beta
-      nightly:
-        rustup_toolchain: nightly
+#      beta:
+#        rustup_toolchain: beta
+#      nightly:
+#        rustup_toolchain: nightly
   steps:
   - ${{ if not(startsWith(parameters.name, 'Windows')) }}:
     # Linux and macOS.
@@ -18,6 +18,11 @@ jobs:
         export PATH="$HOME/.cargo/bin:$PATH"
         echo "##vso[task.setvariable variable=PATH;]$PATH"
       displayName: Install rust
+  - ${{ if startsWith(parameters.name, 'Linux') }}:
+    # Linux only.
+    - script: |
+        sudo apt-get update && sudo apt-get install libasound2-dev libjack-jackd2-dev
+      displayName: Install ALSA and Jack dependencies
   - ${{ if startsWith(parameters.name, 'Windows') }}:
     # Windows.
     - script: |
