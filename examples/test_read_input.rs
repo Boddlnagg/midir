@@ -38,7 +38,7 @@ fn run() -> Result<(), Box<Error>> {
         }
     };
     
-    println!("\nOpening connections");
+    println!("\nOpening connection");
     let in_port_name = midi_in.port_name(in_port)?;
 
     // _conn_in needs to be a named parameter, because it needs to be kept alive until the end of the scope
@@ -46,11 +46,11 @@ fn run() -> Result<(), Box<Error>> {
         println!("{}: {:?} (len = {})", stamp, message, message.len());
     }, ())?;
     
-    println!("Connections open, reading input from '{}' (press enter to exit) ...", in_port_name);
+    println!("Connection open, reading input from '{}' (press enter to exit) ...", in_port_name);
 
     input.clear();
     stdin().read_line(&mut input)?; // wait for next enter key press
 
-    println!("Closing connections");
+    println!("Closing connection");
     Ok(())
 }
