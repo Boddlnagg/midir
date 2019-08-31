@@ -13,6 +13,7 @@ Cross-platform, realtime MIDI processing in Rust.
 - [x] CoreMIDI (macOS, iOS (untested))
 - [x] WinRT (Windows 8+), enable the `winrt` feature
 - [x] Jack (Linux, macOS), enable the `jack` feature
+- [x] Web MIDI (Chrome, Opera, perhaps others browsers)
 
 A higher-level API for parsing and assembling MIDI messages might be added in the future.
 
