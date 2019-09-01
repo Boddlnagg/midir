@@ -7,7 +7,7 @@ fn main() {
     }
 }
 
-#[cfg(not(windows))] // virtual ports are not supported on Windows
+#[cfg(not(any(windows, target_arch = "wasm32")))] // virtual ports are not supported on Windows nor on Web MIDI
 mod example {
 
 use std::thread::sleep;
@@ -73,7 +73,7 @@ pub fn run() -> Result<(), Box<Error>> {
 }
 
  // needed to compile successfully
-#[cfg(windows)] mod example {
+#[cfg(any(windows, target_arch = "wasm32"))] mod example {
     use std::error::Error;
     pub fn run() -> Result<(), Box<Error>> { Ok(()) }
 }

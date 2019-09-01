@@ -238,11 +238,13 @@ mod tests {
     fn test_trait_impls() {
         // make sure that all the structs implement `Send`
         fn is_send<T: Send>() {}
-        is_send::<MidiInputPort>();
         is_send::<MidiInput>();
-        is_send::<MidiInputConnection<()>>();
-        is_send::<MidiOutputPort>();
         is_send::<MidiOutput>();
-        is_send::<MidiOutputConnection>();
+        #[cfg(not(target_arch = "wasm32"))] {
+            is_send::<MidiInputPort>();
+            is_send::<MidiInputConnection<()>>();
+            is_send::<MidiOutputPort>();
+            is_send::<MidiOutputConnection>();
+        }
     }
 }
