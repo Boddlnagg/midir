@@ -1,5 +1,5 @@
-//! This file contains automated tests, but they require virtual ports and therefore can't work on Windows ...
-#![cfg(not(windows))]
+//! This file contains automated tests, but they require virtual ports and therefore can't work on Windows or Web MIDI ...
+#![cfg(not(any(windows, target_arch = "wasm32")))]
 extern crate midir;
 
 use std::thread::sleep;
