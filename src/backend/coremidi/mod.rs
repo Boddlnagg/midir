@@ -21,12 +21,22 @@ pub struct MidiInput {
     ignore_flags: Ignore
 }
 
+pub struct MidiInputPort {
+    source: Source
+}
+
 impl MidiInput {
     pub fn new(client_name: &str) -> Result<Self, InitError> {
         match Client::new(client_name) {
             Ok(cl) => Ok(MidiInput { client: cl, ignore_flags: Ignore::None }),
             Err(_) => Err(InitError)
         }
+    }
+
+    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiInputPort> {
+        Sources.into_iter().map(|s| ::common::MidiInputPort {
+            imp: MidiInputPort { source: s }
+        }).collect()
     }
 
     pub fn ignore(&mut self, flags: Ignore) {
@@ -37,9 +47,8 @@ impl MidiInput {
         Sources::count()
     }
     
-    pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
-        let endpoint = Source::from_index(port_number).ok_or(PortInfoError::PortNumberOutOfRange)?;
-        match endpoint.display_name() {
+    pub fn port_name(&self, port: &MidiInputPort) -> Result<String, PortInfoError> {
+        match port.source.display_name() {
             Some(name) => Ok(name),
             None => Err(PortInfoError::CannotRetrievePortName)
         }
@@ -139,14 +148,9 @@ impl MidiInput {
     }
     
     pub fn connect<F, T: Send + 'static>(
-        self, port_number: usize, port_name: &str, callback: F, data: T
+        self, port: &MidiInputPort, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
         where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
-        let src = match Source::from_index(port_number) {
-            Some(src) => src,
-            None => return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self))
-        };
-
         let handler_data = Arc::new(Mutex::new(HandlerData {
             message: MidiMessage::new(),
             ignore_flags: self.ignore_flags,
@@ -155,18 +159,18 @@ impl MidiInput {
             user_data: Some(data)
         }));
         let handler_data2 = handler_data.clone();
-        let port = match self.client.input_port(port_name, move |packets| {
+        let iport = match self.client.input_port(port_name, move |packets| {
             MidiInput::handle_input(packets, &mut *handler_data2.lock().unwrap())
         }) {
             Ok(p) => p,
             Err(_) => return Err(ConnectError::other("error creating MIDI input port", self))
         };
-        if let Err(_) = port.connect_source(&src) {
+        if let Err(_) = iport.connect_source(&port.source) {
             return Err(ConnectError::other("error connecting MIDI input port", self));
         }
         Ok(MidiInputConnection {
             client: self.client,
-            details: InputConnectionDetails::Explicit(port),
+            details: InputConnectionDetails::Explicit(iport),
             handler_data: handler_data
         })
     }
@@ -241,6 +245,10 @@ pub struct MidiOutput {
     client: Client
 }
 
+pub struct MidiOutputPort {
+    dest: Arc<Destination>
+}
+
 impl MidiOutput {
     pub fn new(client_name: &str) -> Result<Self, InitError> {
         match Client::new(client_name) {
@@ -248,32 +256,32 @@ impl MidiOutput {
             Err(_) => Err(InitError)
         }
     }
+
+    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiOutputPort> {
+        Destinations.into_iter().map(|d| ::common::MidiOutputPort {
+            imp: MidiOutputPort { dest: Arc::new(d) }
+        }).collect()
+    }
     
     pub fn port_count(&self) -> usize {
         Destinations::count()
     }
     
-    pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
-        let endpoint = Destination::from_index(port_number).ok_or(PortInfoError::PortNumberOutOfRange)?;
-        match endpoint.display_name() {
+    pub fn port_name(&self, port: &MidiOutputPort) -> Result<String, PortInfoError> {
+        match port.dest.display_name() {
             Some(name) => Ok(name),
             None => Err(PortInfoError::CannotRetrievePortName)
         }
     }
     
-    pub fn connect(self, port_number: usize, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
-        let dest = match Destination::from_index(port_number) {
-            Some(dest) => dest,
-            None => return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self))
-        };
-
-        let port = match self.client.output_port(port_name) {
+    pub fn connect(self, port: &MidiOutputPort, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
+        let oport = match self.client.output_port(port_name) {
             Ok(p) => p,
             Err(_) => return Err(ConnectError::other("error creating MIDI output port", self))
         };
         Ok(MidiOutputConnection {
             client: self.client,
-            details: OutputConnectionDetails::Explicit(port, dest)
+            details: OutputConnectionDetails::Explicit(oport, port.dest.clone())
         })
     }
 
@@ -290,7 +298,7 @@ impl MidiOutput {
 }
 
 enum OutputConnectionDetails {
-    Explicit(OutputPort, Destination),
+    Explicit(OutputPort, Arc<Destination>),
     Virtual(VirtualSource)
 }
 
@@ -298,8 +306,6 @@ pub struct MidiOutputConnection {
     client: Client,
     details: OutputConnectionDetails
 }
-
-unsafe impl Send for MidiOutputConnection {}
 
 impl MidiOutputConnection {
     pub fn close(self) -> MidiOutput {
@@ -319,3 +325,9 @@ impl MidiOutputConnection {
         
     }
 }
+
+// workaround for https://github.com/chris-zen/coremidi/issues/14
+unsafe impl Send for MidiInput {}
+unsafe impl<T: Send> Send for MidiInputConnection<T> {}
+unsafe impl Send for MidiOutput {}
+unsafe impl Send for MidiOutputConnection {}

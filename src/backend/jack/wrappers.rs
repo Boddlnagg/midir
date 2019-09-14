@@ -128,8 +128,13 @@ impl Client {
         unsafe { jack_set_process_callback(self.p, Some(callback), data) };
     }
     
-    pub fn connect(&mut self, source_port: &CStr, destination_port: &CStr) {
-        unsafe { jack_connect(self.p, source_port.as_ptr(), destination_port.as_ptr()) };
+    pub fn connect(&mut self, source_port: &CStr, destination_port: &CStr) -> Result<(), ()> {
+        let rc = unsafe { jack_connect(self.p, source_port.as_ptr(), destination_port.as_ptr()) };
+        if rc == 0 {
+            Ok(())
+        } else {
+            Err(()) // TODO: maybe handle EEXIST explicitly
+        }
     }
 }
 

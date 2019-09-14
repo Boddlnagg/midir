@@ -33,8 +33,10 @@ pub fn run() -> Result<(), Box<Error>> {
     
     assert_eq!(midi_out.port_count(), previous_count + 1);
     
-    println!("Connecting to port '{}' ...", midi_out.port_name(previous_count).unwrap());
-    let mut conn_out = midi_out.connect(previous_count, "midir-test")?;
+    let out_ports = midi_out.ports();
+    let new_port = out_ports.last().unwrap();
+    println!("Connecting to port '{}' ...", midi_out.port_name(&new_port).unwrap());
+    let mut conn_out = midi_out.connect(&new_port, "midir-test")?;
     println!("Starting to send messages ...");
     //sleep(Duration::from_millis(2000));
     println!("Sending NoteOn message");
@@ -53,6 +55,7 @@ pub fn run() -> Result<(), Box<Error>> {
     assert_eq!(v.len(), LARGE_SYSEX_SIZE);
     conn_out.send(&v)?;
     sleep(Duration::from_millis(200));
+    // FIXME: the following doesn't seem to work with ALSA
     println!("Sending large SysEx message (chunked)...");
     for ch in v.chunks(4) {
         conn_out.send(ch)?;
