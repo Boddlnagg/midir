@@ -21,13 +21,13 @@ fn run() -> Result<(), Box<Error>> {
 
     loop {
         println!("Available input ports:");
-        for i in 0..midi_in.port_count() {
-            println!("{}: {}", i, midi_in.port_name(i)?);
+        for (i, p) in midi_in.ports().iter().enumerate() {
+            println!("{}: {}", i, midi_in.port_name(p)?);
         }
         
         println!("\nAvailable output ports:");
-        for i in 0..midi_out.port_count() {
-            println!("{}: {}", i, midi_out.port_name(i)?);
+        for (i, p) in midi_out.ports().iter().enumerate() {
+            println!("{}: {}", i, midi_out.port_name(p)?);
         }
 
         // run in endless loop if "--loop" parameter is specified

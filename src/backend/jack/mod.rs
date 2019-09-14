@@ -5,6 +5,7 @@ use self::jack_sys::jack_nframes_t;
 use self::libc::c_void;
 
 use std::{mem, slice};
+use std::ffi::CString;
 
 mod wrappers;
 use self::wrappers::*;
@@ -24,6 +25,10 @@ struct InputHandlerData<T> {
 pub struct MidiInput {
     ignore_flags: Ignore,
     client: Option<Client>,
+}
+
+pub struct MidiInputPort {
+    name: CString
 }
 
 pub struct MidiInputConnection<T> {
@@ -47,18 +52,26 @@ impl MidiInput {
     pub fn ignore(&mut self, flags: Ignore) {
         self.ignore_flags = flags;
     }
+
+    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiInputPort> {
+        let ports = self.client.as_ref().unwrap().get_midi_ports(PortIsOutput);
+        let mut result = Vec::with_capacity(ports.count());
+        for i in 0..ports.count() {
+            result.push(::common::MidiInputPort {
+                imp: MidiInputPort {
+                    name: ports.get_c_name(i).into()
+                }
+            })
+        }
+        result
+    }
     
     pub fn port_count(&self) -> usize {
         self.client.as_ref().unwrap().get_midi_ports(PortIsOutput).count()
     }
     
-    pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
-        let midi_ports = self.client.as_ref().unwrap().get_midi_ports(PortIsOutput);
-        if port_number >= midi_ports.count() {
-            Err(PortInfoError::PortNumberOutOfRange)
-        } else {
-            Ok(midi_ports[port_number].to_string())
-        }
+    pub fn port_name(&self, port: &MidiInputPort) -> Result<String, PortInfoError> {
+        Ok(port.name.to_string_lossy().into())
     }
     
     fn activate_callback<F, T: Send>(&mut self, callback: F, data: T)
@@ -80,37 +93,24 @@ impl MidiInput {
     }
     
     pub fn connect<F, T: Send>(
-        mut self, port_number: usize, port_name: &str, callback: F, data: T
+        mut self, port: &MidiInputPort, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
         where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
-        
-        let source_port_name = {
-            let ports = self.client.as_ref().unwrap().get_midi_ports(PortIsOutput);
-            let port_number = port_number as usize;
-            if port_number >= ports.count() {
-                None
-            } else {
-                Some(ports.get_c_name(port_number).to_owned()) // have to copy the name to prevent borrowing issues
-            }
-        };
-        
-        let source_port_name = match source_port_name {
-            None => return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self)),
-            Some(s) => s
-        };
-        
+
         let mut handler_data = self.activate_callback(callback, data);
         
         // Create port ...
-        let port = match self.client.as_mut().unwrap().register_midi_port(port_name, PortIsInput) {
+        let dest_port = match self.client.as_mut().unwrap().register_midi_port(port_name, PortIsInput) {
             Ok(p) => p,
             Err(()) => { return Err(ConnectError::other("could not register JACK port", self)); }
         };
         
         // ... and connect it to the output
-        self.client.as_mut().unwrap().connect(&source_port_name, port.get_name());
+        if let Err(_) = self.client.as_mut().unwrap().connect(&port.name, dest_port.get_name()) {
+            return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self));
+        }
         
-        handler_data.port = Some(port);
+        handler_data.port = Some(dest_port);
         
         Ok(MidiInputConnection {
             handler_data: handler_data,
@@ -205,6 +205,10 @@ pub struct MidiOutput {
     client: Option<Client>,
 }
 
+pub struct MidiOutputPort {
+    name: CString
+}
+
 pub struct MidiOutputConnection {
     handler_data: Box<OutputHandlerData>,
     client: Option<Client>
@@ -221,19 +225,26 @@ impl MidiOutput {
             client: Some(client),
         })
     }
+
+    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiOutputPort> {
+        let ports = self.client.as_ref().unwrap().get_midi_ports(PortIsInput);
+        let mut result = Vec::with_capacity(ports.count());
+        for i in 0..ports.count() {
+            result.push(::common::MidiOutputPort {
+                imp: MidiOutputPort {
+                    name: ports.get_c_name(i).into()
+                }
+            })
+        }
+        result
+    }
     
     pub fn port_count(&self) -> usize {
         self.client.as_ref().unwrap().get_midi_ports(PortIsInput).count()
     }
     
-    pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
-        let midi_ports = self.client.as_ref().unwrap().get_midi_ports(PortIsInput);
-        let port_number = port_number;
-        if port_number >= midi_ports.count() {
-            Err(PortInfoError::PortNumberOutOfRange)
-        } else {
-            Ok(midi_ports[port_number].to_string())
-        }
+    pub fn port_name(&self, port: &MidiOutputPort) -> Result<String, PortInfoError> {
+        Ok(port.name.to_string_lossy().into())
     }
     
     fn activate_callback(&mut self) -> Box<OutputHandlerData> {
@@ -250,33 +261,21 @@ impl MidiOutput {
         handler_data
     }
     
-    pub fn connect(mut self, port_number: usize, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
-        let dest_port_name = {
-            let ports = self.client.as_ref().unwrap().get_midi_ports(PortIsInput);
-            if port_number >= ports.count() {
-                None
-            } else {
-                Some(ports.get_c_name(port_number).to_owned()) // have to copy the name to prevent borrowing issues
-            }
-        };
-        
-        let dest_port_name = match dest_port_name {
-            None => return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self)),
-            Some(s) => s
-        };
-        
+    pub fn connect(mut self, port: &MidiOutputPort, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
         let mut handler_data = self.activate_callback();
         
         // Create port ...
-        let port = match self.client.as_mut().unwrap().register_midi_port(port_name, PortIsOutput) {
+        let source_port = match self.client.as_mut().unwrap().register_midi_port(port_name, PortIsOutput) {
             Ok(p) => p,
             Err(()) => { return Err(ConnectError::other("could not register JACK port", self)); }
         };
         
         // ... and connect it to the input
-        self.client.as_mut().unwrap().connect(port.get_name(), &dest_port_name);
+        if let Err(_) = self.client.as_mut().unwrap().connect(source_port.get_name(), &port.name) {
+            return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self));
+        }
         
-        handler_data.port = Some(port);
+        handler_data.port = Some(source_port);
         
         Ok(MidiOutputConnection {
             handler_data: handler_data,

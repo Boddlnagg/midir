@@ -20,23 +20,27 @@ fn run() -> Result<(), Box<Error>> {
     let midi_out = MidiOutput::new("midir forwarding output")?;
     
     println!("Available input ports:");
-    for i in 0..midi_in.port_count() {
-        println!("{}: {}", i, midi_in.port_name(i)?);
+    let midi_in_ports = midi_in.ports();
+    for (i, p) in midi_in_ports.iter().enumerate() {
+        println!("{}: {}", i, midi_in.port_name(p)?);
     }
     print!("Please select input port: ");
     stdout().flush()?;
     stdin().read_line(&mut input)?;
-    let in_port: usize = input.trim().parse()?;
+    let in_port = midi_in_ports.get(input.trim().parse::<usize>()?)
+                               .ok_or("Invalid port number")?;
     
     println!("\nAvailable output ports:");
-    for i in 0..midi_out.port_count() {
-        println!("{}: {}", i, midi_out.port_name(i)?);
+    let midi_out_ports = midi_out.ports();
+    for (i, p) in midi_out_ports.iter().enumerate() {
+        println!("{}: {}", i, midi_out.port_name(p)?);
     }
     print!("Please select output port: ");
     stdout().flush()?;
     input.clear();
     stdin().read_line(&mut input)?;
-    let out_port: usize = input.trim().parse()?;
+    let out_port = midi_out_ports.get(input.trim().parse::<usize>()?)
+                                 .ok_or("Invalid port number")?;
     
     println!("\nOpening connections");
     let in_port_name = midi_in.port_name(in_port)?;

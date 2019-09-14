@@ -5,7 +5,7 @@ extern crate midir;
 use std::thread::sleep;
 use std::time::Duration;
 
-use midir::{MidiInput, MidiOutput, Ignore};
+use midir::{MidiInput, MidiOutput, Ignore, MidiOutputPort};
 use midir::os::unix::{VirtualInput, VirtualOutput};
 
 #[test]
@@ -22,9 +22,11 @@ fn end_to_end() {
     }, ()).unwrap();
     
     assert_eq!(midi_out.port_count(), previous_count + 1);
-    
-    println!("Connecting to port '{}' ...", midi_out.port_name(previous_count).unwrap());
-    let mut conn_out = midi_out.connect(previous_count, "midir-test").unwrap();
+
+    let new_port: MidiOutputPort = midi_out.ports().into_iter().rev().next().unwrap();
+
+    println!("Connecting to port '{}' ...", midi_out.port_name(&new_port).unwrap());
+    let mut conn_out = midi_out.connect(&new_port, "midir-test").unwrap();
     println!("Starting to send messages ...");
     conn_out.send(&[144, 60, 1]).unwrap();
     sleep(Duration::from_millis(200));
@@ -46,9 +48,11 @@ fn end_to_end() {
     println!("\nCreating virtual output port ...");
     let mut conn_out = midi_out.create_virtual("midir-test").unwrap();
     assert_eq!(midi_in.port_count(), previous_count + 1);
+
+    let new_port = midi_in.ports().into_iter().rev().next().unwrap();
     
-    println!("Connecting to port '{}' ...", midi_in.port_name(previous_count).unwrap());
-    let conn_in = midi_in.connect(previous_count, "midir-test", |stamp, message, _| {
+    println!("Connecting to port '{}' ...", midi_in.port_name(&new_port).unwrap());
+    let conn_in = midi_in.connect(&new_port, "midir-test", |stamp, message, _| {
         println!("{}: {:?} (len = {})", stamp, message, message.len());
     }, ()).unwrap();
     println!("Starting to send messages ...");

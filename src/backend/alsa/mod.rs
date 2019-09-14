@@ -14,11 +14,20 @@ use ::{MidiMessage, Ignore};
 use ::errors::*;
 
 mod helpers {
-    use super::alsa::seq::{Seq, ClientIter, PortIter, PortInfo, PortCap, MidiEvent, MIDI_GENERIC, SYNTH, APPLICATION};
+    use super::alsa::seq::{Seq, Addr, ClientIter, PortIter, PortInfo, PortCap, MidiEvent, MIDI_GENERIC, SYNTH, APPLICATION};
     use ::errors::PortInfoError;
 
     pub fn poll(fds: &mut [super::libc::pollfd], timeout: i32) -> i32 {
         unsafe { super::libc::poll(fds.as_mut_ptr(), fds.len() as super::libc::nfds_t, timeout) }
+    }
+
+    #[inline]
+    pub fn get_ports<F, T>(s: &Seq, capability: PortCap, f: F) -> Vec<T> where F: Fn(PortInfo) -> T {
+        ClientIter::new(s).flat_map(|c| PortIter::new(s, c.get_client()))
+                          .filter(|p| p.get_type().intersects(MIDI_GENERIC | SYNTH | APPLICATION))
+                          .filter(|p| p.get_capability().intersects(capability))
+                          .map(f)
+                          .collect()
     }
 
     #[inline]
@@ -30,20 +39,12 @@ mod helpers {
     }
 
     #[inline]
-    pub fn get_port_info(s: &Seq, capability: PortCap, port_number: usize) -> Option<PortInfo> {
-        ClientIter::new(s).flat_map(|c| PortIter::new(s, c.get_client()))
-                          .filter(|p| p.get_type().intersects(MIDI_GENERIC | SYNTH | APPLICATION))
-                          .filter(|p| p.get_capability().intersects(capability))
-                          .nth(port_number)
-    }
-
-    #[inline]
-    pub fn get_port_name(s: &Seq, capability: PortCap, port_number: usize) -> Result<String, PortInfoError> {
+    pub fn get_port_name(s: &Seq, addr: Addr) -> Result<String, PortInfoError> {
         use std::fmt::Write;
 
-        let pinfo = match get_port_info(s, capability, port_number) {
-            Some(p) => p,
-            None => return Err(PortInfoError::PortNumberOutOfRange)
+        let pinfo = match s.get_any_port_info(addr) {
+            Ok(p) => p,
+            Err(_) => return Err(PortInfoError::InvalidPort)
         };
 
         let cinfo = s.get_any_client_info(pinfo.get_client()).map_err(|_| PortInfoError::CannotRetrievePortName)?;
@@ -120,6 +121,10 @@ pub struct MidiInput {
     seq: Option<Seq>,
 }
 
+pub struct MidiInputPort {
+    addr: Addr
+}
+
 pub struct MidiInputConnection<T: 'static> {
     subscription: Option<PortSubscribe>,
     thread: Option<JoinHandle<(HandlerData<T>, T)>>,
@@ -154,13 +159,21 @@ impl MidiInput {
     pub fn ignore(&mut self, flags: Ignore) {
         self.ignore_flags = flags;
     }
+
+    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiInputPort> {
+        helpers::get_ports(self.seq.as_ref().unwrap(), READ | SUBS_READ, |p| ::common::MidiInputPort { 
+            imp: MidiInputPort {
+                addr: Addr { client: p.get_client(), port: p.get_port() }
+            }
+        })
+    }
     
     pub fn port_count(&self) -> usize {
         helpers::get_port_count(self.seq.as_ref().unwrap(), READ | SUBS_READ)
     }
     
-    pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
-        helpers::get_port_name(self.seq.as_ref().unwrap(), READ | SUBS_READ, port_number)
+    pub fn port_name(&self, port: &MidiInputPort) -> Result<String, PortInfoError> {
+        helpers::get_port_name(self.seq.as_ref().unwrap(), port.addr)
     }
     
     fn init_queue(&mut self) -> i32 {
@@ -221,7 +234,7 @@ impl MidiInput {
     }
     
     pub fn connect<F, T: Send>(
-        mut self, port_number: usize, port_name: &str, callback: F, data: T
+        mut self, port: &MidiInputPort, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
         where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
         
@@ -232,9 +245,9 @@ impl MidiInput {
         
         let queue_id = self.init_queue();
 
-        let src_pinfo = match helpers::get_port_info(self.seq.as_ref().unwrap(), READ | SUBS_READ, port_number) {
-            Some(p) => p,
-            None => return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self))
+        let src_pinfo = match self.seq.as_ref().unwrap().get_any_port_info(port.addr) {
+            Ok(p) => p,
+            Err(_) => return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self))
         };
 
         let c_port_name = match CString::new(port_name) {
@@ -418,6 +431,10 @@ pub struct MidiOutput {
     seq: Option<Seq>, // TODO: if `Seq` is marked as non-zero, this should just be pointer-sized 
 }
 
+pub struct MidiOutputPort {
+    addr: Addr
+}
+
 pub struct MidiOutputConnection {
     seq: Option<Seq>,
     vport: i32,
@@ -439,19 +456,27 @@ impl MidiOutput {
             seq: Some(seq),
         })
     }
+
+    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiOutputPort> {
+        helpers::get_ports(self.seq.as_ref().unwrap(), WRITE | SUBS_WRITE, |p| ::common::MidiOutputPort { 
+            imp: MidiOutputPort {
+                addr: Addr { client: p.get_client(), port: p.get_port() }
+            }
+        })
+    }
     
     pub fn port_count(&self) -> usize {
         helpers::get_port_count(self.seq.as_ref().unwrap(), WRITE | SUBS_WRITE)
     }
     
-    pub fn port_name(&self, port_number: usize) -> Result<String, PortInfoError> {
-        helpers::get_port_name(self.seq.as_ref().unwrap(), WRITE | SUBS_WRITE, port_number)
+    pub fn port_name(&self, port: &MidiOutputPort) -> Result<String, PortInfoError> {
+        helpers::get_port_name(self.seq.as_ref().unwrap(), port.addr)
     }
     
-    pub fn connect(mut self, port_number: usize, port_name: &str) -> Result<MidiOutputConnection, ConnectError<Self>> {
-        let pinfo = match helpers::get_port_info(self.seq.as_ref().unwrap(), WRITE | SUBS_WRITE, port_number) {
-            Some(p) => p,
-            None => return Err(ConnectError::new(ConnectErrorKind::PortNumberOutOfRange, self))
+    pub fn connect(mut self, port: &MidiOutputPort, port_name: &str) -> Result<MidiOutputConnection, ConnectError<Self>> {
+        let pinfo = match self.seq.as_ref().unwrap().get_any_port_info(port.addr) {
+            Ok(p) => p,
+            Err(_) => return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self))
         };
 
         let c_port_name = match CString::new(port_name) {

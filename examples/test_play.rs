@@ -5,7 +5,7 @@ use std::time::Duration;
 use std::io::{stdin, stdout, Write};
 use std::error::Error;
 
-use midir::MidiOutput;
+use midir::{MidiOutput, MidiOutputPort};
 
 fn main() {
     match run() {
@@ -18,22 +18,24 @@ fn run() -> Result<(), Box<Error>> {
     let midi_out = MidiOutput::new("My Test Output")?;
     
     // Get an output port (read from console if multiple are available)
-    let out_port = match midi_out.port_count() {
+    let out_ports = midi_out.ports();
+    let out_port: &MidiOutputPort = match out_ports.len() {
         0 => return Err("no output port found".into()),
         1 => {
-            println!("Choosing the only available output port: {}", midi_out.port_name(0).unwrap());
-            0
+            println!("Choosing the only available output port: {}", midi_out.port_name(&out_ports[0]).unwrap());
+            &out_ports[0]
         },
         _ => {
             println!("\nAvailable output ports:");
-            for i in 0..midi_out.port_count() {
-                println!("{}: {}", i, midi_out.port_name(i).unwrap());
+            for (i, p) in out_ports.iter().enumerate() {
+                println!("{}: {}", i, midi_out.port_name(p).unwrap());
             }
             print!("Please select output port: ");
             stdout().flush()?;
             let mut input = String::new();
             stdin().read_line(&mut input)?;
-            input.trim().parse()?
+            out_ports.get(input.trim().parse::<usize>()?)
+                     .ok_or("invalid output port selected")?
         }
     };
     
@@ -51,6 +53,8 @@ fn run() -> Result<(), Box<Error>> {
             sleep(Duration::from_millis(duration * 150));
             let _ = conn_out.send(&[NOTE_OFF_MSG, note, VELOCITY]);
         };
+
+        sleep(Duration::from_millis(4 * 150));
         
         play_note(66, 4);
         play_note(65, 3);
