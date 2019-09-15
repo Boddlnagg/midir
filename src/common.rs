@@ -241,6 +241,9 @@ mod tests {
         is_send::<MidiInput>();
         is_send::<MidiOutput>();
         #[cfg(not(target_arch = "wasm32"))] {
+            // The story around threading and `Send` on WASM is not clear yet
+            // Tracking issue:      https://github.com/Boddlnagg/midir/issues/49
+            // Prev. discussion:    https://github.com/Boddlnagg/midir/pull/47
             is_send::<MidiInputPort>();
             is_send::<MidiInputConnection<()>>();
             is_send::<MidiOutputPort>();
