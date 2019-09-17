@@ -19,3 +19,8 @@ jobs:
     name: Windows_GNU
     vmImage: vs2017-win2016
     target: i686-pc-windows-gnu
+- template: azure-pipelines-template.yml
+  parameters:
+    name: Linux_WASM
+    vmImage: ubuntu-16.04
+    target: x86_64-unknown-linux-gnu
