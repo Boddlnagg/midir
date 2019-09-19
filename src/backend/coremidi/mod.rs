@@ -325,9 +325,3 @@ impl MidiOutputConnection {
         
     }
 }
-
-// workaround for https://github.com/chris-zen/coremidi/issues/14
-unsafe impl Send for MidiInput {}
-unsafe impl<T: Send> Send for MidiInputConnection<T> {}
-unsafe impl Send for MidiOutput {}
-unsafe impl Send for MidiOutputConnection {}
