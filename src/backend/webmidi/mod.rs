@@ -1,5 +1,5 @@
 //! Web MIDI Backend.
-//! 
+//!
 //! Reference:
 //! * [W3C Editor's Draft](https://webaudio.github.io/web-midi-api/)
 //! * [MDN web docs](https://developer.mozilla.org/en-US/docs/Web/API/MIDIAccess)
@@ -241,7 +241,7 @@ impl MidiOutputConnection {
         let _ = self.output.close(); // NOTE: asyncronous!
         MidiOutput {}
     }
-    
+
     pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
         self.output.send(unsafe { Uint8Array::view(message) }.as_ref()).map_err(|_| SendError::Other("JavaScript exception"))
     }

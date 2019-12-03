@@ -71,7 +71,7 @@ impl Client {
     pub fn get_time() -> u64 {
         unsafe { jack_get_time() }
     }
-    
+
     pub fn open(name: &str, options: JackOpenOptions) -> Result<Client, ()> {
         let c_name = CString::new(name).ok().expect("client name must not contain null bytes");
         let result = unsafe { jack_client_open(c_name.as_ptr(), options.bits(), ptr::null_mut()) };
@@ -81,20 +81,20 @@ impl Client {
             Ok(Client { p: result })
         }
     }
-    
+
     pub fn get_midi_ports(&self, flags: PortFlags) -> PortInfos {
         let ports_ptr = unsafe { jack_get_ports(self.p, ptr::null_mut(), JACK_DEFAULT_MIDI_TYPE.as_ptr() as *const i8, flags.bits() as u64) };
         let slice = if ports_ptr.is_null() {
             &[]
         } else {
-            unsafe { 
+            unsafe {
                 let count = (0isize..).find(|i| (*ports_ptr.offset(*i)).is_null()).unwrap() as usize;
                 slice::from_raw_parts(ports_ptr, count)
             }
         };
         PortInfos { p: slice }
     }
-    
+
     pub fn register_midi_port(&mut self, name: &str, flags: PortFlags) -> Result<MidiPort, ()> {
         let c_name = CString::new(name).ok().expect("port name must not contain null bytes");
         let result = unsafe { jack_port_register(self.p, c_name.as_ptr(), JACK_DEFAULT_MIDI_TYPE.as_ptr() as *const i8, flags.bits() as u64, 0) };
@@ -104,21 +104,21 @@ impl Client {
             Ok(MidiPort { p: result })
         }
     }
-    
+
     /// This can not be implemented in Drop, because it needs a reference
     /// to the client. But it consumes the MidiPort.
     pub fn unregister_midi_port(&mut self, client: MidiPort) {
         unsafe { jack_port_unregister(self.p, client.p) };
     }
-    
+
     pub fn activate(&mut self) {
         unsafe { jack_activate(self.p) };
     }
-    
+
     pub fn deactivate(&mut self) {
         unsafe { jack_deactivate(self.p) };
     }
-    
+
     /// The code in the supplied function must be suitable for real-time
     /// execution. That means that it cannot call functions that might block
     /// for a long time. This includes all I/O functions (disk, TTY, network),
@@ -127,7 +127,7 @@ impl Client {
     pub fn set_process_callback(&mut self, callback: ProcessCallback, data: *mut c_void) {
         unsafe { jack_set_process_callback(self.p, Some(callback), data) };
     }
-    
+
     pub fn connect(&mut self, source_port: &CStr, destination_port: &CStr) -> Result<(), ()> {
         let rc = unsafe { jack_connect(self.p, source_port.as_ptr(), destination_port.as_ptr()) };
         if rc == 0 {
@@ -154,7 +154,7 @@ impl<'a> PortInfos<'a> {
     pub fn count(&self) -> usize {
         self.p.len()
     }
-    
+
     pub fn get_c_name(&self, index: usize) -> &CStr {
         let ptr = self.p[index];
         unsafe { CStr::from_ptr(ptr) }
@@ -163,8 +163,8 @@ impl<'a> PortInfos<'a> {
 
 impl<'a> Index<usize> for PortInfos<'a> {
     type Output = str;
-    
-    fn index(&self, index: usize) -> &Self::Output { 
+
+    fn index(&self, index: usize) -> &Self::Output {
         let slice = self.get_c_name(index).to_bytes();
         str::from_utf8(slice).ok().expect("Error converting port name to UTF8")
     }
@@ -188,7 +188,7 @@ impl MidiPort {
     pub fn get_name(&self) -> &CStr {
         unsafe { CStr::from_ptr(jack_port_name(self.p)) }
     }
-    
+
     pub fn get_midi_buffer(&self, nframes: jack_nframes_t) -> MidiBuffer {
         let buf = unsafe { jack_port_get_buffer(self.p, nframes) };
         MidiBuffer { p: buf }
@@ -203,15 +203,15 @@ impl MidiBuffer {
     pub fn get_event_count(&self) -> u32 {
         unsafe { jack_midi_get_event_count(self.p) }
     }
-    
+
     pub unsafe fn get_event(&self, ev: &mut jack_midi_event_t, index: u32) {
         jack_midi_event_get(ev, self.p, index);
     }
-    
+
     pub fn clear(&mut self) {
         unsafe { jack_midi_clear_buffer(self.p) }
     }
-    
+
     pub fn event_reserve(&mut self, time: jack_nframes_t, data_size: usize) -> *mut jack_midi_data_t {
         unsafe { jack_midi_event_reserve(self.p, time, data_size as size_t) }
     }
@@ -228,16 +228,16 @@ impl Ringbuffer {
         let result = unsafe { jack_ringbuffer_create(size as size_t) };
         Ringbuffer { p: result }
     }
-    
+
     pub fn get_read_space(&self) -> usize {
         unsafe { jack_ringbuffer_read_space(self.p) as usize }
     }
-    
+
     pub fn read(&mut self, destination: *mut u8, count: usize) -> usize {
         let bytes_read = unsafe { jack_ringbuffer_read(self.p, destination as *mut i8, count as size_t) };
-        bytes_read as usize 
+        bytes_read as usize
     }
-    
+
     pub fn write(&mut self, source: &[u8]) -> usize {
         unsafe { jack_ringbuffer_write(self.p, source.as_ptr() as *const i8, source.len() as size_t) as usize }
     }

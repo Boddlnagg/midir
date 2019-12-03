@@ -84,7 +84,7 @@ impl MidiInputPort {
         //println!("{}", from_wide_ptr(buffer.as_ptr(), buffer.len()).to_string_lossy().into_owned());
         Ok(buffer.into_boxed_slice())
     }
-    
+
     fn name(port_number: UINT) -> Result<String, PortInfoError> {
         let mut device_caps: MIDIINCAPSW = unsafe { mem::uninitialized() };
         let result = unsafe { midiInGetDevCapsW(port_number as UINT_PTR, &mut device_caps, mem::size_of::<MIDIINCAPSW>() as u32) };
@@ -144,7 +144,7 @@ impl MidiInput {
     pub fn new(_client_name: &str) -> Result<Self, InitError> {
         Ok(MidiInput { ignore_flags: Ignore::None })
     }
-    
+
     pub fn ignore(&mut self, flags: Ignore) {
         self.ignore_flags = flags;
     }
@@ -163,7 +163,7 @@ impl MidiInput {
         }
         result
     }
-    
+
     pub fn port_count(&self) -> usize {
         MidiInputPort::count() as usize
     }
@@ -171,12 +171,12 @@ impl MidiInput {
     pub fn port_name(&self, port: &MidiInputPort) -> Result<String, PortInfoError> {
         Ok(port.name.clone())
     }
-    
+
     pub fn connect<F, T: Send>(
         self, port: &MidiInputPort, _port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
         where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
-        
+
         let port_number = match port.current_port_number() {
             Some(p) => p,
             None => return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self))
@@ -190,7 +190,7 @@ impl MidiInput {
             callback: Box::new(callback),
             user_data: Some(data)
         });
-        
+
         let mut in_handle: HMIDIIN = unsafe { mem::uninitialized() };
         let handler_data_ptr: *mut HandlerData<T> = &mut *handler_data;
         let result = unsafe { midiInOpen(&mut in_handle,
@@ -201,7 +201,7 @@ impl MidiInput {
         if result != MMSYSERR_NOERROR {
             return Err(ConnectError::other("could not create Windows MM MIDI input port", self));
         }
-        
+
         // Allocate and init the sysex buffers.
         for i in 0..RT_SYSEX_BUFFER_COUNT {
             handler_data.sysex_buffer.0[i] = Box::into_raw(Box::new(MIDIHDR {
@@ -215,24 +215,24 @@ impl MidiInput {
                 dwOffset: 0,
                 dwReserved: unsafe { mem::zeroed() },
             }));
-            
+
             // TODO: are those buffers ever freed if an error occurs here (altough these calls probably only fail with out-of-memory)?
             // TODO: close port in case of error?
-            
+
             let result = unsafe { midiInPrepareHeader(in_handle, handler_data.sysex_buffer.0[i], mem::size_of::<MIDIHDR>() as u32) };
             if result != MMSYSERR_NOERROR {
                 return Err(ConnectError::other("could not initialize Windows MM MIDI input port (PrepareHeader)", self));
             }
-            
+
             // Register the buffer.
             let result = unsafe { midiInAddBuffer(in_handle, handler_data.sysex_buffer.0[i], mem::size_of::<MIDIHDR>() as u32) };
             if result != MMSYSERR_NOERROR {
                 return Err(ConnectError::other("could not initialize Windows MM MIDI input port (AddBuffer)", self));
-            }            
+            }
         }
-        
+
         handler_data.in_handle = Some(MidiInHandle(Mutex::new(in_handle)));
-        
+
         // We can safely access (a copy of) `in_handle` here, although
         // it has been copied into the Mutex already, because the callback
         // has not been called yet.
@@ -241,7 +241,7 @@ impl MidiInput {
             unsafe { midiInClose(in_handle) };
             return Err(ConnectError::other("could not start Windows MM MIDI input port", self));
         }
-        
+
         Ok(MidiInputConnection {
             handler_data: handler_data
         })
@@ -251,23 +251,23 @@ impl MidiInput {
 impl<T> MidiInputConnection<T> {
     pub fn close(mut self) -> (MidiInput, T) {
         self.close_internal();
-        
+
         (MidiInput {
             ignore_flags: self.handler_data.ignore_flags,
         }, self.handler_data.user_data.take().unwrap())
     }
-    
+
     fn close_internal(&mut self) {
         // for information about his lock, see https://groups.google.com/forum/#!topic/mididev/6OUjHutMpEo
         let in_handle_lock = self.handler_data.in_handle.as_ref().unwrap().0.lock().unwrap();
-        
+
         // TODO: Call both reset and stop here? The difference seems to be that
         //       reset "returns all pending input buffers to the callback function"
         unsafe {
             midiInReset(*in_handle_lock);
             midiInStop(*in_handle_lock);
         }
-        
+
         for i in 0..RT_SYSEX_BUFFER_COUNT {
             let result;
             unsafe {
@@ -276,12 +276,12 @@ impl<T> MidiInputConnection<T> {
                 // recreate the Box so that it will be dropped/deallocated at the end of this scope
                 let _ = Box::from_raw(self.handler_data.sysex_buffer.0[i]);
             }
-            
+
             if result != MMSYSERR_NOERROR {
                 let _ = writeln!(stderr(), "Warning: Ignoring error shutting down Windows MM input port (UnprepareHeader).");
             }
         }
-        
+
         unsafe { midiInClose(*in_handle_lock) };
     }
 }
@@ -335,7 +335,7 @@ impl MidiOutputPort {
         //println!("{}", from_wide_ptr(buffer.as_ptr(), buffer.len()).to_string_lossy().into_owned());
         Ok(buffer.into_boxed_slice())
     }
-    
+
     fn name(port_number: UINT) -> Result<String, PortInfoError> {
         let mut device_caps: MIDIOUTCAPSW = unsafe { mem::uninitialized() };
         let result = unsafe { midiOutGetDevCapsW(port_number as UINT_PTR, &mut device_caps, mem::size_of::<MIDIOUTCAPSW>() as u32) };
@@ -390,7 +390,7 @@ impl MidiOutput {
         }
         result
     }
-    
+
     pub fn port_count(&self) -> usize {
         MidiOutputPort::count() as usize
     }
@@ -398,7 +398,7 @@ impl MidiOutput {
     pub fn port_name(&self, port: &MidiOutputPort) -> Result<String, PortInfoError> {
         Ok(port.name.clone())
     }
-    
+
     pub fn connect(self, port: &MidiOutputPort, _port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
         let port_number = match port.current_port_number() {
             Some(p) => p,
@@ -409,7 +409,7 @@ impl MidiOutput {
         if result != MMSYSERR_NOERROR {
             return Err(ConnectError::other("could not create Windows MM MIDI output port", self));
         }
-        
+
         Ok(MidiOutputConnection {
             out_handle: out_handle
         })
@@ -421,17 +421,17 @@ impl MidiOutputConnection {
         // The actual closing is done by the implementation of Drop
         MidiOutput // In this API this is a noop
     }
-    
+
     pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
         let nbytes = message.len();
         if nbytes == 0 {
             return Err(SendError::InvalidData("message to be sent must not be empty"));
         }
-        
+
         if message[0] == 0xF0 { // Sysex message
             // Allocate buffer for sysex data and copy message
             let mut buffer = message.to_vec();
-        
+
             // Create and prepare MIDIHDR structure.
             let mut sysex = MIDIHDR {
                 lpData: buffer.as_mut_ptr() as *mut i8,
@@ -444,13 +444,13 @@ impl MidiOutputConnection {
                 dwOffset: 0,
                 dwReserved: unsafe { mem::zeroed() },
             };
-            
+
             let result = unsafe { midiOutPrepareHeader(self.out_handle, &mut sysex, mem::size_of::<MIDIHDR>() as u32) };
-            
+
             if result != MMSYSERR_NOERROR {
                 return Err(SendError::Other("preparation for sending sysex message failed (OutPrepareHeader)"));
             }
-            
+
             // Send the message.
             loop {
                 let result = unsafe { midiOutLongMsg(self.out_handle, &mut sysex, mem::size_of::<MIDIHDR>() as u32) };
@@ -464,7 +464,7 @@ impl MidiOutputConnection {
                     break;
                 }
             }
-            
+
             loop {
                 let result = unsafe { midiOutUnprepareHeader(self.out_handle, &mut sysex, mem::size_of::<MIDIHDR>() as u32) };
                 if result == MIDIERR_STILLPLAYING {
@@ -477,14 +477,14 @@ impl MidiOutputConnection {
             if nbytes > 3 {
                 return Err(SendError::InvalidData("non-sysex message must not be longer than 3 bytes"));
             }
-            
+
             // Pack MIDI bytes into double word.
             let packet: DWORD = 0;
             let ptr = &packet as *const u32 as *mut u8;
             for i in 0..nbytes {
                 unsafe { *ptr.offset(i as isize) = message[i] };
             }
-            
+
             // Send the message immediately.
             loop {
                 let result = unsafe { midiOutShortMsg(self.out_handle, packet) };
@@ -499,7 +499,7 @@ impl MidiOutputConnection {
                 }
             }
         }
-        
+
         Ok(())
     }
 }

@@ -49,12 +49,12 @@ impl MidiInput {
         }
         result
     }
-    
+
     pub fn port_count(&self) -> usize {
         let device_collection = DeviceInformation::find_all_async_aqs_filter(&self.selector.make_reference()).unwrap().blocking_get().expect("find_all_async failed").expect("find_all_async returned null");
         device_collection.get_size().expect("get_size failed") as usize
     }
-    
+
     pub fn port_name(&self, port: &MidiInputPort) -> Result<String, PortInfoError> {
         let device_info_async = DeviceInformation::create_from_id_async(&port.id.make_reference()).map_err(|_| PortInfoError::InvalidPort)?;
         let device_info = device_info_async.blocking_get().map_err(|_| PortInfoError::InvalidPort)?.expect("device_info was null");
@@ -65,7 +65,7 @@ impl MidiInput {
     fn handle_input<T>(args: &MidiMessageReceivedEventArgs, handler_data: &mut HandlerData<T>) {
         let ignore = handler_data.ignore_flags;
         let data = &mut handler_data.user_data.as_mut().unwrap();
-        let timestamp; 
+        let timestamp;
         let byte_access;
         let message_bytes;
         unsafe {
@@ -93,7 +93,7 @@ impl MidiInput {
         self, port: &MidiInputPort, _port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
         where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
-        
+
         let in_port = match MidiInPort::from_id_async(&port.id.make_reference()) {
             Ok(port_async) => match port_async.blocking_get() {
                 Ok(Some(port)) => port,
@@ -101,7 +101,7 @@ impl MidiInput {
             }
             Err(_) => return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self))
         };
-        
+
         let handler_data = Arc::new(Mutex::new(HandlerData {
             ignore_flags: self.ignore_flags,
             callback: Box::new(callback),
@@ -113,7 +113,7 @@ impl MidiInput {
             unsafe { MidiInput::handle_input(&*args, &mut *handler_data2.lock().unwrap()) };
             Ok(())
         });
-        
+
         let event_token = in_port.add_message_received(&handler).expect("add_message_received failed");
 
         Ok(MidiInputConnection { rt: self.rt, port: RtMidiInPort(in_port), event_token: event_token, handler_data: handler_data })
@@ -193,20 +193,20 @@ impl MidiOutput {
         }
         result
     }
-    
+
     pub fn port_count(&self) -> usize {
         let device_collection = DeviceInformation::find_all_async_aqs_filter(&self.selector.make_reference()).unwrap().blocking_get().expect("find_all_async failed").expect("find_all_async returned null");
         device_collection.get_size().expect("get_size failed") as usize
     }
-    
+
     pub fn port_name(&self, port: &MidiOutputPort) -> Result<String, PortInfoError> {
         let device_info_async = DeviceInformation::create_from_id_async(&port.id.make_reference()).map_err(|_| PortInfoError::InvalidPort)?;
         let device_info = device_info_async.blocking_get().map_err(|_| PortInfoError::InvalidPort)?.expect("device_info_async was null");
         let device_name = device_info.get_name().map_err(|_| PortInfoError::CannotRetrievePortName)?;
         Ok(device_name.to_string())
     }
-    
-    pub fn connect(self, port: &MidiOutputPort, _port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {        
+
+    pub fn connect(self, port: &MidiOutputPort, _port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
         let out_port = match MidiOutPort::from_id_async(&port.id.make_reference()) {
             Ok(port_async) => match port_async.blocking_get() {
                 Ok(Some(port)) => port,
@@ -231,7 +231,7 @@ impl MidiOutputConnection {
         let device_selector = MidiOutPort::get_device_selector().expect("get_device_selector failed"); // probably won't ever fail here, because it worked previously
         MidiOutput { rt: self.rt, selector: device_selector }
     }
-    
+
     pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
         let data_writer: ComPtr<DataWriter> = DataWriter::new();
         data_writer.write_bytes(message).map_err(|_| SendError::Other("write_bytes failed"))?;

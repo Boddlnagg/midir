@@ -30,7 +30,7 @@ impl std::ops::BitOr for Ignore {
 impl Ignore {
     #[inline(always)]
     pub fn contains(self, other: Ignore) -> bool {
-        self as u8 & other as u8 != 0 
+        self as u8 & other as u8 != 0
     }
 }
 

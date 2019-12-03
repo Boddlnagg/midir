@@ -16,7 +16,7 @@ fn main() {
 
 fn run() -> Result<(), Box<Error>> {
     let midi_out = MidiOutput::new("My Test Output")?;
-    
+
     // Get an output port (read from console if multiple are available)
     let out_ports = midi_out.ports();
     let out_port: &MidiOutputPort = match out_ports.len() {
@@ -38,7 +38,7 @@ fn run() -> Result<(), Box<Error>> {
                      .ok_or("invalid output port selected")?
         }
     };
-    
+
     println!("\nOpening connection");
     let mut conn_out = midi_out.connect(out_port, "midir-test")?;
     println!("Connection open. Listen!");
@@ -55,7 +55,7 @@ fn run() -> Result<(), Box<Error>> {
         };
 
         sleep(Duration::from_millis(4 * 150));
-        
+
         play_note(66, 4);
         play_note(65, 3);
         play_note(63, 1);

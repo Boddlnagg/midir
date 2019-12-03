@@ -24,7 +24,7 @@ fn run() -> Result<(), Box<Error>> {
         for (i, p) in midi_in.ports().iter().enumerate() {
             println!("{}: {}", i, midi_in.port_name(p)?);
         }
-        
+
         println!("\nAvailable output ports:");
         for (i, p) in midi_out.ports().iter().enumerate() {
             println!("{}: {}", i, midi_out.port_name(p)?);
@@ -41,6 +41,6 @@ fn run() -> Result<(), Box<Error>> {
         stdin().read_line(&mut input)?;
         println!("\n");
     }
-    
+
     Ok(())
 }

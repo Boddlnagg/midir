@@ -10,22 +10,22 @@ use super::HandlerData;
 use Ignore;
 
 pub extern "system" fn handle_input<T>(_: HMIDIIN,
-                input_status: UINT, 
+                input_status: UINT,
                 instance_ptr: DWORD_PTR,
                 midi_message: DWORD_PTR,
                 timestamp: DWORD) {
     if input_status != MM_MIM_DATA && input_status != MM_MIM_LONGDATA && input_status != MM_MIM_LONGERROR { return; }
-    
+
     let data: &mut HandlerData<T> = unsafe { &mut *(instance_ptr as *mut HandlerData<T>) };
-    
+
     // Calculate time stamp.
     data.message.timestamp = timestamp as u64 * 1000; // milliseconds -> microseconds
-    
+
     if input_status == MM_MIM_DATA { // Channel or system message
         // Make sure the first byte is a status byte.
         let status: u8 = (midi_message & 0x000000FF) as u8;
         if !(status & 0x80 != 0) { return; }
-        
+
         // Determine the number of bytes in the MIDI message.
         let nbytes: u16 = if status < 0xC0 { 3 }
         else if status < 0xE0 { 2 }
@@ -42,7 +42,7 @@ pub extern "system" fn handle_input<T>(_: HMIDIIN,
             // A MIDI active sensing message and we're ignoring it.
             return;
         } else { 1 };
-        
+
         // Copy bytes to our MIDI message.
         let ptr = (&midi_message) as *const DWORD_PTR as *const u8;
         let bytes: &[u8] = unsafe { slice::from_raw_parts(ptr, nbytes as usize) };
@@ -56,7 +56,7 @@ pub extern "system" fn handle_input<T>(_: HMIDIIN,
             // TODO: If sysex messages are longer than RT_SYSEX_BUFFER_SIZE, they
             //       are split in chunks. We could reassemble a single message.
         }
-    
+
         // The WinMM API requires that the sysex buffer be requeued after
         // input of each sysex message.  Even if we are ignoring sysex
         // messages, we still need to requeue the buffer in case the user
@@ -73,13 +73,13 @@ pub extern "system" fn handle_input<T>(_: HMIDIIN,
             if result != MMSYSERR_NOERROR {
                 let _ = writeln!(stderr(), "\nError in handle_input: Requeuing WinMM input sysex buffer failed.\n");
             }
-            
+
             if data.ignore_flags.contains(Ignore::Sysex) { return; }
         } else { return; }
     }
-    
-    (data.callback)(data.message.timestamp, &data.message.bytes, data.user_data.as_mut().unwrap());   
-    
+
+    (data.callback)(data.message.timestamp, &data.message.bytes, data.user_data.as_mut().unwrap());
+
     // Clear the vector for the next input message.
     data.message.bytes.clear();
 }

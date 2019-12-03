@@ -42,11 +42,11 @@ impl MidiInput {
     pub fn ignore(&mut self, flags: Ignore) {
         self.ignore_flags = flags;
     }
-    
+
     pub fn port_count(&self) -> usize {
         Sources::count()
     }
-    
+
     pub fn port_name(&self, port: &MidiInputPort) -> Result<String, PortInfoError> {
         match port.source.display_name() {
             Some(name) => Ok(name),
@@ -146,7 +146,7 @@ impl MidiInput {
             }
         }
     }
-    
+
     pub fn connect<F, T: Send + 'static>(
         self, port: &MidiInputPort, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
@@ -262,18 +262,18 @@ impl MidiOutput {
             imp: MidiOutputPort { dest: Arc::new(d) }
         }).collect()
     }
-    
+
     pub fn port_count(&self) -> usize {
         Destinations::count()
     }
-    
+
     pub fn port_name(&self, port: &MidiOutputPort) -> Result<String, PortInfoError> {
         match port.dest.display_name() {
             Some(name) => Ok(name),
             None => Err(PortInfoError::CannotRetrievePortName)
         }
     }
-    
+
     pub fn connect(self, port: &MidiOutputPort, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
         let oport = match self.client.output_port(port_name) {
             Ok(p) => p,
@@ -311,7 +311,7 @@ impl MidiOutputConnection {
     pub fn close(self) -> MidiOutput {
         MidiOutput { client: self.client }
     }
-    
+
     pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
         let packets = PacketBuffer::new(0, message);
         match self.details {
@@ -322,6 +322,6 @@ impl MidiOutputConnection {
                 vrt.received(&packets).map_err(|_| SendError::Other("error sending MIDI to virtual destinations"))
             }
         }
-        
+
     }
 }

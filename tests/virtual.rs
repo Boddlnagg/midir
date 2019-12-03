@@ -13,14 +13,14 @@ fn end_to_end() {
     let mut midi_in = MidiInput::new("My Test Input").unwrap();
     midi_in.ignore(Ignore::None);
     let midi_out = MidiOutput::new("My Test Output").unwrap();
-    
+
     let previous_count = midi_out.port_count();
-    
+
     println!("Creating virtual input port ...");
     let conn_in = midi_in.create_virtual("midir-test", |stamp, message, _| {
         println!("{}: {:?} (len = {})", stamp, message, message.len());
     }, ()).unwrap();
-    
+
     assert_eq!(midi_out.port_count(), previous_count + 1);
 
     let new_port: MidiOutputPort = midi_out.ports().into_iter().rev().next().unwrap();
@@ -41,16 +41,16 @@ fn end_to_end() {
     println!("Closing virtual input ...");
     let midi_in = conn_in.close().0;
     assert_eq!(midi_out.port_count(), previous_count);
-    
+
     let previous_count = midi_in.port_count();
-    
+
     // reuse midi_in and midi_out, but swap roles
     println!("\nCreating virtual output port ...");
     let mut conn_out = midi_out.create_virtual("midir-test").unwrap();
     assert_eq!(midi_in.port_count(), previous_count + 1);
 
     let new_port = midi_in.ports().into_iter().rev().next().unwrap();
-    
+
     println!("Connecting to port '{}' ...", midi_in.port_name(&new_port).unwrap());
     let conn_in = midi_in.connect(&new_port, "midir-test", |stamp, message, _| {
         println!("{}: {:?} (len = {})", stamp, message, message.len());

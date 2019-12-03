@@ -16,11 +16,11 @@ fn main() {
 
 fn run() -> Result<(), Box<Error>> {
     let mut input = String::new();
-    
+
     let mut midi_in = MidiInput::new("My Test Input")?;
     midi_in.ignore(Ignore::None);
     let mut midi_out = MidiOutput::new("My Test Output")?;
-    
+
     println!("Available input ports:");
     let midi_in_ports = midi_in.ports();
     for (i, p) in midi_in_ports.iter().enumerate() {
@@ -31,7 +31,7 @@ fn run() -> Result<(), Box<Error>> {
     stdin().read_line(&mut input)?;
     let in_port = midi_in_ports.get(input.trim().parse::<usize>()?)
                                .ok_or("Invalid port number")?;
-    
+
     println!("\nAvailable output ports:");
     let midi_out_ports = midi_out.ports();
     for (i, p) in midi_out_ports.iter().enumerate() {
@@ -43,7 +43,7 @@ fn run() -> Result<(), Box<Error>> {
     stdin().read_line(&mut input)?;
     let out_port = midi_out_ports.get(input.trim().parse::<usize>()?)
                                  .ok_or("Invalid port number")?;
-    
+
     // This shows how to reuse input and output objects:
     // Open/close the connections twice using the same MidiInput/MidiOutput objects
     for _ in 0..2 {
@@ -54,12 +54,12 @@ fn run() -> Result<(), Box<Error>> {
             println!("{}: {:?} (len = {})", stamp, message, message.len());
             log.extend_from_slice(message);
         }, log_all_bytes)?;
-        
+
         // One could get the log back here out of the error
         let mut conn_out = midi_out.connect(out_port, "midir-test")?;
-        
+
         println!("Connections open, enter `q` to exit ...");
-        
+
         loop {
             input.clear();
             stdin().read_line(&mut input)?;

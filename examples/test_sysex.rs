@@ -23,16 +23,16 @@ pub fn run() -> Result<(), Box<Error>> {
     let mut midi_in = MidiInput::new("My Test Input")?;
     midi_in.ignore(Ignore::None);
     let midi_out = MidiOutput::new("My Test Output")?;
-    
+
     let previous_count = midi_out.port_count();
-    
+
     println!("Creating virtual input port ...");
     let conn_in = midi_in.create_virtual("midir-test", |stamp, message, _| {
         println!("{}: {:?} (len = {})", stamp, message, message.len());
     }, ())?;
-    
+
     assert_eq!(midi_out.port_count(), previous_count + 1);
-    
+
     let out_ports = midi_out.ports();
     let new_port = out_ports.last().unwrap();
     println!("Connecting to port '{}' ...", midi_out.port_name(&new_port).unwrap());

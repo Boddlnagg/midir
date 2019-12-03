@@ -15,11 +15,11 @@ fn main() {
 #[cfg(not(target_arch = "wasm32"))] // conn_out is not `Send` in Web MIDI, which means it cannot be passed to connect
 fn run() -> Result<(), Box<Error>> {
     let mut input = String::new();
-    
+
     let mut midi_in = MidiInput::new("midir forwarding input")?;
     midi_in.ignore(Ignore::None);
     let midi_out = MidiOutput::new("midir forwarding output")?;
-    
+
     println!("Available input ports:");
     let midi_in_ports = midi_in.ports();
     for (i, p) in midi_in_ports.iter().enumerate() {
@@ -30,7 +30,7 @@ fn run() -> Result<(), Box<Error>> {
     stdin().read_line(&mut input)?;
     let in_port = midi_in_ports.get(input.trim().parse::<usize>()?)
                                .ok_or("Invalid port number")?;
-    
+
     println!("\nAvailable output ports:");
     let midi_out_ports = midi_out.ports();
     for (i, p) in midi_out_ports.iter().enumerate() {
@@ -42,7 +42,7 @@ fn run() -> Result<(), Box<Error>> {
     stdin().read_line(&mut input)?;
     let out_port = midi_out_ports.get(input.trim().parse::<usize>()?)
                                  .ok_or("Invalid port number")?;
-    
+
     println!("\nOpening connections");
     let in_port_name = midi_in.port_name(in_port)?;
     let out_port_name = midi_out.port_name(out_port)?;
@@ -54,7 +54,7 @@ fn run() -> Result<(), Box<Error>> {
         conn_out.send(message).unwrap_or_else(|_| println!("Error when forwarding message ..."));
         println!("{}: {:?} (len = {})", stamp, message, message.len());
     }, ())?;
-    
+
     println!("Connections open, forwarding from '{}' to '{}' (press enter to exit) ...", in_port_name, out_port_name);
 
     input.clear();

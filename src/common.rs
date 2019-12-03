@@ -3,7 +3,7 @@
 use ::errors::*;
 use ::backend::{
     MidiInputPort as MidiInputPortImpl,
-    MidiInput as MidiInputImpl, 
+    MidiInput as MidiInputImpl,
     MidiInputConnection as MidiInputConnectionImpl,
     MidiOutputPort as MidiOutputPortImpl,
     MidiOutput as MidiOutputImpl,
@@ -37,7 +37,7 @@ impl MidiInput {
     pub fn new(client_name: &str) -> Result<Self, InitError> {
         MidiInputImpl::new(client_name).map(|imp| MidiInput { imp: imp })
     }
-    
+
     /// Set flags to decide what kind of messages should be ignored (i.e., filtered out)
     /// by this `MidiInput`. By default, no messages are ignored.
     pub fn ignore(&mut self, flags: Ignore) {
@@ -51,12 +51,12 @@ impl MidiInput {
     pub fn ports(&self) -> MidiInputPorts {
         self.imp.ports_internal()
     }
-    
+
     /// Get the number of available MIDI input ports that *midir* can connect to.
     pub fn port_count(&self) -> usize {
         self.imp.port_count()
     }
-    
+
     /// Get the name of a specified MIDI input port.
     ///
     /// An error will be returned when the port is no longer valid
@@ -64,7 +64,7 @@ impl MidiInput {
     pub fn port_name(&self, port: &MidiInputPort) -> Result<String, PortInfoError> {
         self.imp.port_name(&port.imp)
     }
-    
+
     /// Connect to a specified MIDI input port in order to receive messages.
     /// For each incoming MIDI message, the provided `callback` function will
     /// be called. The first parameter of the callback function is a timestamp
@@ -94,7 +94,7 @@ impl MidiInput {
             Err(imp) => {
                 let kind = imp.kind();
                 Err(ConnectError::new(kind, MidiInput { imp: imp.into_inner() }))
-            } 
+            }
         }
     }
 }
@@ -110,7 +110,7 @@ impl<T: Send> ::os::unix::VirtualInput<T> for MidiInput {
             Err(imp) => {
                 let kind = imp.kind();
                 Err(ConnectError::new(kind, MidiInput { imp: imp.into_inner() }))
-            } 
+            }
         }
     }
 }
@@ -164,12 +164,12 @@ impl MidiOutput {
     pub fn ports(&self) -> MidiOutputPorts {
         self.imp.ports_internal()
     }
-    
+
     /// Get the number of available MIDI output ports that *midir* can connect to.
     pub fn port_count(&self) -> usize {
         self.imp.port_count()
     }
-    
+
     /// Get the name of a specified MIDI output port.
     ///
     /// An error will be returned when the port is no longer valid
@@ -177,7 +177,7 @@ impl MidiOutput {
     pub fn port_name(&self, port: &MidiOutputPort) -> Result<String, PortInfoError> {
         self.imp.port_name(&port.imp)
     }
-    
+
     /// Connect to a specified MIDI output port in order to send messages.
     /// The connection will be kept open as long as the returned
     /// `MidiOutputConnection` is kept alive.
@@ -193,7 +193,7 @@ impl MidiOutput {
             Err(imp) => {
                 let kind = imp.kind();
                 Err(ConnectError::new(kind, MidiOutput { imp: imp.into_inner() }))
-            } 
+            }
         }
     }
 }
@@ -206,7 +206,7 @@ impl ::os::unix::VirtualOutput for MidiOutput {
             Err(imp) => {
                 let kind = imp.kind();
                 Err(ConnectError::new(kind, MidiOutput { imp: imp.into_inner() }))
-            } 
+            }
         }
     }
 }
@@ -222,7 +222,7 @@ impl MidiOutputConnection {
     pub fn close(self) -> MidiOutput {
         MidiOutput { imp: self.imp.close() }
     }
-    
+
     /// Send a message to the port that this output connection is connected to.
     /// The message must be a valid MIDI message (see https://www.midi.org/specifications/item/table-1-summary-of-midi-message).
     pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
