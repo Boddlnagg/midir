@@ -237,7 +237,7 @@ struct HandlerData<T> {
     message: MidiMessage,
     ignore_flags: Ignore,
     continue_sysex: bool,
-    callback: Box<FnMut(u64, &[u8], &mut T) + Send>,
+    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send>,
     user_data: Option<T>
 }
 

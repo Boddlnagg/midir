@@ -136,7 +136,7 @@ struct HandlerData<T> {
     sysex_buffer: SysexBuffer,
     in_handle: Option<MidiInHandle>,
     ignore_flags: Ignore,
-    callback: Box<FnMut(u64, &[u8], &mut T) + Send + 'static>,
+    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send + 'static>,
     user_data: Option<T>
 }
 

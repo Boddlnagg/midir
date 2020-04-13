@@ -156,7 +156,7 @@ impl<T> MidiInputConnection<T> {
 /// offsets after monomorphization.
 struct HandlerData<T> {
     ignore_flags: Ignore,
-    callback: Box<FnMut(u64, &[u8], &mut T) + Send>,
+    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send>,
     user_data: Option<T>
 }
 

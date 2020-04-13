@@ -19,7 +19,7 @@ use midir::os::unix::VirtualInput;
 
 const LARGE_SYSEX_SIZE: usize = 5572; // This is the maximum that worked for me
 
-pub fn run() -> Result<(), Box<Error>> {
+pub fn run() -> Result<(), Box<dyn Error>> {
     let mut midi_in = MidiInput::new("My Test Input")?;
     midi_in.ignore(Ignore::None);
     let midi_out = MidiOutput::new("My Test Output")?;
@@ -75,5 +75,5 @@ pub fn run() -> Result<(), Box<Error>> {
  // needed to compile successfully
 #[cfg(any(windows, target_arch = "wasm32"))] mod example {
     use std::error::Error;
-    pub fn run() -> Result<(), Box<Error>> { Ok(()) }
+    pub fn run() -> Result<(), Box<dyn Error>> { Ok(()) }
 }
