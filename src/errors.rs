@@ -1,9 +1,9 @@
 use std::error::Error;
 use std::fmt;
 
-const INVALID_PORT_MSG: &'static str = "invalid port";
-const PORT_OUT_OF_RANGE_MSG: &'static str = "provided port number was out of range";
-const CANNOT_RETRIEVE_PORT_NAME_MSG: &'static str = "unknown error when trying to retrieve the port name";
+const INVALID_PORT_MSG: &str = "invalid port";
+const PORT_OUT_OF_RANGE_MSG: &str = "provided port number was out of range";
+const CANNOT_RETRIEVE_PORT_NAME_MSG: &str = "unknown error when trying to retrieve the port name";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// An error that can occur during initialization (i.e., while
