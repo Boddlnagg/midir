@@ -136,7 +136,7 @@ struct HandlerData<T: 'static> {
     ignore_flags: Ignore,
     seq: Seq,
     trigger_rcv_fd: i32,
-    callback: Box<FnMut(u64, &[u8], &mut T) + Send>,
+    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send>,
     queue_id: i32, // an input queue is needed to get timestamped events
 }
 

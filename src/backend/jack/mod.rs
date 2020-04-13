@@ -18,7 +18,7 @@ const OUTPUT_RINGBUFFER_SIZE: usize = 16384;
 struct InputHandlerData<T> {
     port: Option<MidiPort>,
     ignore_flags: Ignore,
-    callback: Box<FnMut(u64, &[u8], &mut T) + Send>,
+    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send>,
     user_data: Option<T>
 }
 

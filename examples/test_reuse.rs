@@ -14,7 +14,7 @@ fn main() {
     }
 }
 
-fn run() -> Result<(), Box<Error>> {
+fn run() -> Result<(), Box<dyn Error>> {
     let mut input = String::new();
     
     let mut midi_in = MidiInput::new("My Test Input")?;

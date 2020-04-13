@@ -14,7 +14,7 @@ fn main() {
     }
 }
 
-fn run() -> Result<(), Box<Error>> {
+fn run() -> Result<(), Box<dyn Error>> {
     let midi_out = MidiOutput::new("My Test Output")?;
     
     // Get an output port (read from console if multiple are available)

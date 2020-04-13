@@ -12,7 +12,7 @@ fn main() {
     }
 }
 
-fn run() -> Result<(), Box<Error>> {
+fn run() -> Result<(), Box<dyn Error>> {
     let mut midi_in = MidiInput::new("midir test input")?;
     midi_in.ignore(Ignore::None);
     let midi_out = MidiOutput::new("midir test output")?;

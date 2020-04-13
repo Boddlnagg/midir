@@ -13,7 +13,7 @@ fn main() {
 }
 
 #[cfg(not(target_arch = "wasm32"))] // conn_out is not `Send` in Web MIDI, which means it cannot be passed to connect
-fn run() -> Result<(), Box<Error>> {
+fn run() -> Result<(), Box<dyn Error>> {
     let mut input = String::new();
     
     let mut midi_in = MidiInput::new("midir forwarding input")?;
@@ -65,7 +65,7 @@ fn run() -> Result<(), Box<Error>> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn run() -> Result<(), Box<Error>> {
+fn run() -> Result<(), Box<dyn Error>> {
     println!("test_forward cannot run on Web MIDI");
     Ok(())
 }
