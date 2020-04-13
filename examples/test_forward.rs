@@ -8,7 +8,7 @@ use midir::{MidiInput, MidiOutput, Ignore};
 fn main() {
     match run() {
         Ok(_) => (),
-        Err(err) => println!("Error: {}", err.description())
+        Err(err) => println!("Error: {}", err)
     }
 }
 
