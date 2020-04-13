@@ -10,7 +10,7 @@ use midir::{MidiOutput, MidiOutputPort};
 fn main() {
     match run() {
         Ok(_) => (),
-        Err(err) => println!("Error: {}", err.description())
+        Err(err) => println!("Error: {}", err)
     }
 }
 

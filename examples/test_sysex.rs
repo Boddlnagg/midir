@@ -3,7 +3,7 @@ extern crate midir;
 fn main() {
     match example::run() {
         Ok(_) => (),
-        Err(err) => println!("Error: {}", err.description())
+        Err(err) => println!("Error: {}", err)
     }
 }
 

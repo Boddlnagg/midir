@@ -10,15 +10,11 @@ const CANNOT_RETRIEVE_PORT_NAME_MSG: &'static str = "unknown error when trying t
 /// creating a `MidiInput` or `MidiOutput` object).
 pub struct InitError;
 
-impl Error for InitError {
-    fn description(&self) -> &str {
-        "MIDI support could not be initialized"
-    }
-}
+impl Error for InitError {}
 
 impl fmt::Display for InitError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.description().fmt(f)
+        "MIDI support could not be initialized".fmt(f)
     }
 }
 
@@ -31,19 +27,15 @@ pub enum PortInfoError {
     CannotRetrievePortName,
 }
 
-impl Error for PortInfoError {
-    fn description(&self) -> &str {
-        match *self {
-            PortInfoError::PortNumberOutOfRange => PORT_OUT_OF_RANGE_MSG,
-            PortInfoError::InvalidPort => INVALID_PORT_MSG,
-            PortInfoError::CannotRetrievePortName => CANNOT_RETRIEVE_PORT_NAME_MSG,
-        }
-    }
-}
+impl Error for PortInfoError {}
 
 impl fmt::Display for PortInfoError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.description().fmt(f)
+        match *self {
+            PortInfoError::PortNumberOutOfRange => PORT_OUT_OF_RANGE_MSG.fmt(f),
+            PortInfoError::InvalidPort => INVALID_PORT_MSG.fmt(f),
+            PortInfoError::CannotRetrievePortName => CANNOT_RETRIEVE_PORT_NAME_MSG.fmt(f),
+        }
     }
 }
 
@@ -54,18 +46,14 @@ pub enum ConnectErrorKind {
     Other(&'static str)
 }
 
-impl ConnectErrorKind {
-    fn description(&self) -> &str {
-        match *self {
-            ConnectErrorKind::InvalidPort => INVALID_PORT_MSG,
-            ConnectErrorKind::Other(msg) => msg
-        }
-    }
-}
+impl ConnectErrorKind {}
 
 impl fmt::Display for ConnectErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.description().fmt(f)
+        match *self {
+            ConnectErrorKind::InvalidPort => INVALID_PORT_MSG.fmt(f),
+            ConnectErrorKind::Other(msg) => msg.fmt(f)
+        }
     }
 }
 
@@ -106,11 +94,7 @@ impl<T> fmt::Display for ConnectError<T> {
     }
 }
 
-impl<T> Error for ConnectError<T> {
-    fn description(&self) -> &str {
-        self.kind.description()
-    }
-}
+impl<T> Error for ConnectError<T> {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// An error that can occur when sending MIDI messages.
@@ -119,16 +103,12 @@ pub enum SendError {
     Other(&'static str)
 }
 
-impl Error for SendError {
-    fn description(&self) -> &str {
-        match *self {
-            SendError::InvalidData(msg) | SendError::Other(msg) => msg
-        }
-    }
-}
+impl Error for SendError {}
 
 impl fmt::Display for SendError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.description().fmt(f)
+        match *self {
+            SendError::InvalidData(msg) | SendError::Other(msg) => msg.fmt(f)
+        }
     }
 }
