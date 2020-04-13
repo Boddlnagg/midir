@@ -38,7 +38,7 @@ pub struct MidiInputConnection<T> {
 
 impl MidiInput {
     pub fn new(client_name: &str) -> Result<Self, InitError> {
-        let client = match Client::open(client_name, NoStartServer) {
+        let client = match Client::open(client_name, JackOpenOptions::NoStartServer) {
             Ok(c) => c,
             Err(_) => { return Err(InitError); } // TODO: maybe add message that Jack server might not be running
         };
@@ -54,7 +54,7 @@ impl MidiInput {
     }
 
     pub(crate) fn ports_internal(&self) -> Vec<::common::MidiInputPort> {
-        let ports = self.client.as_ref().unwrap().get_midi_ports(PortIsOutput);
+        let ports = self.client.as_ref().unwrap().get_midi_ports(PortFlags::PortIsOutput);
         let mut result = Vec::with_capacity(ports.count());
         for i in 0..ports.count() {
             result.push(::common::MidiInputPort {
@@ -67,7 +67,7 @@ impl MidiInput {
     }
     
     pub fn port_count(&self) -> usize {
-        self.client.as_ref().unwrap().get_midi_ports(PortIsOutput).count()
+        self.client.as_ref().unwrap().get_midi_ports(PortFlags::PortIsOutput).count()
     }
     
     pub fn port_name(&self, port: &MidiInputPort) -> Result<String, PortInfoError> {
@@ -100,7 +100,7 @@ impl MidiInput {
         let mut handler_data = self.activate_callback(callback, data);
         
         // Create port ...
-        let dest_port = match self.client.as_mut().unwrap().register_midi_port(port_name, PortIsInput) {
+        let dest_port = match self.client.as_mut().unwrap().register_midi_port(port_name, PortFlags::PortIsInput) {
             Ok(p) => p,
             Err(()) => { return Err(ConnectError::other("could not register JACK port", self)); }
         };
@@ -126,7 +126,7 @@ impl MidiInput {
         let mut handler_data = self.activate_callback(callback, data);
         
         // Create port
-        let port = match self.client.as_mut().unwrap().register_midi_port(port_name, PortIsInput) {
+        let port = match self.client.as_mut().unwrap().register_midi_port(port_name, PortFlags::PortIsInput) {
             Ok(p) => p,
             Err(()) => { return Err(ConnectError::other("could not register JACK port", self)); }
         };
@@ -216,7 +216,7 @@ pub struct MidiOutputConnection {
 
 impl MidiOutput {
     pub fn new(client_name: &str) -> Result<Self, InitError> {
-        let client = match Client::open(client_name, NoStartServer) {
+        let client = match Client::open(client_name, JackOpenOptions::NoStartServer) {
             Ok(c) => c,
             Err(_) => { return Err(InitError); } // TODO: maybe add message that Jack server might not be running
         };
@@ -227,7 +227,7 @@ impl MidiOutput {
     }
 
     pub(crate) fn ports_internal(&self) -> Vec<::common::MidiOutputPort> {
-        let ports = self.client.as_ref().unwrap().get_midi_ports(PortIsInput);
+        let ports = self.client.as_ref().unwrap().get_midi_ports(PortFlags::PortIsInput);
         let mut result = Vec::with_capacity(ports.count());
         for i in 0..ports.count() {
             result.push(::common::MidiOutputPort {
@@ -240,7 +240,7 @@ impl MidiOutput {
     }
     
     pub fn port_count(&self) -> usize {
-        self.client.as_ref().unwrap().get_midi_ports(PortIsInput).count()
+        self.client.as_ref().unwrap().get_midi_ports(PortFlags::PortIsInput).count()
     }
     
     pub fn port_name(&self, port: &MidiOutputPort) -> Result<String, PortInfoError> {
@@ -265,7 +265,7 @@ impl MidiOutput {
         let mut handler_data = self.activate_callback();
         
         // Create port ...
-        let source_port = match self.client.as_mut().unwrap().register_midi_port(port_name, PortIsOutput) {
+        let source_port = match self.client.as_mut().unwrap().register_midi_port(port_name, PortFlags::PortIsOutput) {
             Ok(p) => p,
             Err(()) => { return Err(ConnectError::other("could not register JACK port", self)); }
         };
@@ -289,7 +289,7 @@ impl MidiOutput {
         let mut handler_data = self.activate_callback();
         
         // Create port
-        let port = match self.client.as_mut().unwrap().register_midi_port(port_name, PortIsOutput) {
+        let port = match self.client.as_mut().unwrap().register_midi_port(port_name, PortFlags::PortIsOutput) {
             Ok(p) => p,
             Err(()) => { return Err(ConnectError::other("could not register JACK port", self)); }
         };

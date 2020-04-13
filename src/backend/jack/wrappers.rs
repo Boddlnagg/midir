@@ -40,21 +40,21 @@ use super::jack_sys::{
 pub const JACK_DEFAULT_MIDI_TYPE: &'static [u8] = b"8 bit raw midi\0";
 
 bitflags! {
-    flags JackOpenOptions: u32 {
-        const NoStartServer = 1,
-        const UseExactName = 2,
-        const ServerName = 4,
-        const SessionID = 32,
+    pub struct JackOpenOptions: u32 {
+        const NoStartServer = 1;
+        const UseExactName = 2;
+        const ServerName = 4;
+        const SessionID = 32;
     }
 }
 
 bitflags! {
-    flags PortFlags: u32 {
-        const PortIsInput = 1,
-        const PortIsOutput = 2,
-        const PortIsPhysical = 4,
-        const PortCanMonitor = 8,
-        const PortIsTerminal = 16
+    pub struct PortFlags: u32 {
+        const PortIsInput = 1;
+        const PortIsOutput = 2;
+        const PortIsPhysical = 4;
+        const PortCanMonitor = 8;
+        const PortIsTerminal = 16;
     }
 }
 
