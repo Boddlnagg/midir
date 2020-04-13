@@ -586,7 +586,7 @@ impl Drop for MidiOutputConnection {
 
 fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T> {
     use self::alsa::PollDescriptors;
-    use self::alsa::seq::{EventType, Connect};
+    use self::alsa::seq::Connect;
 
     let mut continue_sysex: bool = false;
     
