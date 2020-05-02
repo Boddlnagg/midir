@@ -2,7 +2,7 @@ extern crate winrt;
 
 use std::sync::{Arc, Mutex};
 
-use self::winrt::{RuntimeContext, ComPtr, HString, RtAsyncOperation, RtDefaultConstructible, IMemoryBufferByteAccess};
+use self::winrt::{ComPtr, HString, RtAsyncOperation, RtDefaultConstructible, IMemoryBufferByteAccess};
 use self::winrt::windows::foundation::*;
 use self::winrt::windows::devices::enumeration::*;
 use self::winrt::windows::devices::midi::*;
@@ -18,7 +18,6 @@ pub struct MidiInputPort {
 unsafe impl Send for MidiInputPort {} // because HString doesn't ...
 
 pub struct MidiInput {
-    rt: RuntimeContext,
     selector: HString,
     ignore_flags: Ignore
 }
@@ -27,9 +26,8 @@ unsafe impl Send for MidiInput {} // because HString doesn't ...
 
 impl MidiInput {
     pub fn new(_client_name: &str) -> Result<Self, InitError> {
-        let rt = RuntimeContext::init();
         let device_selector = MidiInPort::get_device_selector().map_err(|_| InitError)?;
-        Ok(MidiInput { rt: rt, selector: device_selector, ignore_flags: Ignore::None })
+        Ok(MidiInput { selector: device_selector, ignore_flags: Ignore::None })
     }
 
     pub fn ignore(&mut self, flags: Ignore) {
@@ -65,17 +63,15 @@ impl MidiInput {
     fn handle_input<T>(args: &MidiMessageReceivedEventArgs, handler_data: &mut HandlerData<T>) {
         let ignore = handler_data.ignore_flags;
         let data = &mut handler_data.user_data.as_mut().unwrap();
-        let timestamp; 
+        let timestamp;
         let byte_access;
         let message_bytes;
-        unsafe {
-            let message = args.get_message().expect("get_message failed").expect("get_message returned null");
-            timestamp = message.get_timestamp().expect("get_timestamp failed").Duration as u64 / 10;
-            let buffer = message.get_raw_data().expect("get_raw_data failed").expect("get_raw_data returned null");
-            let membuffer = Buffer::create_memory_buffer_over_ibuffer(&buffer).expect("create_memory_buffer_over_ibuffer failed").expect("create_memory_buffer_over_ibuffer returned null");
-            byte_access = membuffer.create_reference().expect("create_reference failed").expect("create_reference returned null").query_interface::<IMemoryBufferByteAccess>().unwrap();
-            message_bytes = byte_access.get_buffer();
-        }
+        let message = args.get_message().expect("get_message failed").expect("get_message returned null");
+        timestamp = message.get_timestamp().expect("get_timestamp failed").Duration as u64 / 10;
+        let buffer = message.get_raw_data().expect("get_raw_data failed").expect("get_raw_data returned null");
+        let membuffer = Buffer::create_memory_buffer_over_ibuffer(&buffer).expect("create_memory_buffer_over_ibuffer failed").expect("create_memory_buffer_over_ibuffer returned null");
+        byte_access = membuffer.create_reference().expect("create_reference failed").expect("create_reference returned null").query_interface::<IMemoryBufferByteAccess>().unwrap();
+        message_bytes = unsafe { byte_access.get_buffer() }; // TODO: somehow make sure that the buffer is not invalidated while we're reading from it ...
 
         // The first byte in the message is the status
         let status = message_bytes[0];
@@ -116,7 +112,7 @@ impl MidiInput {
         
         let event_token = in_port.add_message_received(&handler).expect("add_message_received failed");
 
-        Ok(MidiInputConnection { rt: self.rt, port: RtMidiInPort(in_port), event_token: event_token, handler_data: handler_data })
+        Ok(MidiInputConnection { port: RtMidiInPort(in_port), event_token: event_token, handler_data: handler_data })
     }
 }
 
@@ -124,7 +120,6 @@ struct RtMidiInPort(ComPtr<MidiInPort>);
 unsafe impl Send for RtMidiInPort {}
 
 pub struct MidiInputConnection<T> {
-    rt: RuntimeContext,
     port: RtMidiInPort,
     event_token: EventRegistrationToken,
     // TODO: get rid of Arc & Mutex?
@@ -142,7 +137,6 @@ impl<T> MidiInputConnection<T> {
         let device_selector = MidiInPort::get_device_selector().expect("get_device_selector failed"); // probably won't ever fail here, because it worked previously
         let mut handler_data_locked = self.handler_data.lock().unwrap();
         (MidiInput {
-            rt: self.rt,
             selector: device_selector,
             ignore_flags: handler_data_locked.ignore_flags
         }, handler_data_locked.user_data.take().unwrap())
@@ -167,7 +161,6 @@ pub struct MidiOutputPort {
 unsafe impl Send for MidiOutputPort {} // because HString doesn't ...
 
 pub struct MidiOutput {
-    rt: RuntimeContext,
     selector: HString // TODO: change to FastHString?
 }
 
@@ -175,9 +168,8 @@ unsafe impl Send for MidiOutput {} // because HString doesn't ...
 
 impl MidiOutput {
     pub fn new(_client_name: &str) -> Result<Self, InitError> {
-        let rt = RuntimeContext::init();
         let device_selector = MidiOutPort::get_device_selector().map_err(|_| InitError)?;
-        Ok(MidiOutput { rt: rt, selector: device_selector })
+        Ok(MidiOutput { selector: device_selector })
     }
 
     pub(crate) fn ports_internal(&self) -> Vec<::common::MidiOutputPort> {
@@ -214,12 +206,11 @@ impl MidiOutput {
             }
             Err(_) => return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self))
         };
-        Ok(MidiOutputConnection { rt: self.rt, port: out_port })
+        Ok(MidiOutputConnection { port: out_port })
     }
 }
 
 pub struct MidiOutputConnection {
-    rt: RuntimeContext,
     port: ComPtr<IMidiOutPort>
 }
 
@@ -229,7 +220,7 @@ impl MidiOutputConnection {
     pub fn close(self) -> MidiOutput {
         let _ = self.port.query_interface::<IClosable>().unwrap().close();
         let device_selector = MidiOutPort::get_device_selector().expect("get_device_selector failed"); // probably won't ever fail here, because it worked previously
-        MidiOutput { rt: self.rt, selector: device_selector }
+        MidiOutput { selector: device_selector }
     }
     
     pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
