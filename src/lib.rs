@@ -34,7 +34,7 @@ impl Ignore {
     }
 }
 
-/// A MIDI structure used internally by the class to store incoming
+/// A MIDI structure used internally by some backends to store incoming
 /// messages. Each message represents one and only one MIDI message.
 /// The timestamp is represented as the elapsed microseconds since
 /// a point in time that is arbitrary, but does not change for the
@@ -46,7 +46,7 @@ struct MidiMessage {
 }
 
 impl MidiMessage {
-    pub fn new() -> MidiMessage {
+    fn new() -> MidiMessage {
         MidiMessage {
             bytes: vec![],
             timestamp: 0
