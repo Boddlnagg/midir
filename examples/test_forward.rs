@@ -3,7 +3,7 @@ extern crate midir;
 use std::io::{stdin, stdout, Write};
 use std::error::Error;
 
-use midir::{MidiInput, MidiOutput, MidiInputPort, MidiOutputPort, Ignore};
+use midir::{MidiInput, MidiOutput, MidiIO, Ignore};
 
 fn main() {
     match run() {
@@ -18,9 +18,9 @@ fn run() -> Result<(), Box<dyn Error>> {
     midi_in.ignore(Ignore::None);
     let midi_out = MidiOutput::new("midir forwarding output")?;
 
-    let in_port = get_input_port_interactively(&midi_in)?;
+    let in_port = select_port(&midi_in, "input")?;
     println!();
-    let out_port = get_output_port_interactively(&midi_out)?;
+    let out_port = select_port(&midi_out, "output")?;
 
     println!("\nOpening connections");
     let in_port_name = midi_in.port_name(&in_port)?;
@@ -43,34 +43,19 @@ fn run() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn get_input_port_interactively(midi_in: &MidiInput) -> Result<MidiInputPort, Box<dyn Error>> {
-    println!("Available input ports:");
-    let midi_in_ports = midi_in.ports();
-    for (i, p) in midi_in_ports.iter().enumerate() {
-        println!("{}: {}", i, midi_in.port_name(p)?);
+fn select_port<T: MidiIO>(midi_io: &T, descr: &str) -> Result<T::Port, Box<dyn Error>> {
+    println!("Available {} ports:", descr);
+    let midi_ports = midi_io.ports();
+    for (i, p) in midi_ports.iter().enumerate() {
+        println!("{}: {}", i, midi_io.port_name(p)?);
     }
-    print!("Please select input port: ");
+    print!("Please select {} port: ", descr);
     stdout().flush()?;
     let mut input = String::new();
     stdin().read_line(&mut input)?;
-    let in_port = midi_in_ports.get(input.trim().parse::<usize>()?)
-                               .ok_or("Invalid port number")?;
-    Ok(in_port.clone())
-}
-
-fn get_output_port_interactively(midi_out: &MidiOutput) -> Result<MidiOutputPort, Box<dyn Error>>{
-    println!("Available output ports:");
-    let midi_out_ports = midi_out.ports();
-    for (i, p) in midi_out_ports.iter().enumerate() {
-        println!("{}: {}", i, midi_out.port_name(p)?);
-    }
-    print!("Please select output port: ");
-    stdout().flush()?;
-    let mut input = String::new();
-    stdin().read_line(&mut input)?;
-    let out_port = midi_out_ports.get(input.trim().parse::<usize>()?)
-                                 .ok_or("Invalid port number")?;
-    Ok(out_port.clone())
+    let port = midi_ports.get(input.trim().parse::<usize>()?)
+                         .ok_or("Invalid port number")?;
+    Ok(port.clone())
 }
 
 #[cfg(target_arch = "wasm32")]

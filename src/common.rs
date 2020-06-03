@@ -11,6 +11,26 @@ use ::backend::{
 };
 use ::Ignore;
 
+/// Trait that abstracts over input and output ports.
+pub trait MidiIO {
+    /// Type of an input or output port structure.
+    type Port: Clone;
+
+    /// Get a collection of all MIDI input or output ports.
+    /// The resulting vector contains one object per port, which you can use to
+    /// query metadata about the port or connect to it.
+    fn ports(&self) -> Vec<Self::Port>;
+    
+    /// Get the number of available MIDI input or output ports.
+    fn port_count(&self) -> usize;
+    
+    /// Get the name of a specified MIDI input or output port.
+    ///
+    /// An error will be returned when the port is no longer valid
+    /// (e.g. the respective device has been disconnected).
+    fn port_name(&self, port: &Self::Port) -> Result<String, PortInfoError>;
+}
+
 /// An object representing a single input port.
 /// How the port is identified internally is backend-dependent.
 /// If the backend allows it, port objects remain valid when
@@ -97,6 +117,22 @@ impl MidiInput {
                 Err(ConnectError::new(kind, MidiInput { imp: imp.into_inner() }))
             } 
         }
+    }
+}
+
+impl MidiIO for MidiInput {
+    type Port = MidiInputPort;
+
+    fn ports(&self) -> MidiInputPorts {
+        self.imp.ports_internal()
+    }
+
+    fn port_count(&self) -> usize {
+        self.imp.port_count()
+    }
+
+    fn port_name(&self, port: &MidiInputPort) -> Result<String, PortInfoError> {
+        self.imp.port_name(&port.imp)
     }
 }
 
@@ -197,6 +233,22 @@ impl MidiOutput {
                 Err(ConnectError::new(kind, MidiOutput { imp: imp.into_inner() }))
             } 
         }
+    }
+}
+
+impl MidiIO for MidiOutput {
+    type Port = MidiOutputPort;
+
+    fn ports(&self) -> MidiOutputPorts {
+        self.imp.ports_internal()
+    }
+
+    fn port_count(&self) -> usize {
+        self.imp.port_count()
+    }
+
+    fn port_name(&self, port: &MidiOutputPort) -> Result<String, PortInfoError> {
+        self.imp.port_name(&port.imp)
     }
 }
 
