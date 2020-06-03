@@ -21,8 +21,9 @@ pub struct MidiInput {
     ignore_flags: Ignore
 }
 
+#[derive(Clone)]
 pub struct MidiInputPort {
-    source: Source
+    source: Arc<Source>
 }
 
 impl MidiInput {
@@ -35,7 +36,7 @@ impl MidiInput {
 
     pub(crate) fn ports_internal(&self) -> Vec<::common::MidiInputPort> {
         Sources.into_iter().map(|s| ::common::MidiInputPort {
-            imp: MidiInputPort { source: s }
+            imp: MidiInputPort { source: Arc::new(s) }
         }).collect()
     }
 
@@ -245,6 +246,7 @@ pub struct MidiOutput {
     client: Client
 }
 
+#[derive(Clone)]
 pub struct MidiOutputPort {
     dest: Arc<Destination>
 }

@@ -49,6 +49,7 @@ pub struct MidiInput {
     ignore_flags: Ignore
 }
 
+#[derive(Clone)]
 pub struct MidiInputPort {
     name: String,
     interface_id: Box<[u16]>
@@ -298,6 +299,7 @@ impl<T> Drop for MidiInputConnection<T> {
 #[derive(Debug)]
 pub struct MidiOutput;
 
+#[derive(Clone)]
 pub struct MidiOutputPort {
     name: String,
     interface_id: Box<[u16]>

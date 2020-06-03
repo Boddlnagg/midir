@@ -11,6 +11,7 @@ use self::winrt::windows::storage::streams::*;
 use ::errors::*;
 use ::Ignore;
 
+#[derive(Clone)]
 pub struct MidiInputPort {
     id: HString
 }
@@ -154,6 +155,7 @@ struct HandlerData<T> {
     user_data: Option<T>
 }
 
+#[derive(Clone)]
 pub struct MidiOutputPort {
     id: HString
 }
