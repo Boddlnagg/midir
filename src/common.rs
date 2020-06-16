@@ -53,7 +53,7 @@ pub struct MidiInput {
     imp: MidiInputImpl
 }
 
-impl MidiInput {
+impl<'a> MidiInput {
     /// Creates a new `MidiInput` object that is required for any MIDI input functionality.
     pub fn new(client_name: &str) -> Result<Self, InitError> {
         MidiInputImpl::new(client_name).map(|imp| MidiInput { imp: imp })
@@ -108,8 +108,8 @@ impl MidiInput {
     /// (e.g. the respective device has been disconnected).
     pub fn connect<F, T: Send>(
         self, port: &MidiInputPort, port_name: &str, callback: F, data: T
-    ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
-        where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
+    ) -> Result<MidiInputConnection<'a, T>, ConnectError<MidiInput>>
+        where F: FnMut(u64, &[u8], &mut T) + Send + 'a {
         match self.imp.connect(&port.imp, port_name, callback, data) {
             Ok(imp) => Ok(MidiInputConnection { imp: imp }),
             Err(imp) => {
@@ -153,11 +153,11 @@ impl<T: Send> ::os::unix::VirtualInput<T> for MidiInput {
 }
 
 /// Represents an open connection to a MIDI input port.
-pub struct MidiInputConnection<T: 'static> {
-    imp: MidiInputConnectionImpl<T>
+pub struct MidiInputConnection<'a, T: 'static + Send> {
+    imp: MidiInputConnectionImpl<'a, T>
 }
 
-impl<T> MidiInputConnection<T> {
+impl<T: Send> MidiInputConnection<'_, T> {
     /// Closes the connection. The returned values allow you to
     /// inspect the additional data passed to the callback (the `data`
     /// parameter of `connect`), or to reuse the `MidiInput` object,

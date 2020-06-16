@@ -126,22 +126,22 @@ pub struct MidiInputPort {
     addr: Addr
 }
 
-pub struct MidiInputConnection<T: 'static> {
+pub struct MidiInputConnection<'a, T: 'static + Send> {
     subscription: Option<PortSubscribe>,
-    thread: Option<JoinHandle<(HandlerData<T>, T)>>,
+    thread: Option<thread_scoped::JoinGuard<'a, (HandlerData<'a, T>, T)>>,
     vport: i32, // TODO: probably port numbers are only u8, therefore could use Option<u8>
     trigger_send_fd: i32,
 }
 
-struct HandlerData<T: 'static> {
+struct HandlerData<'a, T: 'static> {
     ignore_flags: Ignore,
     seq: Seq,
     trigger_rcv_fd: i32,
-    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send>,
+    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send + 'a>,
     queue_id: i32, // an input queue is needed to get timestamped events
 }
 
-impl MidiInput {
+impl<'a> MidiInput {
     pub fn new(client_name: &str) -> Result<Self, InitError> {
         let seq = match Seq::open(None, None, true) {
             Ok(s) => s,
@@ -236,8 +236,8 @@ impl MidiInput {
     
     pub fn connect<F, T: Send>(
         mut self, port: &MidiInputPort, port_name: &str, callback: F, data: T
-    ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
-        where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
+    ) -> Result<MidiInputConnection<'a, T>, ConnectError<Self>>
+        where F: FnMut(u64, &[u8], &mut T) + Send + 'a {
         
         let trigger_fds = match self.init_trigger() {
             Ok(fds) => fds,
@@ -284,20 +284,11 @@ impl MidiInput {
             queue_id: queue_id
         };
         
-        let threadbuilder = Builder::new();
-        let name = format!("midir ALSA input handler (port '{}')", port_name);
-        let threadbuilder = threadbuilder.name(name);
-        let thread = match threadbuilder.spawn(move || {
+        let thread = unsafe { thread_scoped::scoped(move || {
             let mut d = data;
             let h = handle_input(handler_data, &mut d);
             (h, d) // return both the handler data and the user data 
-        }) {
-            Ok(handle) => handle,
-            Err(_) => {
-                //unsafe { snd_seq_unsubscribe_port(self.seq.as_mut_ptr(), sub.as_ptr()) };
-                return Err(ConnectError::other("could not start ALSA input handler thread", self));
-            }
-        };
+        }) };
 
         Ok(MidiInputConnection {
             subscription: Some(subscription),
@@ -342,18 +333,11 @@ impl MidiInput {
             queue_id: queue_id
         };
         
-        let threadbuilder = Builder::new();
-        let thread = match threadbuilder.spawn(move || {
+        let thread = unsafe { thread_scoped::scoped(move || {
             let mut d = data;
             let h = handle_input(handler_data, &mut d);
             (h, d) // return both the handler data and the user data 
-        }) {
-            Ok(handle) => handle,
-            Err(_) => {
-                //unsafe { snd_seq_unsubscribe_port(self.seq.as_mut_ptr(), sub.as_ptr()) };
-                return Err(ConnectError::other("could not start ALSA input handler thread", self));
-            }
-        };
+        }) };
 
         Ok(MidiInputConnection {
             subscription: None,
@@ -364,7 +348,7 @@ impl MidiInput {
     }
 }
 
-impl<T> MidiInputConnection<T> {
+impl<T: Send> MidiInputConnection<'_, T> {
     pub fn close(mut self) -> (MidiInput, T) {
         let (handler_data, user_data) = self.close_internal();
         
@@ -381,17 +365,7 @@ impl<T> MidiInputConnection<T> {
         
         let thread = self.thread.take().unwrap(); 
         // Join the thread to get the handler_data back
-        let (handler_data, user_data) = match thread.join() {
-            Ok(data) => data,
-            // TODO: handle this more gracefully?
-            Err(e) => {
-                if let Some(e) = e.downcast_ref::<&'static str>() {
-                    panic!("Error when joining ALSA thread: {}", e);
-                } else {
-                    panic!("Unknown error when joining ALSA thread: {:?}", e);
-                }
-            }
-        };
+        let (handler_data, user_data) = thread.join();
         
         // TODO: find out why snd_seq_unsubscribe_port takes a long time if there was not yet any input message
         if let Some(ref subscription) = self.subscription {
@@ -419,7 +393,7 @@ impl<T> MidiInputConnection<T> {
 }
 
 
-impl<T> Drop for MidiInputConnection<T> {
+impl<T: Send> Drop for MidiInputConnection<'_, T> {
     fn drop(&mut self) {
         // Use `self.thread` as a flag whether the connection has already been dropped
         if self.thread.is_some() {
@@ -586,7 +560,7 @@ impl Drop for MidiOutputConnection {
     }
 }
 
-fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T> {
+fn handle_input<'a, T>(mut data: HandlerData<'a, T>, user_data: &mut T) -> HandlerData<'a, T> {
     use self::alsa::PollDescriptors;
     use self::alsa::seq::Connect;
 
