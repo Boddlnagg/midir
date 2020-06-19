@@ -3,7 +3,6 @@ extern crate alsa;
 extern crate nix;
 
 use std::mem;
-use std::thread::{Builder, JoinHandle};
 use std::io::{stderr, Write};
 use std::ffi::{CString, CStr};
 
