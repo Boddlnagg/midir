@@ -15,10 +15,10 @@ use ::errors::*;
 
 const OUTPUT_RINGBUFFER_SIZE: usize = 16384;
 
-struct InputHandlerData<T> {
+struct InputHandlerData<'a, T> {
     port: Option<MidiPort>,
     ignore_flags: Ignore,
-    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send>,
+    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send + 'a>,
     user_data: Option<T>
 }
 
@@ -32,9 +32,9 @@ pub struct MidiInputPort {
     name: CString
 }
 
-pub struct MidiInputConnection<T> {
-    handler_data: Box<InputHandlerData<T>>,
-    client: Option<Client>
+pub struct MidiInputConnection<'a, T> {
+    handler_data: Box<InputHandlerData<'a, T>>,
+    client: Option<Client>,
 }
 
 impl MidiInput {
@@ -75,9 +75,9 @@ impl MidiInput {
         Ok(port.name.to_string_lossy().into())
     }
     
-    fn activate_callback<F, T: Send>(&mut self, callback: F, data: T)
-            -> Box<InputHandlerData<T>>
-            where F: FnMut(u64, &[u8], &mut T) + Send + 'static
+    fn activate_callback<'a, F, T: Send>(&mut self, callback: F, data: T)
+            -> Box<InputHandlerData<'a, T>>
+            where F: FnMut(u64, &[u8], &mut T) + Send + 'a
     {
         let handler_data = Box::new(InputHandlerData {
             port: None,
@@ -93,10 +93,10 @@ impl MidiInput {
         handler_data
     }
     
-    pub fn connect<F, T: Send>(
+    pub fn connect<'a, F, T: Send>(
         mut self, port: &MidiInputPort, port_name: &str, callback: F, data: T
-    ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
-        where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
+    ) -> Result<MidiInputConnection<'a, T>, ConnectError<MidiInput>>
+        where F: FnMut(u64, &[u8], &mut T) + Send + 'a {
 
         let mut handler_data = self.activate_callback(callback, data);
         
@@ -141,7 +141,7 @@ impl MidiInput {
     }
 }
 
-impl<T> MidiInputConnection<T> {
+impl<T> MidiInputConnection<'_, T> {
     pub fn close(mut self) -> (MidiInput, T) {
         self.close_internal();
         
@@ -158,7 +158,7 @@ impl<T> MidiInputConnection<T> {
     }
 }
 
-impl<T> Drop for MidiInputConnection<T> {
+impl<T> Drop for MidiInputConnection<'_, T> {
     fn drop(&mut self) {
         if self.client.is_some() {
             self.close_internal();
