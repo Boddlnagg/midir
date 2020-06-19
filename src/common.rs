@@ -53,7 +53,7 @@ pub struct MidiInput {
     imp: MidiInputImpl
 }
 
-impl<'a> MidiInput {
+impl MidiInput {
     /// Creates a new `MidiInput` object that is required for any MIDI input functionality.
     pub fn new(client_name: &str) -> Result<Self, InitError> {
         MidiInputImpl::new(client_name).map(|imp| MidiInput { imp: imp })
@@ -106,7 +106,7 @@ impl<'a> MidiInput {
     ///
     /// An error will be returned when the port is no longer valid
     /// (e.g. the respective device has been disconnected).
-    pub fn connect<F, T: Send>(
+    pub fn connect<'a, F, T: Send>(
         self, port: &MidiInputPort, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<'a, T>, ConnectError<MidiInput>>
         where F: FnMut(u64, &[u8], &mut T) + Send + 'a {
