@@ -55,8 +55,8 @@ pub struct MidiInputPort {
     interface_id: Box<[u16]>
 }
 
-pub struct MidiInputConnection<T> {
-    handler_data: Box<HandlerData<T>>,
+pub struct MidiInputConnection<'a, T> {
+    handler_data: Box<HandlerData<'a, T>>,
 }
 
 impl MidiInputPort {
@@ -132,12 +132,12 @@ unsafe impl Send for MidiInHandle {}
 ///
 /// It is important that `user_data` is the last field to not influence
 /// offsets after monomorphization.
-struct HandlerData<T> {
+struct HandlerData<'a, T> {
     message: MidiMessage,
     sysex_buffer: SysexBuffer,
     in_handle: Option<MidiInHandle>,
     ignore_flags: Ignore,
-    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send + 'static>,
+    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send + 'a>,
     user_data: Option<T>
 }
 
@@ -173,10 +173,10 @@ impl MidiInput {
         Ok(port.name.clone())
     }
     
-    pub fn connect<F, T: Send>(
+    pub fn connect<'a, F, T: Send>(
         self, port: &MidiInputPort, _port_name: &str, callback: F, data: T
-    ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
-        where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
+    ) -> Result<MidiInputConnection<'a, T>, ConnectError<MidiInput>>
+        where F: FnMut(u64, &[u8], &mut T) + Send + 'a {
         
         let port_number = match port.current_port_number() {
             Some(p) => p,
@@ -249,7 +249,7 @@ impl MidiInput {
     }
 }
 
-impl<T> MidiInputConnection<T> {
+impl<T> MidiInputConnection<'_, T> {
     pub fn close(mut self) -> (MidiInput, T) {
         self.close_internal();
         
@@ -287,7 +287,7 @@ impl<T> MidiInputConnection<T> {
     }
 }
 
-impl<T> Drop for MidiInputConnection<T> {
+impl<T> Drop for MidiInputConnection<'_, T> {
     fn drop(&mut self) {
         // If user_data has been emptied, we know that we already have closed the connection
         if self.handler_data.user_data.is_some() {
