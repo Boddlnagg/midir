@@ -8,6 +8,8 @@ use std::io::{Write, stderr};
 use std::thread::sleep;
 use std::time::Duration;
 use memalloc::{allocate, deallocate};
+use std::mem::MaybeUninit;
+use std::ptr::null_mut;
 
 use self::winapi::shared::basetsd::{DWORD_PTR, UINT_PTR};
 use self::winapi::shared::minwindef::{DWORD, UINT};
@@ -87,13 +89,14 @@ impl MidiInputPort {
     }
     
     fn name(port_number: UINT) -> Result<String, PortInfoError> {
-        let mut device_caps: MIDIINCAPSW = unsafe { mem::uninitialized() };
-        let result = unsafe { midiInGetDevCapsW(port_number as UINT_PTR, &mut device_caps, mem::size_of::<MIDIINCAPSW>() as u32) };
+        let mut device_caps: MaybeUninit<MIDIINCAPSW> = MaybeUninit::uninit();
+        let result = unsafe { midiInGetDevCapsW(port_number as UINT_PTR, device_caps.as_mut_ptr(), mem::size_of::<MIDIINCAPSW>() as u32) };
         if result == MMSYSERR_BADDEVICEID {
             return Err(PortInfoError::PortNumberOutOfRange)
         } else if result != MMSYSERR_NOERROR {
             return Err(PortInfoError::CannotRetrievePortName)
         }
+        let device_caps = unsafe { device_caps.assume_init() };
         let pname: &[u16] = unsafe { &device_caps.szPname }; // requires unsafe because of packed alignment ...
         let output = from_wide_ptr(pname.as_ptr(), pname.len()).to_string_lossy().into_owned();
         Ok(output)
@@ -185,16 +188,16 @@ impl MidiInput {
 
         let mut handler_data = Box::new(HandlerData {
             message: MidiMessage::new(),
-            sysex_buffer: SysexBuffer(unsafe { mem::uninitialized() }),
+            sysex_buffer: SysexBuffer([null_mut(); RT_SYSEX_BUFFER_COUNT]),
             in_handle: None,
             ignore_flags: self.ignore_flags,
             callback: Box::new(callback),
             user_data: Some(data)
         });
         
-        let mut in_handle: HMIDIIN = unsafe { mem::uninitialized() };
+        let mut in_handle: MaybeUninit<HMIDIIN> = MaybeUninit::uninit();
         let handler_data_ptr: *mut HandlerData<T> = &mut *handler_data;
-        let result = unsafe { midiInOpen(&mut in_handle,
+        let result = unsafe { midiInOpen(in_handle.as_mut_ptr(),
                         port_number as UINT,
                         handler::handle_input::<T> as DWORD_PTR,
                         handler_data_ptr as DWORD_PTR,
@@ -202,7 +205,8 @@ impl MidiInput {
         if result != MMSYSERR_NOERROR {
             return Err(ConnectError::other("could not create Windows MM MIDI input port", self));
         }
-        
+        let in_handle = unsafe { in_handle.assume_init() };
+
         // Allocate and init the sysex buffers.
         for i in 0..RT_SYSEX_BUFFER_COUNT {
             handler_data.sysex_buffer.0[i] = Box::into_raw(Box::new(MIDIHDR {
@@ -339,13 +343,14 @@ impl MidiOutputPort {
     }
     
     fn name(port_number: UINT) -> Result<String, PortInfoError> {
-        let mut device_caps: MIDIOUTCAPSW = unsafe { mem::uninitialized() };
-        let result = unsafe { midiOutGetDevCapsW(port_number as UINT_PTR, &mut device_caps, mem::size_of::<MIDIOUTCAPSW>() as u32) };
+        let mut device_caps: MaybeUninit<MIDIOUTCAPSW> = MaybeUninit::uninit();
+        let result = unsafe { midiOutGetDevCapsW(port_number as UINT_PTR, device_caps.as_mut_ptr(), mem::size_of::<MIDIOUTCAPSW>() as u32) };
         if result == MMSYSERR_BADDEVICEID {
             return Err(PortInfoError::PortNumberOutOfRange)
         } else if result != MMSYSERR_NOERROR {
             return Err(PortInfoError::CannotRetrievePortName)
         }
+        let device_caps = unsafe { device_caps.assume_init() };
         let pname: &[u16] = unsafe { &device_caps.szPname }; // requires unsafe because of packed alignment ...
         let output = from_wide_ptr(pname.as_ptr(), pname.len()).to_string_lossy().into_owned();
         Ok(output)
@@ -406,14 +411,13 @@ impl MidiOutput {
             Some(p) => p,
             None => return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self))
         };
-        let mut out_handle = unsafe { mem::uninitialized() };
-        let result = unsafe { midiOutOpen(&mut out_handle, port_number as UINT, 0, 0, CALLBACK_NULL) };
+        let mut out_handle: MaybeUninit<HMIDIOUT> = MaybeUninit::uninit();
+        let result = unsafe { midiOutOpen(out_handle.as_mut_ptr(), port_number as UINT, 0, 0, CALLBACK_NULL) };
         if result != MMSYSERR_NOERROR {
             return Err(ConnectError::other("could not create Windows MM MIDI output port", self));
         }
-        
         Ok(MidiOutputConnection {
-            out_handle: out_handle
+            out_handle: unsafe { out_handle.assume_init() },
         })
     }
 }
