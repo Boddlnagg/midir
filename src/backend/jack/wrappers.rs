@@ -204,7 +204,7 @@ impl MidiBuffer {
         unsafe { jack_midi_get_event_count(self.p) }
     }
     
-    pub unsafe fn get_event(&self, ev: &mut jack_midi_event_t, index: u32) {
+    pub unsafe fn get_event(&self, ev: *mut jack_midi_event_t, index: u32) {
         jack_midi_event_get(ev, self.p, index);
     }
     

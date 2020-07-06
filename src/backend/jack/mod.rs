@@ -177,12 +177,12 @@ extern "C" fn handle_input<T>(nframes: jack_nframes_t, arg: *mut c_void) -> i32 
         
         // We have midi events in buffer
         let evcount = buff.get_event_count();
-        let mut event = unsafe { mem::uninitialized() };
+        let mut event = mem::MaybeUninit::uninit();
         
         for j in 0..evcount {
             message.bytes.clear();
-            
-            unsafe { buff.get_event(&mut event, j) };
+            unsafe { buff.get_event(event.as_mut_ptr(), j) };
+            let event = unsafe { event.assume_init() };
             
             for i in 0..event.size {
                 message.bytes.push(unsafe { *event.buffer.offset(i as isize) });
