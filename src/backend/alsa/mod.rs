@@ -8,13 +8,13 @@ use std::io::{stderr, Write};
 use std::ffi::{CString, CStr};
 
 use self::alsa::{Seq, Direction};
-use self::alsa::seq::{PortInfo, PortSubscribe, Addr, QueueTempo, EventType, MIDI_GENERIC, APPLICATION, WRITE, SUBS_WRITE, READ, SUBS_READ};
+use self::alsa::seq::{PortInfo, PortSubscribe, Addr, QueueTempo, EventType, PortCap, PortType};
 
 use ::{MidiMessage, Ignore};
 use ::errors::*;
 
 mod helpers {
-    use super::alsa::seq::{Seq, Addr, ClientIter, PortIter, PortInfo, PortCap, MidiEvent, MIDI_GENERIC, SYNTH, APPLICATION};
+    use super::alsa::seq::{Seq, Addr, ClientIter, PortIter, PortInfo, PortCap, MidiEvent, PortType};
     use ::errors::PortInfoError;
 
     pub fn poll(fds: &mut [super::libc::pollfd], timeout: i32) -> i32 {
@@ -24,7 +24,7 @@ mod helpers {
     #[inline]
     pub fn get_ports<F, T>(s: &Seq, capability: PortCap, f: F) -> Vec<T> where F: Fn(PortInfo) -> T {
         ClientIter::new(s).flat_map(|c| PortIter::new(s, c.get_client()))
-                          .filter(|p| p.get_type().intersects(MIDI_GENERIC | SYNTH | APPLICATION))
+                          .filter(|p| p.get_type().intersects(PortType::MIDI_GENERIC | PortType::SYNTH | PortType::APPLICATION))
                           .filter(|p| p.get_capability().intersects(capability))
                           .map(f)
                           .collect()
@@ -33,7 +33,7 @@ mod helpers {
     #[inline]
     pub fn get_port_count(s: &Seq, capability: PortCap) -> usize {
         ClientIter::new(s).flat_map(|c| PortIter::new(s, c.get_client()))
-                          .filter(|p| p.get_type().intersects(MIDI_GENERIC | SYNTH | APPLICATION))
+                          .filter(|p| p.get_type().intersects(PortType::MIDI_GENERIC | PortType::SYNTH | PortType::APPLICATION))
                           .filter(|p| p.get_capability().intersects(capability))
                           .count()
     }
@@ -162,7 +162,7 @@ impl MidiInput {
     }
 
     pub(crate) fn ports_internal(&self) -> Vec<::common::MidiInputPort> {
-        helpers::get_ports(self.seq.as_ref().unwrap(), READ | SUBS_READ, |p| ::common::MidiInputPort { 
+        helpers::get_ports(self.seq.as_ref().unwrap(), PortCap::READ | PortCap::SUBS_READ, |p| ::common::MidiInputPort {
             imp: MidiInputPort {
                 addr: Addr { client: p.get_client(), port: p.get_port() }
             }
@@ -170,7 +170,7 @@ impl MidiInput {
     }
     
     pub fn port_count(&self) -> usize {
-        helpers::get_port_count(self.seq.as_ref().unwrap(), READ | SUBS_READ)
+        helpers::get_port_count(self.seq.as_ref().unwrap(), PortCap::READ | PortCap::SUBS_READ)
     }
     
     pub fn port_name(&self, port: &MidiInputPort) -> Result<String, PortInfoError> {
@@ -209,8 +209,8 @@ impl MidiInput {
         // these functions are private, and the values are zeroed already by `empty()`
         //pinfo.set_client(0);
         //pinfo.set_port(0);
-        pinfo.set_capability(WRITE | SUBS_WRITE);
-        pinfo.set_type(MIDI_GENERIC | APPLICATION);
+        pinfo.set_capability(PortCap::WRITE | PortCap::SUBS_WRITE);
+        pinfo.set_type(PortType::MIDI_GENERIC | PortType::APPLICATION);
         pinfo.set_midi_channels(16);
         
         if !cfg!(feature = "avoid_timestamping") {
@@ -460,7 +460,7 @@ impl MidiOutput {
     }
 
     pub(crate) fn ports_internal(&self) -> Vec<::common::MidiOutputPort> {
-        helpers::get_ports(self.seq.as_ref().unwrap(), WRITE | SUBS_WRITE, |p| ::common::MidiOutputPort { 
+        helpers::get_ports(self.seq.as_ref().unwrap(), PortCap::WRITE | PortCap::SUBS_WRITE, |p| ::common::MidiOutputPort {
             imp: MidiOutputPort {
                 addr: Addr { client: p.get_client(), port: p.get_port() }
             }
@@ -468,7 +468,7 @@ impl MidiOutput {
     }
     
     pub fn port_count(&self) -> usize {
-        helpers::get_port_count(self.seq.as_ref().unwrap(), WRITE | SUBS_WRITE)
+        helpers::get_port_count(self.seq.as_ref().unwrap(), PortCap::WRITE | PortCap::SUBS_WRITE)
     }
     
     pub fn port_name(&self, port: &MidiOutputPort) -> Result<String, PortInfoError> {
@@ -486,7 +486,7 @@ impl MidiOutput {
             Err(_) => return Err(ConnectError::other("port_name must not contain null bytes", self))
         };
 
-        let vport = match self.seq.as_ref().unwrap().create_simple_port(&c_port_name, READ | SUBS_READ, MIDI_GENERIC | APPLICATION) {
+        let vport = match self.seq.as_ref().unwrap().create_simple_port(&c_port_name, PortCap::READ | PortCap::SUBS_READ, PortType::MIDI_GENERIC | PortType::APPLICATION) {
             Ok(vport) => vport,
             Err(_) => return Err(ConnectError::other("could not create ALSA output port", self))
         };
@@ -517,7 +517,7 @@ impl MidiOutput {
             Err(_) => return Err(ConnectError::other("port_name must not contain null bytes", self))
         };
 
-        let vport = match self.seq.as_ref().unwrap().create_simple_port(&c_port_name, READ | SUBS_READ, MIDI_GENERIC | APPLICATION) {
+        let vport = match self.seq.as_ref().unwrap().create_simple_port(&c_port_name, PortCap::READ | PortCap::SUBS_READ, PortType::MIDI_GENERIC | PortType::APPLICATION) {
             Ok(vport) => vport,
             Err(_) => return Err(ConnectError::other("could not create ALSA output port", self))
         };
@@ -651,11 +651,11 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
         // If here, there should be data.
         let mut ev = match seq_input.event_input() {
             Ok(ev) => ev,
-            Err(ref e) if e.errno() == Some(self::nix::errno::ENOSPC) => {
+            Err(ref e) if e.errno() == Some(self::nix::errno::Errno::ENOSPC) => {
                 let _ = writeln!(stderr(), "\nError in handle_input: ALSA MIDI input buffer overrun!\n");
                 continue;
             },
-            Err(ref e) if e.errno() == Some(self::nix::errno::EAGAIN) => {
+            Err(ref e) if e.errno() == Some(self::nix::errno::Errno::EAGAIN) => {
                 let _ = writeln!(stderr(), "\nError in handle_input: no input event from ALSA MIDI input buffer!\n");
                 continue;
             },
