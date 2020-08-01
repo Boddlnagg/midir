@@ -66,7 +66,7 @@ fn run() -> Result<bool, Box<dyn Error>> {
                 msg.push_str(format!("{}: {}\n", i, midi_in.port_name(port).unwrap()).as_str());
             }
             loop {
-                if let Ok(Some(port_str)) = window.prompt_with_message(&msg) {
+                if let Ok(Some(port_str)) = window.prompt_with_message_and_default(&msg, "0") {
                     if let Ok(port_int) = port_str.parse::<usize>() {
                         if let Some(port) = &ports.get(port_int) {
                             break port.clone()
