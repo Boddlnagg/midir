@@ -44,10 +44,12 @@ pub fn start() {
 }
 
 fn run() -> Result<bool, Box<dyn Error>> {
+    let window = web_sys::window().expect("no global `window` exists");
+
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
 
-    // Get an input port (TODO: prompt the user for which one they want if there are multiple, or open them all?)
+    // Get an input port
     let ports = midi_in.ports();
     let in_port = match &ports[..] {
         [] => {
@@ -59,12 +61,19 @@ fn run() -> Result<bool, Box<dyn Error>> {
             port
         },
         _ => {
-            println!("Available input ports:");
+            let mut msg = "Choose an available input port:\n".to_string();
             for (i, port) in ports.iter().enumerate() {
-                println!("{}: {}", i, midi_in.port_name(port).unwrap());
+                msg.push_str(format!("{}: {}\n", i, midi_in.port_name(port).unwrap()).as_str());
             }
-            println!("Using the first input port");
-            &ports[0]
+            loop {
+                if let Ok(Some(port_str)) = window.prompt_with_message_and_default(&msg, "0") {
+                    if let Ok(port_int) = port_str.parse::<usize>() {
+                        if let Some(port) = &ports.get(port_int) {
+                            break port.clone()
+                        }
+                    }
+                }
+            }
         }
     };
 
