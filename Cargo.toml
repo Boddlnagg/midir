@@ -23,9 +23,9 @@ jack = ["jack-sys", "libc"]
 [dependencies]
 bitflags = "1.2"
 memalloc = "0.1.0"
-jack-sys = { version = "0.1.0", optional = true }
-libc = { version = "0.2.21", optional = true }
-winrt = { version = "0.7.0", optional = true}
+jack-sys = { version = "0.2.0", optional = true }
+libc = { version = "0.2.74", optional = true }
+winrt = { version = "0.7.2", optional = true}
 
 [target.'cfg(target_os = "linux")'.dependencies]
 alsa = "0.4.2"
@@ -57,4 +57,4 @@ web-sys = { version = "0.3", features = [
 ]}
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-wasm-bindgen-test = "0.2"
+wasm-bindgen-test = "0.3.17"
