@@ -168,7 +168,7 @@ impl<T> MidiInputConnection<T> {
     }
 }
 
-/// An object representing a single input port.
+/// An object representing a single output port.
 /// How the port is identified internally is backend-dependent.
 /// If the backend allows it, port objects remain valid when
 /// other ports in the system change (i.e. it is not just an index).
