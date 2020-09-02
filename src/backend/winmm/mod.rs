@@ -23,7 +23,7 @@ use self::winapi::um::mmeapi::{midiInAddBuffer, midiInClose, midiInGetDevCapsW, 
 
 use self::winapi::um::mmsystem::{CALLBACK_FUNCTION, CALLBACK_NULL, HMIDIIN, HMIDIOUT, LPMIDIHDR,
                                  MIDIERR_NOTREADY, MIDIERR_STILLPLAYING, MIDIHDR, MIDIINCAPSW,
-                                 MIDIOUTCAPSW, MMSYSERR_BADDEVICEID, MMSYSERR_NOERROR};
+                                 MIDIOUTCAPSW, MMSYSERR_BADDEVICEID, MMSYSERR_NOERROR, MMSYSERR_ALLOCATED};
 
 use {Ignore, MidiMessage};
 use errors::*;
@@ -202,7 +202,9 @@ impl MidiInput {
                         handler::handle_input::<T> as DWORD_PTR,
                         handler_data_ptr as DWORD_PTR,
                         CALLBACK_FUNCTION) };
-        if result != MMSYSERR_NOERROR {
+        if result == MMSYSERR_ALLOCATED { 
+            return Err(ConnectError::other("could not create Windows MM MIDI input port (MMSYSERR_ALLOCATED)", self));
+        } else if result != MMSYSERR_NOERROR {
             return Err(ConnectError::other("could not create Windows MM MIDI input port", self));
         }
         let in_handle = unsafe { in_handle.assume_init() };
@@ -413,7 +415,9 @@ impl MidiOutput {
         };
         let mut out_handle: MaybeUninit<HMIDIOUT> = MaybeUninit::uninit();
         let result = unsafe { midiOutOpen(out_handle.as_mut_ptr(), port_number as UINT, 0, 0, CALLBACK_NULL) };
-        if result != MMSYSERR_NOERROR {
+        if result == MMSYSERR_ALLOCATED {
+            return Err(ConnectError::other("could not create Windows MM MIDI output port (MMSYSERR_ALLOCATED)", self));
+        } else if result != MMSYSERR_NOERROR {
             return Err(ConnectError::other("could not create Windows MM MIDI output port", self));
         }
         Ok(MidiOutputConnection {
