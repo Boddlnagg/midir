@@ -164,7 +164,7 @@ impl MidiInput {
     pub(crate) fn ports_internal(&self) -> Vec<::common::MidiInputPort> {
         helpers::get_ports(self.seq.as_ref().unwrap(), PortCap::READ | PortCap::SUBS_READ, |p| ::common::MidiInputPort {
             imp: MidiInputPort {
-                addr: Addr { client: p.get_client(), port: p.get_port() }
+                addr: p.addr()
             }
         })
     }
@@ -265,7 +265,7 @@ impl MidiInput {
         
         // Make subscription
         let sub = PortSubscribe::empty().unwrap();
-        sub.set_sender(Addr { client: src_pinfo.get_client(), port: src_pinfo.get_port()});
+        sub.set_sender(src_pinfo.addr());
         sub.set_dest(Addr { client: self.seq.as_ref().unwrap().client_id().unwrap(), port: vport});
         if self.seq.as_ref().unwrap().subscribe_port(&sub).is_err() {
             return Err(ConnectError::other("could not create ALSA input subscription", self));
@@ -462,7 +462,7 @@ impl MidiOutput {
     pub(crate) fn ports_internal(&self) -> Vec<::common::MidiOutputPort> {
         helpers::get_ports(self.seq.as_ref().unwrap(), PortCap::WRITE | PortCap::SUBS_WRITE, |p| ::common::MidiOutputPort {
             imp: MidiOutputPort {
-                addr: Addr { client: p.get_client(), port: p.get_port() }
+                addr: p.addr()
             }
         })
     }
@@ -494,7 +494,7 @@ impl MidiOutput {
         // Make subscription
         let sub = PortSubscribe::empty().unwrap();
         sub.set_sender(Addr { client: self.seq.as_ref().unwrap().client_id().unwrap(), port: vport });
-        sub.set_dest(Addr { client: pinfo.get_client(), port: pinfo.get_port() });
+        sub.set_dest(pinfo.addr());
         sub.set_time_update(true);
         sub.set_time_real(true);
         if self.seq.as_ref().unwrap().subscribe_port(&sub).is_err() {
