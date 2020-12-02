@@ -22,7 +22,7 @@ use self::windows::devices::midi::*;
 use self::windows::devices::enumeration::DeviceInformation;
 use self::windows::storage::streams::{Buffer, DataWriter};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct MidiInputPort {
     id: HString
 }
@@ -219,7 +219,7 @@ struct HandlerData<T> {
     user_data: Option<T>
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct MidiOutputPort {
     id: HString
 }

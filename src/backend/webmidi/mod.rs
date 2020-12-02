@@ -81,7 +81,7 @@ impl Static {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct MidiInputPort {
     input: web_sys::MidiInput,
 }
@@ -186,7 +186,7 @@ impl<T> MidiInputConnection<T> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct MidiOutputPort {
     output: web_sys::MidiOutput,
 }

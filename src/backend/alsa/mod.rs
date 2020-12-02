@@ -121,7 +121,7 @@ pub struct MidiInput {
     seq: Option<Seq>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct MidiInputPort {
     addr: Addr
 }
@@ -432,7 +432,7 @@ pub struct MidiOutput {
     seq: Option<Seq>, // TODO: if `Seq` is marked as non-zero, this should just be pointer-sized 
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct MidiOutputPort {
     addr: Addr
 }

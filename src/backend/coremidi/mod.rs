@@ -26,6 +26,17 @@ pub struct MidiInputPort {
     source: Arc<Source>
 }
 
+impl PartialEq for MidiInputPort {
+    fn eq(&self, other: &Self) -> bool {
+        if let (Some(id1), Some(id2)) = (self.source.unique_id(), other.unique_id()) {
+            id1 == id2
+        } else {
+            // Acording to macos docs "The system assigns unique IDs to all objects.", so I think we can ignore this case
+            false
+        }
+    }
+}
+
 impl MidiInput {
     pub fn new(client_name: &str) -> Result<Self, InitError> {
         match Client::new(client_name) {
@@ -249,6 +260,17 @@ pub struct MidiOutput {
 #[derive(Clone)]
 pub struct MidiOutputPort {
     dest: Arc<Destination>
+}
+
+impl PartialEq for MidiOutputPort {
+    fn eq(&self, other: &Self) -> bool {
+        if let (Some(id1), Some(id2)) = (self.source.unique_id(), other.unique_id()) {
+            id1 == id2
+        } else {
+            // Acording to macos docs "The system assigns unique IDs to all objects.", so I think we can ignore this case
+            false
+        }
+    }
 }
 
 impl MidiOutput {

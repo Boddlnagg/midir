@@ -57,6 +57,12 @@ pub struct MidiInputPort {
     interface_id: Box<[u16]>
 }
 
+impl PartialEq for MidiInputPort {
+    fn eq(&self, other: &Self) -> bool {
+        self.interface_id == other.interface_id
+    }
+}
+
 pub struct MidiInputConnection<T> {
     handler_data: Box<HandlerData<T>>,
 }
@@ -309,6 +315,12 @@ pub struct MidiOutput;
 pub struct MidiOutputPort {
     name: String,
     interface_id: Box<[u16]>
+}
+
+impl PartialEq for MidiOutputPort {
+    fn eq(&self, other: &Self) -> bool {
+        self.interface_id == other.interface_id
+    }
 }
 
 pub struct MidiOutputConnection {
