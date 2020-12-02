@@ -38,7 +38,7 @@ pub trait MidiIO {
 ///
 /// Use the `ports` method of a `MidiInput` instance to obtain
 /// available ports.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct MidiInputPort {
     pub(crate) imp: MidiInputPortImpl
 }
@@ -175,7 +175,7 @@ impl<T> MidiInputConnection<T> {
 ///
 /// Use the `ports` method of a `MidiOutput` instance to obtain
 /// available ports.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct MidiOutputPort {
     pub(crate) imp: MidiOutputPortImpl
 }
