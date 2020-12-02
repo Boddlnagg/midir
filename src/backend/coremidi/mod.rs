@@ -28,7 +28,7 @@ pub struct MidiInputPort {
 
 impl PartialEq for MidiInputPort {
     fn eq(&self, other: &Self) -> bool {
-        if let (Some(id1), Some(id2)) = (self.source.unique_id(), other.unique_id()) {
+        if let (Some(id1), Some(id2)) = (self.source.unique_id(), other.source.unique_id()) {
             id1 == id2
         } else {
             // Acording to macos docs "The system assigns unique IDs to all objects.", so I think we can ignore this case
@@ -264,7 +264,7 @@ pub struct MidiOutputPort {
 
 impl PartialEq for MidiOutputPort {
     fn eq(&self, other: &Self) -> bool {
-        if let (Some(id1), Some(id2)) = (self.source.unique_id(), other.unique_id()) {
+        if let (Some(id1), Some(id2)) = (self.dest.unique_id(), other.dest.unique_id()) {
             id1 == id2
         } else {
             // Acording to macos docs "The system assigns unique IDs to all objects.", so I think we can ignore this case
