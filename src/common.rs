@@ -38,7 +38,7 @@ pub trait MidiIO {
 ///
 /// Use the `ports` method of a `MidiInput` instance to obtain
 /// available ports.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct MidiInputPort {
     pub(crate) imp: MidiInputPortImpl
 }
@@ -175,7 +175,7 @@ impl<T> MidiInputConnection<T> {
 ///
 /// Use the `ports` method of a `MidiOutput` instance to obtain
 /// available ports.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct MidiOutputPort {
     pub(crate) imp: MidiOutputPortImpl
 }
@@ -303,5 +303,13 @@ mod tests {
             is_send::<MidiOutputPort>();
             is_send::<MidiOutputConnection>();
         }
+
+        // make sure that Midi port structs implement `PartialEq`
+        fn is_partial_eq<T: PartialEq>() {}
+        is_partial_eq::<MidiInputPortImpl>();
+        is_partial_eq::<MidiOutputPortImpl>();
+
+        is_partial_eq::<MidiInputPort>();
+        is_partial_eq::<MidiOutputPort>();
     }
 }
