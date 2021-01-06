@@ -56,7 +56,7 @@ pub struct MidiInput {
 impl MidiInput {
     /// Creates a new `MidiInput` object that is required for any MIDI input functionality.
     pub fn new(client_name: &str) -> Result<Self, InitError> {
-        MidiInputImpl::new(client_name).map(|imp| MidiInput { imp })
+        MidiInputImpl::new(client_name).map(|imp| Self { imp })
     }
 
     /// Set flags to decide what kind of messages should be ignored (i.e., filtered out)
@@ -112,7 +112,7 @@ impl MidiInput {
         port_name: &str,
         callback: F,
         data: T,
-    ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
+    ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
     where
         F: FnMut(u64, &[u8], &mut T) + Send + 'static,
     {
@@ -122,7 +122,7 @@ impl MidiInput {
                 let kind = imp.kind();
                 Err(ConnectError::new(
                     kind,
-                    MidiInput {
+                    Self {
                         imp: imp.into_inner(),
                     },
                 ))
@@ -164,7 +164,7 @@ impl<T: Send> ::os::unix::VirtualInput<T> for MidiInput {
                 let kind = imp.kind();
                 Err(ConnectError::new(
                     kind,
-                    MidiInput {
+                    Self {
                         imp: imp.into_inner(),
                     },
                 ))
@@ -213,7 +213,7 @@ pub struct MidiOutput {
 impl MidiOutput {
     /// Creates a new `MidiOutput` object that is required for any MIDI output functionality.
     pub fn new(client_name: &str) -> Result<Self, InitError> {
-        MidiOutputImpl::new(client_name).map(|imp| MidiOutput { imp })
+        MidiOutputImpl::new(client_name).map(|imp| Self { imp })
     }
 
     /// Get a collection of all MIDI output ports that *midir* can connect to.
@@ -250,14 +250,14 @@ impl MidiOutput {
         self,
         port: &MidiOutputPort,
         port_name: &str,
-    ) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
+    ) -> Result<MidiOutputConnection, ConnectError<Self>> {
         match self.imp.connect(&port.imp, port_name) {
             Ok(imp) => Ok(MidiOutputConnection { imp }),
             Err(imp) => {
                 let kind = imp.kind();
                 Err(ConnectError::new(
                     kind,
-                    MidiOutput {
+                    Self {
                         imp: imp.into_inner(),
                     },
                 ))
@@ -284,17 +284,14 @@ impl MidiIO for MidiOutput {
 
 #[cfg(unix)]
 impl ::os::unix::VirtualOutput for MidiOutput {
-    fn create_virtual(
-        self,
-        port_name: &str,
-    ) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
+    fn create_virtual(self, port_name: &str) -> Result<MidiOutputConnection, ConnectError<Self>> {
         match self.imp.create_virtual(port_name) {
             Ok(imp) => Ok(MidiOutputConnection { imp }),
             Err(imp) => {
                 let kind = imp.kind();
                 Err(ConnectError::new(
                     kind,
-                    MidiOutput {
+                    Self {
                         imp: imp.into_inner(),
                     },
                 ))

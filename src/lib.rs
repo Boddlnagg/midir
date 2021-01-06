@@ -20,7 +20,7 @@ pub enum Ignore {
 }
 
 impl std::ops::BitOr for Ignore {
-    type Output = Ignore;
+    type Output = Self;
     #[inline(always)]
     fn bitor(self, rhs: Self) -> Self::Output {
         // this is safe because all combinations also exist as variants
@@ -30,7 +30,7 @@ impl std::ops::BitOr for Ignore {
 
 impl Ignore {
     #[inline(always)]
-    pub fn contains(self, other: Ignore) -> bool {
+    pub fn contains(self, other: Self) -> bool {
         self as u8 & other as u8 != 0
     }
 }
@@ -47,8 +47,8 @@ struct MidiMessage {
 }
 
 impl MidiMessage {
-    fn new() -> MidiMessage {
-        MidiMessage {
+    fn new() -> Self {
+        Self {
             bytes: vec![],
             timestamp: 0,
         }

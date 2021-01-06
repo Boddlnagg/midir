@@ -32,9 +32,9 @@ impl Error for PortInfoError {}
 impl fmt::Display for PortInfoError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            PortInfoError::PortNumberOutOfRange => PORT_OUT_OF_RANGE_MSG.fmt(f),
-            PortInfoError::InvalidPort => INVALID_PORT_MSG.fmt(f),
-            PortInfoError::CannotRetrievePortName => CANNOT_RETRIEVE_PORT_NAME_MSG.fmt(f),
+            Self::PortNumberOutOfRange => PORT_OUT_OF_RANGE_MSG.fmt(f),
+            Self::InvalidPort => INVALID_PORT_MSG.fmt(f),
+            Self::CannotRetrievePortName => CANNOT_RETRIEVE_PORT_NAME_MSG.fmt(f),
         }
     }
 }
@@ -51,8 +51,8 @@ impl ConnectErrorKind {}
 impl fmt::Display for ConnectErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ConnectErrorKind::InvalidPort => INVALID_PORT_MSG.fmt(f),
-            ConnectErrorKind::Other(msg) => msg.fmt(f),
+            Self::InvalidPort => INVALID_PORT_MSG.fmt(f),
+            Self::Other(msg) => msg.fmt(f),
         }
     }
 }
@@ -64,15 +64,12 @@ pub struct ConnectError<T> {
 }
 
 impl<T> ConnectError<T> {
-    pub fn new(kind: ConnectErrorKind, inner: T) -> ConnectError<T> {
-        ConnectError {
-            kind: kind,
-            inner: inner,
-        }
+    pub fn new(kind: ConnectErrorKind, inner: T) -> Self {
+        Self { kind, inner }
     }
 
     /// Helper method to create ConnectErrorKind::Other.
-    pub fn other(msg: &'static str, inner: T) -> ConnectError<T> {
+    pub fn other(msg: &'static str, inner: T) -> Self {
         Self::new(ConnectErrorKind::Other(msg), inner)
     }
 
@@ -111,7 +108,7 @@ impl Error for SendError {}
 impl fmt::Display for SendError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            SendError::InvalidData(msg) | SendError::Other(msg) => msg.fmt(f),
+            Self::InvalidData(msg) | Self::Other(msg) => msg.fmt(f),
         }
     }
 }

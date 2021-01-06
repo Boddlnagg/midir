@@ -43,7 +43,7 @@ impl PartialEq for MidiInputPort {
 impl MidiInput {
     pub fn new(client_name: &str) -> Result<Self, InitError> {
         match Client::new(client_name) {
-            Ok(cl) => Ok(MidiInput {
+            Ok(cl) => Ok(Self {
                 client: cl,
                 ignore_flags: Ignore::None,
             }),
@@ -185,7 +185,7 @@ impl MidiInput {
         port_name: &str,
         callback: F,
         data: T,
-    ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
+    ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
     where
         F: FnMut(u64, &[u8], &mut T) + Send + 'static,
     {
@@ -198,7 +198,7 @@ impl MidiInput {
         }));
         let handler_data2 = handler_data.clone();
         let iport = match self.client.input_port(port_name, move |packets| {
-            MidiInput::handle_input(packets, &mut *handler_data2.lock().unwrap())
+            Self::handle_input(packets, &mut *handler_data2.lock().unwrap())
         }) {
             Ok(p) => p,
             Err(_) => return Err(ConnectError::other("error creating MIDI input port", self)),
@@ -221,7 +221,7 @@ impl MidiInput {
         port_name: &str,
         callback: F,
         data: T,
-    ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
+    ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
     where
         F: FnMut(u64, &[u8], &mut T) + Send + 'static,
     {
@@ -234,7 +234,7 @@ impl MidiInput {
         }));
         let handler_data2 = handler_data.clone();
         let vrt = match self.client.virtual_destination(port_name, move |packets| {
-            MidiInput::handle_input(packets, &mut *handler_data2.lock().unwrap())
+            Self::handle_input(packets, &mut *handler_data2.lock().unwrap())
         }) {
             Ok(p) => p,
             Err(_) => return Err(ConnectError::other("error creating MIDI input port", self)),
