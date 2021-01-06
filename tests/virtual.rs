@@ -5,8 +5,16 @@ extern crate midir;
 use std::thread::sleep;
 use std::time::Duration;
 
-use midir::os::unix::{VirtualInput, VirtualOutput};
-use midir::{Ignore, MidiInput, MidiOutput, MidiOutputPort};
+use midir::os::unix::{
+    VirtualInput,
+    VirtualOutput,
+};
+use midir::{
+    Ignore,
+    MidiInput,
+    MidiOutput,
+    MidiOutputPort,
+};
 
 #[test]
 fn end_to_end() {

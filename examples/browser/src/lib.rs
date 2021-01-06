@@ -10,9 +10,15 @@ use wasm_bindgen::JsCast;
 use web_sys::console;
 
 use std::error::Error;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc,
+    Mutex,
+};
 
-use midir::{Ignore, MidiInput};
+use midir::{
+    Ignore,
+    MidiInput,
+};
 
 pub fn log(s: String) {
     console::log(&Array::of1(&s.into()));

@@ -1,6 +1,9 @@
 extern crate coremidi;
 
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc,
+    Mutex,
+};
 
 use errors::*;
 use Ignore;

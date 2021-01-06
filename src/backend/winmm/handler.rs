@@ -1,11 +1,25 @@
-use std::io::{stderr, Write};
-use std::{mem, slice};
+use std::io::{
+    stderr,
+    Write,
+};
+use std::{
+    mem,
+    slice,
+};
 
 use super::winapi::shared::basetsd::DWORD_PTR;
-use super::winapi::shared::minwindef::{DWORD, UINT};
+use super::winapi::shared::minwindef::{
+    DWORD,
+    UINT,
+};
 use super::winapi::um::mmeapi::midiInAddBuffer;
 use super::winapi::um::mmsystem::{
-    HMIDIIN, MIDIHDR, MMSYSERR_NOERROR, MM_MIM_DATA, MM_MIM_LONGDATA, MM_MIM_LONGERROR,
+    HMIDIIN,
+    MIDIHDR,
+    MMSYSERR_NOERROR,
+    MM_MIM_DATA,
+    MM_MIM_LONGDATA,
+    MM_MIM_LONGERROR,
 };
 use super::HandlerData;
 use Ignore;

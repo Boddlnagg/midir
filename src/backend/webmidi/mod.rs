@@ -8,13 +8,24 @@ extern crate js_sys;
 extern crate wasm_bindgen;
 extern crate web_sys;
 
-use self::js_sys::{Map, Promise, Uint8Array};
+use self::js_sys::{
+    Map,
+    Promise,
+    Uint8Array,
+};
 use self::wasm_bindgen::prelude::*;
 use self::wasm_bindgen::JsCast;
-use self::web_sys::{MidiAccess, MidiMessageEvent, MidiOptions};
+use self::web_sys::{
+    MidiAccess,
+    MidiMessageEvent,
+    MidiOptions,
+};
 
 use std::cell::RefCell;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc,
+    Mutex,
+};
 
 use errors::*;
 use Ignore;

@@ -2,20 +2,50 @@ extern crate alsa;
 extern crate libc;
 extern crate nix;
 
-use std::ffi::{CStr, CString};
-use std::io::{stderr, Write};
+use std::ffi::{
+    CStr,
+    CString,
+};
+use std::io::{
+    stderr,
+    Write,
+};
 use std::mem;
-use std::thread::{Builder, JoinHandle};
+use std::thread::{
+    Builder,
+    JoinHandle,
+};
 
-use self::alsa::seq::{Addr, EventType, PortCap, PortInfo, PortSubscribe, PortType, QueueTempo};
-use self::alsa::{Direction, Seq};
+use self::alsa::seq::{
+    Addr,
+    EventType,
+    PortCap,
+    PortInfo,
+    PortSubscribe,
+    PortType,
+    QueueTempo,
+};
+use self::alsa::{
+    Direction,
+    Seq,
+};
 
 use errors::*;
-use {Ignore, MidiMessage};
+use {
+    Ignore,
+    MidiMessage,
+};
 
 mod helpers {
     use super::alsa::seq::{
-        Addr, ClientIter, MidiEvent, PortCap, PortInfo, PortIter, PortType, Seq,
+        Addr,
+        ClientIter,
+        MidiEvent,
+        PortCap,
+        PortInfo,
+        PortIter,
+        PortType,
+        Seq,
     };
     use errors::PortInfoError;
 

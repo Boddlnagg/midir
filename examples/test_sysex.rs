@@ -15,7 +15,11 @@ mod example {
     use std::time::Duration;
 
     use midir::os::unix::VirtualInput;
-    use midir::{Ignore, MidiInput, MidiOutput};
+    use midir::{
+        Ignore,
+        MidiInput,
+        MidiOutput,
+    };
 
     const LARGE_SYSEX_SIZE: usize = 5572; // This is the maximum that worked for me
 

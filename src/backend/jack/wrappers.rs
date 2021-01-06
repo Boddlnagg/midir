@@ -1,19 +1,50 @@
 #![allow(non_upper_case_globals, dead_code)]
 
-use std::ffi::{CStr, CString};
+use std::ffi::{
+    CStr,
+    CString,
+};
 use std::ops::Index;
-use std::{ptr, slice, str};
+use std::{
+    ptr,
+    slice,
+    str,
+};
 
-use super::libc::{c_void, size_t};
+use super::libc::{
+    c_void,
+    size_t,
+};
 
 use super::jack_sys::{
-    jack_activate, jack_client_close, jack_client_open, jack_client_t, jack_connect,
-    jack_deactivate, jack_free, jack_get_ports, jack_get_time, jack_midi_clear_buffer,
-    jack_midi_data_t, jack_midi_event_get, jack_midi_event_reserve, jack_midi_event_t,
-    jack_midi_get_event_count, jack_nframes_t, jack_port_get_buffer, jack_port_name,
-    jack_port_register, jack_port_t, jack_port_unregister, jack_ringbuffer_create,
-    jack_ringbuffer_free, jack_ringbuffer_read, jack_ringbuffer_read_space, jack_ringbuffer_t,
-    jack_ringbuffer_write, jack_set_process_callback,
+    jack_activate,
+    jack_client_close,
+    jack_client_open,
+    jack_client_t,
+    jack_connect,
+    jack_deactivate,
+    jack_free,
+    jack_get_ports,
+    jack_get_time,
+    jack_midi_clear_buffer,
+    jack_midi_data_t,
+    jack_midi_event_get,
+    jack_midi_event_reserve,
+    jack_midi_event_t,
+    jack_midi_get_event_count,
+    jack_nframes_t,
+    jack_port_get_buffer,
+    jack_port_name,
+    jack_port_register,
+    jack_port_t,
+    jack_port_unregister,
+    jack_ringbuffer_create,
+    jack_ringbuffer_free,
+    jack_ringbuffer_read,
+    jack_ringbuffer_read_space,
+    jack_ringbuffer_t,
+    jack_ringbuffer_write,
+    jack_set_process_callback,
 };
 
 pub const JACK_DEFAULT_MIDI_TYPE: &[u8] = b"8 bit raw midi\0";

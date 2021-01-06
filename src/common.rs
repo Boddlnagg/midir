@@ -1,9 +1,12 @@
 #![deny(missing_docs)]
 
 use backend::{
-    MidiInput as MidiInputImpl, MidiInputConnection as MidiInputConnectionImpl,
-    MidiInputPort as MidiInputPortImpl, MidiOutput as MidiOutputImpl,
-    MidiOutputConnection as MidiOutputConnectionImpl, MidiOutputPort as MidiOutputPortImpl,
+    MidiInput as MidiInputImpl,
+    MidiInputConnection as MidiInputConnectionImpl,
+    MidiInputPort as MidiInputPortImpl,
+    MidiOutput as MidiOutputImpl,
+    MidiOutputConnection as MidiOutputConnectionImpl,
+    MidiOutputPort as MidiOutputPortImpl,
 };
 use errors::*;
 use Ignore;

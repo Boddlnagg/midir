@@ -1,34 +1,78 @@
 extern crate winapi;
 
-use memalloc::{allocate, deallocate};
+use memalloc::{
+    allocate,
+    deallocate,
+};
 use std::ffi::OsString;
-use std::io::{stderr, Write};
+use std::io::{
+    stderr,
+    Write,
+};
 use std::mem::MaybeUninit;
 use std::os::windows::ffi::OsStringExt;
 use std::ptr::null_mut;
 use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::Duration;
-use std::{mem, ptr, slice};
+use std::{
+    mem,
+    ptr,
+    slice,
+};
 
-use self::winapi::shared::basetsd::{DWORD_PTR, UINT_PTR};
-use self::winapi::shared::minwindef::{DWORD, UINT};
+use self::winapi::shared::basetsd::{
+    DWORD_PTR,
+    UINT_PTR,
+};
+use self::winapi::shared::minwindef::{
+    DWORD,
+    UINT,
+};
 
 use self::winapi::um::mmeapi::{
-    midiInAddBuffer, midiInClose, midiInGetDevCapsW, midiInGetNumDevs, midiInOpen,
-    midiInPrepareHeader, midiInReset, midiInStart, midiInStop, midiInUnprepareHeader, midiOutClose,
-    midiOutGetDevCapsW, midiOutGetNumDevs, midiOutLongMsg, midiOutOpen, midiOutPrepareHeader,
-    midiOutReset, midiOutShortMsg, midiOutUnprepareHeader,
+    midiInAddBuffer,
+    midiInClose,
+    midiInGetDevCapsW,
+    midiInGetNumDevs,
+    midiInOpen,
+    midiInPrepareHeader,
+    midiInReset,
+    midiInStart,
+    midiInStop,
+    midiInUnprepareHeader,
+    midiOutClose,
+    midiOutGetDevCapsW,
+    midiOutGetNumDevs,
+    midiOutLongMsg,
+    midiOutOpen,
+    midiOutPrepareHeader,
+    midiOutReset,
+    midiOutShortMsg,
+    midiOutUnprepareHeader,
 };
 
 use self::winapi::um::mmsystem::{
-    CALLBACK_FUNCTION, CALLBACK_NULL, HMIDIIN, HMIDIOUT, LPMIDIHDR, MIDIERR_NOTREADY,
-    MIDIERR_STILLPLAYING, MIDIHDR, MIDIINCAPSW, MIDIOUTCAPSW, MMSYSERR_ALLOCATED,
-    MMSYSERR_BADDEVICEID, MMSYSERR_NOERROR,
+    CALLBACK_FUNCTION,
+    CALLBACK_NULL,
+    HMIDIIN,
+    HMIDIOUT,
+    LPMIDIHDR,
+    MIDIERR_NOTREADY,
+    MIDIERR_STILLPLAYING,
+    MIDIHDR,
+    MIDIINCAPSW,
+    MIDIOUTCAPSW,
+    MMSYSERR_ALLOCATED,
+    MMSYSERR_BADDEVICEID,
+    MMSYSERR_NOERROR,
 };
 
 use errors::*;
-use {Ignore, MidiMessage};
+use {
+    Ignore,
+    MidiMessage,
+};
 
 mod handler;
 

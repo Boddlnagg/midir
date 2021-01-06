@@ -5,13 +5,19 @@ use self::jack_sys::jack_nframes_t;
 use self::libc::c_void;
 
 use std::ffi::CString;
-use std::{mem, slice};
+use std::{
+    mem,
+    slice,
+};
 
 mod wrappers;
 use self::wrappers::*;
 
 use errors::*;
-use {Ignore, MidiMessage};
+use {
+    Ignore,
+    MidiMessage,
+};
 
 const OUTPUT_RINGBUFFER_SIZE: usize = 16384;
 

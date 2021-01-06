@@ -1,11 +1,18 @@
 extern crate midir;
 
 use std::error::Error;
-use std::io::{stdin, stdout, Write};
+use std::io::{
+    stdin,
+    stdout,
+    Write,
+};
 use std::thread::sleep;
 use std::time::Duration;
 
-use midir::{MidiOutput, MidiOutputPort};
+use midir::{
+    MidiOutput,
+    MidiOutputPort,
+};
 
 fn main() {
     match run() {
