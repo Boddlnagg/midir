@@ -205,7 +205,7 @@ impl MidiInput {
         let c_client_name = CString::new(client_name).map_err(|_| InitError)?;
         seq.set_client_name(&c_client_name).map_err(|_| InitError)?;
 
-        Ok(MidiInput {
+        Ok(Self {
             ignore_flags: Ignore::None,
             seq: Some(seq),
         })
@@ -577,7 +577,7 @@ impl MidiOutput {
         let c_client_name = CString::new(client_name).map_err(|_| InitError)?;
         seq.set_client_name(&c_client_name).map_err(|_| InitError)?;
 
-        Ok(MidiOutput { seq: Some(seq) })
+        Ok(Self { seq: Some(seq) })
     }
 
     pub(crate) fn ports_internal(&self) -> Vec<::common::MidiOutputPort> {

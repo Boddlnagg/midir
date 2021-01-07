@@ -106,7 +106,7 @@ unsafe impl Send for MidiInput {} // because HString doesn't ...
 impl MidiInput {
     pub fn new(_client_name: &str) -> Result<Self, InitError> {
         let device_selector = MidiInPort::get_device_selector().map_err(|_| InitError)?;
-        Ok(MidiInput {
+        Ok(Self {
             selector: device_selector,
             ignore_flags: Ignore::None,
         })
@@ -208,7 +208,7 @@ impl MidiInput {
         let handler_data2 = handler_data.clone();
 
         let handler = TypedEventHandler::new(move |_sender, args| {
-            MidiInput::handle_input(args, &mut *handler_data2.lock().unwrap());
+            Self::handle_input(args, &mut *handler_data2.lock().unwrap());
             Ok(())
         });
 
@@ -282,7 +282,7 @@ unsafe impl Send for MidiOutput {} // because HString doesn't ...
 impl MidiOutput {
     pub fn new(_client_name: &str) -> Result<Self, InitError> {
         let device_selector = MidiOutPort::get_device_selector().map_err(|_| InitError)?;
-        Ok(MidiOutput {
+        Ok(Self {
             selector: device_selector,
         })
     }
