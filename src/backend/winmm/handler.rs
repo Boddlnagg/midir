@@ -1,11 +1,12 @@
 use std::{mem, slice};
 use std::io::{Write, stderr};
 
+use ::bindings::windows::win32::multimedia::{midiInAddBuffer, HMIDIIN, MIDIHDR};
+
 use super::winapi::shared::basetsd::DWORD_PTR;
 use super::winapi::shared::minwindef::{DWORD, UINT};
-use super::winapi::um::mmeapi::midiInAddBuffer;
-use super::winapi::um::mmsystem::{HMIDIIN, MIDIHDR, MMSYSERR_NOERROR, MM_MIM_DATA,
-                                  MM_MIM_LONGDATA, MM_MIM_LONGERROR};
+use super::winapi::um::mmsystem::{MMSYSERR_NOERROR, MM_MIM_DATA, MM_MIM_LONGDATA, MM_MIM_LONGERROR};
+
 use super::HandlerData;
 use Ignore;
 
@@ -51,9 +52,9 @@ pub extern "system" fn handle_input<T>(_: HMIDIIN,
         let sysex = unsafe { &*(midi_message as *const MIDIHDR) };
         if !data.ignore_flags.contains(Ignore::Sysex) && input_status != MM_MIM_LONGERROR {
             // Sysex message and we're not ignoring it
-            let bytes: &[u8] = unsafe { slice::from_raw_parts(sysex.lpData as *const u8, sysex.dwBytesRecorded as usize) };
+            let bytes: &[u8] = unsafe { slice::from_raw_parts(mem::transmute(sysex.lp_data), sysex.dw_bytes_recorded as usize) };
             data.message.bytes.extend_from_slice(bytes);
-            // TODO: If sysex messages are longer than RT_SYSEX_BUFFER_SIZE, they
+            // TODO: If sysex messages are longer than MIDIR_SYSEX_BUFFER_SIZE, they
             //       are split in chunks. We could reassemble a single message.
         }
     
@@ -65,10 +66,10 @@ pub extern "system" fn handle_input<T>(_: HMIDIIN,
         // buffer when an application closes and in this case, we should
         // avoid requeueing it, else the computer suddenly reboots after
         // one or two minutes.
-        if (unsafe {*data.sysex_buffer.0[sysex.dwUser as usize]}).dwBytesRecorded > 0 {
+        if (unsafe {*data.sysex_buffer.0[sysex.dw_user as usize]}).dw_bytes_recorded > 0 {
         //if ( sysex->dwBytesRecorded > 0 ) {
             let in_handle = data.in_handle.as_ref().unwrap().0.lock().unwrap();
-            let result = unsafe { midiInAddBuffer(*in_handle, data.sysex_buffer.0[sysex.dwUser as usize], mem::size_of::<MIDIHDR>() as u32) };
+            let result = unsafe { midiInAddBuffer(*in_handle, data.sysex_buffer.0[sysex.dw_user as usize], mem::size_of::<MIDIHDR>() as u32) };
             drop(in_handle);
             if result != MMSYSERR_NOERROR {
                 let _ = writeln!(stderr(), "\nError in handle_input: Requeuing WinMM input sysex buffer failed.\n");

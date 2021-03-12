@@ -1,26 +1,14 @@
-extern crate winrt;
-
 use std::sync::{Arc, Mutex};
 
 use ::errors::*;
 use ::Ignore;
 
-use self::winrt::{AbiTransferable, HString, TryInto};
-
-winrt::import!(
-    dependencies
-        os
-    types
-        windows::foundation::*
-        windows::devices::midi::*
-        windows::devices::enumeration::DeviceInformation
-        windows::storage::streams::{Buffer, DataWriter}
-);
-
-use self::windows::foundation::*;
-use self::windows::devices::midi::*;
-use self::windows::devices::enumeration::DeviceInformation;
-use self::windows::storage::streams::{Buffer, DataWriter};
+use ::bindings::{
+    windows::foundation::*,
+    windows::devices::midi::*,
+    windows::devices::enumeration::DeviceInformation,
+    windows::storage::streams::{Buffer, DataWriter},
+};
 
 #[derive(Clone)]
 pub struct MidiInputPort {
