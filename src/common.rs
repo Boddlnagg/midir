@@ -278,7 +278,7 @@ impl MidiOutputConnection {
     }
     
     /// Send a message to the port that this output connection is connected to.
-    /// The message must be a valid MIDI message (see https://www.midi.org/specifications/item/table-1-summary-of-midi-message).
+    /// The message must be a valid MIDI message (see https://www.midi.org/specifications-old/item/table-1-summary-of-midi-message).
     pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
         self.imp.send(message)
     }
