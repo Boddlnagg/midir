@@ -337,7 +337,8 @@ impl MidiOutputConnection {
     }
     
     pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
-        let packets = PacketBuffer::new(0, message);
+        let host_time = unsafe { external::AudioGetCurrentHostTime() };
+        let packets = PacketBuffer::new(host_time, message);
         match self.details {
             OutputConnectionDetails::Explicit(ref port, ref dest) => {
                 port.send(&dest, &packets).map_err(|_| SendError::Other("error sending MIDI message to port"))
