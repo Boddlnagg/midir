@@ -1,3 +1,6 @@
+#[cfg(all(feature = "winjack", feature = "winrt"))]
+compile_error!("feature \"winjack\" and \"winrt\" cannot be enabled at the same time");
+
 extern crate memalloc;
 
 #[cfg(feature = "jack")]
