@@ -13,7 +13,6 @@ use self::wrappers::*;
 use ::{Ignore, MidiMessage};
 use ::errors::*;
 
-
 const OUTPUT_RINGBUFFER_SIZE: usize = 16384;
 
 struct InputHandlerData<T> {
