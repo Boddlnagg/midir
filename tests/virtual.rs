@@ -1,12 +1,17 @@
 //! This file contains automated tests, but they require virtual ports and therefore can't work on Windows or Web MIDI ...
-#![cfg(not(any(windows, target_arch = "wasm32")))]
+
+#![cfg(not(any(all(windows, not(feature = "winjack")), target_arch = "wasm32")))]
 extern crate midir;
+
+#[cfg(all(windows, feature = "winjack"))]
+#[link(name = "C:/Program Files/JACK2/lib/libjack64")]
+extern "C" {}
 
 use std::thread::sleep;
 use std::time::Duration;
 
 use midir::{MidiInput, MidiOutput, Ignore, MidiOutputPort};
-use midir::os::unix::{VirtualInput, VirtualOutput};
+use midir::r#virtual::{VirtualInput, VirtualOutput};
 
 #[test]
 fn end_to_end() {

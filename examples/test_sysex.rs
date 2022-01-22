@@ -1,5 +1,9 @@
 extern crate midir;
 
+#[cfg(all(windows, feature = "winjack"))]
+#[link(name = "C:/Program Files/JACK2/lib/libjack64")]
+extern "C" {}
+
 fn main() {
     match example::run() {
         Ok(_) => (),
@@ -7,7 +11,7 @@ fn main() {
     }
 }
 
-#[cfg(not(any(windows, target_arch = "wasm32")))] // virtual ports are not supported on Windows nor on Web MIDI
+#[cfg(not(any(all(windows,not(feature = "winjack")), target_arch = "wasm32")))] // virtual ports are not supported on Windows nor on Web MIDI
 mod example {
 
 use std::thread::sleep;
@@ -15,7 +19,7 @@ use std::time::Duration;
 use std::error::Error;
 
 use midir::{MidiInput, MidiOutput, Ignore};
-use midir::os::unix::VirtualInput;
+use midir::r#virtual::VirtualInput;
 
 const LARGE_SYSEX_SIZE: usize = 5572; // This is the maximum that worked for me
 
@@ -73,7 +77,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 }
 
  // needed to compile successfully
-#[cfg(any(windows, target_arch = "wasm32"))] mod example {
+#[cfg(any(all(windows, not(feature = "winjack")), target_arch = "wasm32"))] mod example {
     use std::error::Error;
     pub fn run() -> Result<(), Box<dyn Error>> { Ok(()) }
 }

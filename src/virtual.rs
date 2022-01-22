@@ -1,8 +1,6 @@
 use ::ConnectError;
 use ::{MidiInputConnection, MidiOutputConnection};
 
-// TODO: maybe move to module `virtual` instead of `os::unix`?
-
 /// Trait that is implemented by `MidiInput` on platforms that
 /// support virtual ports (currently every platform but Windows).
 pub trait VirtualInput<T: Send> where Self: Sized {

@@ -54,7 +54,7 @@ impl MidiMessage {
     }
 }
 
-pub mod os; // include platform-specific behaviour
+#[cfg(any(unix, feature = "winjack"))] pub mod r#virtual;
 
 mod errors;
 pub use errors::*;
