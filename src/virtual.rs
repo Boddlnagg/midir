@@ -2,7 +2,7 @@ use ::ConnectError;
 use ::{MidiInputConnection, MidiOutputConnection};
 
 /// Trait that is implemented by `MidiInput` on platforms that
-/// support virtual ports (currently every platform but Windows).
+/// support virtual ports (currently every platform but winmm and winrt).
 pub trait VirtualInput<T: Send> where Self: Sized {
     /// Creates a virtual input port. Once it has been created,
     /// other applications can connect to this port and send MIDI
@@ -14,7 +14,7 @@ pub trait VirtualInput<T: Send> where Self: Sized {
 }
 
 /// Trait that is implemented by `MidiOutput` on platforms that
-/// support virtual ports (currently every platform but Windows).
+/// support virtual ports (currently every platform but winmm and winrt).
 pub trait VirtualOutput where Self: Sized {
     /// Creates a virtual output port. Once it has been created,
     /// other applications can connect to this port and will
