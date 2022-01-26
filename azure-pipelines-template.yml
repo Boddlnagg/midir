@@ -18,6 +18,9 @@ jobs:
         stable-winrt:
           rustup_toolchain: stable-${{ parameters.target }}
           features: "winrt"
+        stable-winjack:
+          rustup_toolchain: stable-${{ parameters.target }}
+          features: "winjack"
         ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/master') }}:
           beta-winrt:
             rustup_toolchain: beta-${{ parameters.target }}
@@ -25,6 +28,12 @@ jobs:
           nightly-winrt:
             rustup_toolchain: nightly-${{ parameters.target }}
             features: "winrt"
+          beta-winjack:
+            rustup_toolchain: beta-${{ parameters.target }}
+            features: "winjack"
+          nightly-winrt:
+            rustup_toolchain: nightly-${{ parameters.target }}
+            features: "winjack"
       ${{ if and(not(startsWith(parameters.name, 'Windows')), not(endsWith(parameters.name, 'WASM'))) }}:
         stable-jack:
           rustup_toolchain: stable-${{ parameters.target }}
@@ -61,6 +70,12 @@ jobs:
     - script: |
         rustup target add wasm32-unknown-unknown
       displayName: Add wasm32-unknown-unknown target
+  - ${{ if eq(variables['FEATURES'], 'winjack') }}
+    # Jack on Windows only
+    - powershell: |
+        Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+        choco install jack
+      displayName: Install Windows Jack dependency
   - ${{ if startsWith(parameters.name, 'Windows') }}:
     # Windows
     - script: |
