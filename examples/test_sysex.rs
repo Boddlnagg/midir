@@ -19,7 +19,7 @@ use std::time::Duration;
 use std::error::Error;
 
 use midir::{MidiInput, MidiOutput, Ignore};
-use midir::r#virtual::VirtualInput;
+use midir::ext::VirtualInput;
 
 const LARGE_SYSEX_SIZE: usize = 5572; // This is the maximum that worked for me
 

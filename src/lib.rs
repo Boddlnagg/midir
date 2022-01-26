@@ -57,7 +57,14 @@ impl MidiMessage {
     }
 }
 
-#[cfg(any(unix, feature = "winjack"))] pub mod r#virtual;
+#[cfg(any(unix, feature = "winjack"))] pub mod ext;
+
+pub mod os {
+    #[cfg(any(unix, feature = "winjack"))]
+    pub mod unix {
+        pub use ext::{VirtualInput, VirtualOutput};
+    }
+}
 
 mod errors;
 pub use errors::*;

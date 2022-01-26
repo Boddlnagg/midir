@@ -137,7 +137,7 @@ impl MidiIO for MidiInput {
 }
 
 #[cfg(any(unix, feature = "winjack"))]
-impl<T: Send> ::r#virtual::VirtualInput<T> for MidiInput {
+impl<T: Send> ::ext::VirtualInput<T> for MidiInput {
     fn create_virtual<F>(
         self, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<Self>>
@@ -253,7 +253,7 @@ impl MidiIO for MidiOutput {
 }
 
 #[cfg(any(unix, feature = "winjack"))]
-impl ::r#virtual::VirtualOutput for MidiOutput {
+impl ::ext::VirtualOutput for MidiOutput {
     fn create_virtual(self, port_name: &str) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
         match self.imp.create_virtual(port_name) {
             Ok(imp) => Ok(MidiOutputConnection { imp: imp }),

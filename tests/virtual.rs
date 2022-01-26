@@ -11,7 +11,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use midir::{MidiInput, MidiOutput, Ignore, MidiOutputPort};
-use midir::r#virtual::{VirtualInput, VirtualOutput};
+use midir::ext::{VirtualInput, VirtualOutput};
 
 #[test]
 fn end_to_end() {
