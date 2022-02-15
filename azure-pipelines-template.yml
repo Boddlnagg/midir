@@ -70,12 +70,6 @@ jobs:
     - script: |
         rustup target add wasm32-unknown-unknown
       displayName: Add wasm32-unknown-unknown target
-  # Jack on Windows only
-  - powershell: |
-        Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-        choco install jack --version 1.9.17
-    displayName: Install Windows Jack dependency
-    condition: eq(variables.features, 'winjack')
   - ${{ if startsWith(parameters.name, 'Windows') }}:
     # Windows
     - script: |
@@ -84,6 +78,11 @@ jobs:
         set PATH=%PATH%;%USERPROFILE%\.cargo\bin
         echo "##vso[task.setvariable variable=PATH;]%PATH%;%USERPROFILE%\.cargo\bin"
       displayName: Install Rust (Windows)
+    # Jack on Windows only
+    - powershell: |
+        choco install jack --version 1.9.17
+      displayName: Install Windows Jack dependency
+      condition: eq(variables.features, 'winjack')
   # All platforms
   - script: |
         rustc -Vv
