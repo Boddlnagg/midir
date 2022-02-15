@@ -31,7 +31,7 @@ jobs:
           beta-winjack:
             rustup_toolchain: beta-${{ parameters.target }}
             features: "winjack"
-          nightly-winrt:
+          nightly-winjack:
             rustup_toolchain: nightly-${{ parameters.target }}
             features: "winjack"
       ${{ if and(not(startsWith(parameters.name, 'Windows')), not(endsWith(parameters.name, 'WASM'))) }}:
@@ -70,12 +70,12 @@ jobs:
     - script: |
         rustup target add wasm32-unknown-unknown
       displayName: Add wasm32-unknown-unknown target
-  - ${{ if eq(variables['FEATURES'], 'winjack') }}
-    # Jack on Windows only
-    - powershell: |
+  # Jack on Windows only
+  - powershell: |
         Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
         choco install jack --version 1.9.17
-      displayName: Install Windows Jack dependency
+    displayName: Install Windows Jack dependency
+    condition: eq(variables.features, 'winjack')
   - ${{ if startsWith(parameters.name, 'Windows') }}:
     # Windows
     - script: |
