@@ -80,7 +80,7 @@ jobs:
       displayName: Install Rust (Windows)
     # Jack on Windows only
     - powershell: |
-        choco install jack --version 1.9.17
+        choco install jack
       displayName: Install Windows Jack dependency
       condition: eq(variables.features, 'winjack')
   # All platforms
