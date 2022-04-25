@@ -18,6 +18,7 @@ license = "MIT"
 [features]
 default = []
 avoid_timestamping = []
+coremidi_send_timestamped = []
 jack = ["jack-sys", "libc"]
 winrt = [
     "windows/Foundation",
