@@ -108,8 +108,8 @@ impl MidiInputPort {
             return Err(PortInfoError::CannotRetrievePortName)
         }
         let device_caps = unsafe { device_caps.assume_init() };
-        let pname: &[u16] = unsafe { &device_caps.szPname }; // requires unsafe because of packed alignment ...
-        let output = from_wide_ptr(pname.as_ptr(), pname.len()).to_string_lossy().into_owned();
+        let pname_ptr: *const [u16; 32] = std::ptr::addr_of!(device_caps.szPname);
+        let output = from_wide_ptr(pname_ptr as *const _, 32).to_string_lossy().into_owned();
         Ok(output)
     }
 
@@ -370,8 +370,8 @@ impl MidiOutputPort {
             return Err(PortInfoError::CannotRetrievePortName)
         }
         let device_caps = unsafe { device_caps.assume_init() };
-        let pname: &[u16] = unsafe { &device_caps.szPname }; // requires unsafe because of packed alignment ...
-        let output = from_wide_ptr(pname.as_ptr(), pname.len()).to_string_lossy().into_owned();
+        let pname_ptr: *const [u16; 32] = std::ptr::addr_of!(device_caps.szPname);
+        let output = from_wide_ptr(pname_ptr as *const _, 32).to_string_lossy().into_owned();
         Ok(output)
     }
 
