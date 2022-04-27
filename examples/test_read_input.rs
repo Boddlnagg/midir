@@ -1,5 +1,9 @@
 extern crate midir;
 
+#[cfg(all(windows, feature = "winjack"))]
+#[link(name = "C:/Program Files/JACK2/lib/libjack64")]
+extern "C" {}
+
 use std::io::{stdin, stdout, Write};
 use std::error::Error;
 

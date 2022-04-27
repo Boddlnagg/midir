@@ -20,6 +20,7 @@ default = []
 avoid_timestamping = []
 coremidi_send_timestamped = []
 jack = ["jack-sys", "libc"]
+winjack = ["jack"]
 winrt = [
     "windows/Foundation",
     "windows/Foundation_Collections",
@@ -32,7 +33,7 @@ winrt = [
 [dependencies]
 bitflags = "1.2"
 memalloc = "0.1.0"
-jack-sys = { version = "0.2", optional = true }
+jack-sys = { version = "0.2.3", optional = true }
 libc = { version = "0.2.21", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]

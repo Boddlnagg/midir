@@ -1,3 +1,6 @@
+#[cfg(all(feature = "winjack", feature = "winrt"))]
+compile_error!("feature \"winjack\" and \"winrt\" cannot be enabled at the same time");
+
 extern crate memalloc;
 
 #[cfg(feature = "jack")]
@@ -57,7 +60,14 @@ impl MidiMessage {
     }
 }
 
-pub mod os; // include platform-specific behaviour
+#[cfg(any(unix, feature = "winjack"))] pub mod ext;
+
+pub mod os {
+    #[cfg(any(unix, feature = "winjack"))]
+    pub mod unix {
+        pub use ext::{VirtualInput, VirtualOutput};
+    }
+}
 
 mod errors;
 pub use errors::*;
