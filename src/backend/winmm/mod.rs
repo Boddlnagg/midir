@@ -9,7 +9,7 @@ use memalloc::{allocate, deallocate};
 use std::mem::MaybeUninit;
 use std::ptr::null_mut;
 
-use windows::Win32::Foundation::PSTR;
+use windows::core::PSTR;
 use windows::Win32::Media::{
     MMSYSERR_NOERROR, MMSYSERR_ALLOCATED, MMSYSERR_BADDEVICEID,
 };
