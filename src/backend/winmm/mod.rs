@@ -290,7 +290,7 @@ impl<T> MidiInputConnection<T> {
             let result;
             unsafe {
                 result = midiInUnprepareHeader(*in_handle_lock, self.handler_data.sysex_buffer.0[i], mem::size_of::<MIDIHDR>() as u32);
-                deallocate((*self.handler_data.sysex_buffer.0[i]).lpData.0 as *mut _, MIDIR_SYSEX_BUFFER_SIZE/*, mem::align_of::<u8>()*/);
+                dealloc((*self.handler_data.sysex_buffer.0[i]).lpData.0 as *mut _, Layout::from_size_align_unchecked(MIDIR_SYSEX_BUFFER_SIZE, 16));
                 // recreate the Box so that it will be dropped/deallocated at the end of this scope
                 let _ = Box::from_raw(self.handler_data.sysex_buffer.0[i]);
             }
