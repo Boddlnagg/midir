@@ -5,9 +5,9 @@ use std::sync::Mutex;
 use std::io::{Write, stderr};
 use std::thread::sleep;
 use std::time::Duration;
-use memalloc::{allocate, deallocate};
 use std::mem::MaybeUninit;
 use std::ptr::null_mut;
+use std::alloc::{alloc, dealloc, Layout};
 
 use windows::core::PSTR;
 use windows::Win32::Media::{
@@ -223,7 +223,7 @@ impl MidiInput {
         // Allocate and init the sysex buffers.
         for i in 0..MIDIR_SYSEX_BUFFER_COUNT {
             handler_data.sysex_buffer.0[i] = Box::into_raw(Box::new(MIDIHDR {
-                lpData: PSTR(unsafe { allocate(MIDIR_SYSEX_BUFFER_SIZE/*, mem::align_of::<u8>()*/) }),
+                lpData: PSTR(unsafe { alloc(Layout::from_size_align_unchecked(MIDIR_SYSEX_BUFFER_SIZE, 16)) }),
                 dwBufferLength: MIDIR_SYSEX_BUFFER_SIZE as u32,
                 dwBytesRecorded: 0,
                 dwUser: i as DWORD_PTR, // We use the dwUser parameter as buffer indicator

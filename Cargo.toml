@@ -31,7 +31,6 @@ winrt = [
 
 [dependencies]
 bitflags = "1.2"
-memalloc = "0.1.0"
 jack-sys = { version = "0.2", optional = true }
 libc = { version = "0.2.21", optional = true }
 
