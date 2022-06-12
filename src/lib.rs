@@ -1,5 +1,3 @@
-extern crate memalloc;
-
 #[cfg(feature = "jack")]
 #[macro_use] extern crate bitflags;
 
