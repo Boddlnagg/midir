@@ -5,12 +5,16 @@ const INVALID_PORT_MSG: &str = "invalid port";
 const PORT_OUT_OF_RANGE_MSG: &str = "provided port number was out of range";
 const CANNOT_RETRIEVE_PORT_NAME_MSG: &str = "unknown error when trying to retrieve the port name";
 
+/// A common midir error trait to allow for uniform error handling.
+pub trait MidirError: Error {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// An error that can occur during initialization (i.e., while
 /// creating a `MidiInput` or `MidiOutput` object).
 pub struct InitError;
 
 impl Error for InitError {}
+impl MidirError for InitError {}
 
 impl fmt::Display for InitError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -28,6 +32,7 @@ pub enum PortInfoError {
 }
 
 impl Error for PortInfoError {}
+impl MidirError for PortInfoError {}
 
 impl fmt::Display for PortInfoError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -95,6 +100,7 @@ impl<T> fmt::Display for ConnectError<T> {
 }
 
 impl<T> Error for ConnectError<T> {}
+impl<T> MidirError for ConnectError<T> {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// An error that can occur when sending MIDI messages.
@@ -104,6 +110,7 @@ pub enum SendError {
 }
 
 impl Error for SendError {}
+impl MidirError for SendError {}
 
 impl fmt::Display for SendError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
