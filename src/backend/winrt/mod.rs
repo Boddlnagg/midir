@@ -4,29 +4,14 @@ use std::convert::TryInto;
 use ::errors::*;
 use ::Ignore;
 
-use windows::core::{Interface, HSTRING};
+use windows::core::HSTRING;
 
 use windows::{
-    Foundation::{TypedEventHandler, EventRegistrationToken, IClosable, IMemoryBufferReference},
+    Foundation::{TypedEventHandler, EventRegistrationToken, IClosable},
     Devices::Midi::*,
     Devices::Enumeration::DeviceInformation,
-    Storage::Streams::{Buffer, DataWriter},
-    Win32::System::WinRT::IMemoryBufferByteAccess,
+    Storage::Streams::{DataReader, DataWriter},
 };
-
-// see also https://github.com/microsoft/windows-rs/blob/master/examples/buffer/src/main.rs
-fn buffer_get_bytes(buffer: &IMemoryBufferReference) -> ::windows::core::Result<&[u8]> {
-    let interop: IMemoryBufferByteAccess = buffer.cast::<IMemoryBufferByteAccess>()?;
-    let mut bufptr = std::ptr::null_mut();
-    let mut capacity: u32 = 0;
-    unsafe { // TODO: somehow make sure that the buffer is not invalidated while we're reading from it ...
-        interop.GetBuffer(&mut bufptr, &mut capacity)?;
-        if capacity == 0 {
-            bufptr = 1 as *mut u8; // null pointer is not allowed
-        }
-        Ok(std::slice::from_raw_parts(bufptr, capacity as usize))
-    }
-}
 
 #[derive(Clone, PartialEq)]
 pub struct MidiInputPort {
@@ -79,9 +64,10 @@ impl MidiInput {
         let message = args.Message().expect("Message failed");
         let timestamp = message.Timestamp().expect("Timestamp failed").Duration as u64 / 10;
         let buffer = message.RawData().expect("RawData failed");
-        let membuffer = Buffer::CreateMemoryBufferOverIBuffer(&buffer).expect("CreateMemoryBufferOverIBuffer failed");
-        let memory_reference: IMemoryBufferReference = membuffer.CreateReference().expect("CreateReference failed");
-        let message_bytes = buffer_get_bytes(&memory_reference).expect("buffer_get_bytes failed");
+        let length = buffer.Length().expect("Length failed") as usize;
+        let data_reader = DataReader::FromBuffer(buffer).expect("FromBuffer failed");
+        let mut message_bytes = vec![0; length];
+        data_reader.ReadBytes(&mut message_bytes).expect("ReadBytes failed");
 
         // The first byte in the message is the status
         let status = message_bytes[0];
@@ -91,7 +77,7 @@ impl MidiInput {
              status == 0xF8 && ignore.contains(Ignore::Time) ||
              status == 0xFE && ignore.contains(Ignore::ActiveSense))
         {
-            (handler_data.callback)(timestamp, message_bytes, data);
+            (handler_data.callback)(timestamp, &message_bytes, data);
         }
     }
 
