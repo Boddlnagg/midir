@@ -24,7 +24,7 @@ mod helpers {
     pub fn get_ports<F, T>(s: &Seq, capability: PortCap, f: F) -> Vec<T> where F: Fn(PortInfo) -> T {
         ClientIter::new(s).flat_map(|c| PortIter::new(s, c.get_client()))
                           .filter(|p| p.get_type().intersects(PortType::MIDI_GENERIC | PortType::SYNTH | PortType::APPLICATION))
-                          .filter(|p| p.get_capability().intersects(capability))
+                          .filter(|p| p.get_capability().contains(capability))
                           .map(f)
                           .collect()
     }
@@ -33,7 +33,7 @@ mod helpers {
     pub fn get_port_count(s: &Seq, capability: PortCap) -> usize {
         ClientIter::new(s).flat_map(|c| PortIter::new(s, c.get_client()))
                           .filter(|p| p.get_type().intersects(PortType::MIDI_GENERIC | PortType::SYNTH | PortType::APPLICATION))
-                          .filter(|p| p.get_capability().intersects(capability))
+                          .filter(|p| p.get_capability().contains(capability))
                           .count()
     }
 
