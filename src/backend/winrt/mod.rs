@@ -65,7 +65,7 @@ impl MidiInput {
         let timestamp = message.Timestamp().expect("Timestamp failed").Duration as u64 / 10;
         let buffer = message.RawData().expect("RawData failed");
         let length = buffer.Length().expect("Length failed") as usize;
-        let data_reader = DataReader::FromBuffer(buffer).expect("FromBuffer failed");
+        let data_reader = DataReader::FromBuffer(&buffer).expect("FromBuffer failed");
         let mut message_bytes = vec![0; length];
         data_reader.ReadBytes(&mut message_bytes).expect("ReadBytes failed");
 
