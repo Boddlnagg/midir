@@ -560,7 +560,7 @@ impl MidiOutputConnection {
         ev.set_direct();
         
         // Send the event.
-        if self.seq.as_ref().unwrap().event_output(&mut ev).is_err() {
+        if self.seq.as_ref().unwrap().event_output_direct(&mut ev).is_err() {
             return Err(SendError::Other("could not send encoded ALSA message"));
         }
         
