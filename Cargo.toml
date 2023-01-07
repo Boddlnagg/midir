@@ -6,7 +6,7 @@ members = [
 
 [package]
 name = "midir"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Patrick Reisert"]
 description = "A cross-platform, realtime MIDI processing library, inspired by RtMidi."
 repository = "https://github.com/Boddlnagg/midir"
@@ -35,7 +35,7 @@ jack-sys = { version = "0.2", optional = true }
 libc = { version = "0.2.21", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-alsa = "0.6.0"
+alsa = "0.7.0"
 libc = "0.2.21"
 
 [target.'cfg(target_os = "ios")'.dependencies]

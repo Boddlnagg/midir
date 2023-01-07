@@ -2,6 +2,13 @@
 
 All major changes to this project will be documented in this file.
 
+## [0.9.0] - 2023-01-08
+
+- Upgrade `alsa` and `windows` dependencies (the latter now requires `rustc 1.64`)
+- [winrt] Fix received data buffer size ([#116](https://github.com/Boddlnagg/midir/pull/116))
+- [alsa] Fix port listing ([#117](https://github.com/Boddlnagg/midir/pull/117))
+- [alsa] Send messages without buffering ([#125](https://github.com/Boddlnagg/midir/pull/125))
+
 ## [0.8.0] - 2022-05-13
 
 - Migrate Windows backends to Microsoft's `windows` crate
