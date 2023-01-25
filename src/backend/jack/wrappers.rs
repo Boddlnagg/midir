@@ -83,7 +83,7 @@ impl Client {
     }
     
     pub fn get_midi_ports(&self, flags: PortFlags) -> PortInfos {
-        let ports_ptr = unsafe { jack_get_ports(self.p, ptr::null_mut(), JACK_DEFAULT_MIDI_TYPE.as_ptr() as *const _, flags.bits() as u64) };
+        let ports_ptr = unsafe { jack_get_ports(self.p, ptr::null_mut(), JACK_DEFAULT_MIDI_TYPE.as_ptr() as *const _, flags.bits() as _) };
         let slice = if ports_ptr.is_null() {
             &[]
         } else {
@@ -97,7 +97,7 @@ impl Client {
     
     pub fn register_midi_port(&mut self, name: &str, flags: PortFlags) -> Result<MidiPort, ()> {
         let c_name = CString::new(name).ok().expect("port name must not contain null bytes");
-        let result = unsafe { jack_port_register(self.p, c_name.as_ptr(), JACK_DEFAULT_MIDI_TYPE.as_ptr() as *const _, flags.bits() as u64, 0) };
+        let result = unsafe { jack_port_register(self.p, c_name.as_ptr(), JACK_DEFAULT_MIDI_TYPE.as_ptr() as *const _, flags.bits() as _, 0) };
         if result.is_null() {
             Err(())
         } else {
@@ -144,10 +144,10 @@ impl Drop for Client {
     }
 }
 
-#[cfg(not(target_arch = "aarch64"))]
+#[cfg(not(any(target_arch = "aarch64", target_arch = "arm")))]
 type PortInfo = i8;
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
 type PortInfo = u8;
 
 pub struct PortInfos<'a> {
