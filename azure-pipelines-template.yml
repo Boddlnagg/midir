@@ -64,10 +64,10 @@ jobs:
   - ${{ if endsWith(parameters.name, 'ARM') }}:
     # Linux on ARM only
     - script: |
-        grep "deb http://azure.archive" /etc/apt/sources.list | sed 's/deb\ http:\/\/azure.archive.ubuntu.com\/ubuntu/deb\ [arch=arm64]\ http:\/\/ports.ubuntu.com\/ubuntu-ports/' > /tmp/arm-sources.list	
+        grep "^deb http://azure.archive" /etc/apt/sources.list | sed 's/deb\ http:\/\/azure.archive.ubuntu.com\/ubuntu/deb\ [arch=arm64]\ http:\/\/ports.ubuntu.com\/ubuntu-ports/' > $HOME/arm-sources.list	
         sudo sed -i 's/deb\ /deb\ \[arch=amd64\]\ /' /etc/apt/sources.list
-        sudo sh -c 'echo -e "\n" >> /etc/apt/sources.list'
-        sudo sh -c 'cat /tmp/arm-sources.list >> /etc/apt/sources.list'
+        sudo sh -c "cat $HOME/arm-sources.list >> /etc/apt/sources.list"
+        rm $HOME/arm-sources.list
         sudo dpkg --add-architecture arm64
         sudo apt-get update
         sudo apt-get install -y libc6-arm64-cross libc6-dev-arm64-cross gcc-aarch64-linux-gnu
