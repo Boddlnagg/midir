@@ -44,8 +44,8 @@ jobs:
         export PATH="$HOME/.cargo/bin:$PATH"
         echo "##vso[task.setvariable variable=PATH;]$PATH"
       displayName: Install Rust
-  - ${{ if and(startsWith(parameters.name, 'Linux'), not(endsWith(parameters.name, 'WASM'))) }}:
-    # Linux only
+  - ${{ if and(startsWith(parameters.name, 'Linux'), not(endsWith(parameters.name, 'WASM')), not(endsWith(parameters.name, 'ARM'))) }}:
+    # Linux on x86_64 only
     - script: |
         sudo apt-get update && sudo apt-get install -y libasound2-dev libjack-jackd2-dev
       displayName: Install ALSA and Jack dependencies
@@ -61,6 +61,24 @@ jobs:
     - script: |
         rustup target add wasm32-unknown-unknown
       displayName: Add wasm32-unknown-unknown target
+  - ${{ if endsWith(parameters.name, 'ARM') }}:
+    # Linux on ARM only
+    - script: |
+        sudo sed 's/deb\ http:\/\/archive.ubuntu.com\/ubuntu/deb\ [arch=arm64]\ http:\/\/ports.ubuntu.com\/ubuntu-ports/;s/deb\ http:\/\/security.ubuntu.com\/ubuntu/deb\ [arch=arm64]\ http:\/\/ports.ubuntu.com\/ubuntu-ports/' /etc/apt/sources.list > /etc/apt/sources.list.d/arm-sources.list
+        sudo sed -i 's/deb\ /deb\ \[arch=amd64\]\ /' /etc/apt/sources.list
+        sudo dpkg --add-architecture arm64
+        sudo apt-get update
+        sudo apt-get install -y libc6-arm64-cross libc6-dev-arm64-cross gcc-aarch64-linux-gnu
+        export PKG_CONFIG_PATH="/usr/lib/aarch64-linux-gnu/pkgconfig"
+        export PKG_CONFIG_ALLOW_CROSS="true"
+      displayName: Set up ARM cross-compilation environment
+    - script: |
+        rustup target add aarch64-unknown-linux-gnu
+        echo -e "[build]\ntarget = \"aarch64-unknown-linux-gnu\"\n[target.aarch64-unknown-linux-gnu]\nlinker = \"aarch64-linux-gnu-gcc\"">$HOME/.cargo/config
+      displayName: Add aarch64-unknown-linux-gnu target
+    - script: |
+        sudo apt-get install -y libasound2-dev:arm64 libjack-jackd2-dev:arm64
+      displayName: Install ALSA and Jack dependencies
   - ${{ if startsWith(parameters.name, 'Windows') }}:
     # Windows
     - script: |
