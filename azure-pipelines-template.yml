@@ -64,7 +64,7 @@ jobs:
   - ${{ if endsWith(parameters.name, 'ARM') }}:
     # Linux on ARM only
     - script: |
-        grep "deb http://azure.archive" | sed 's/deb\ http:\/\/azure.archive.ubuntu.com\/ubuntu/deb\ [arch=arm64]\ http:\/\/ports.ubuntu.com\/ubuntu-ports/' > /tmp/arm-sources.list	
+        grep "deb http://azure.archive" /etc/apt/sources.list | sed 's/deb\ http:\/\/azure.archive.ubuntu.com\/ubuntu/deb\ [arch=arm64]\ http:\/\/ports.ubuntu.com\/ubuntu-ports/' > /tmp/arm-sources.list	
         sudo sed -i 's/deb\ /deb\ \[arch=amd64\]\ /' /etc/apt/sources.list
  	sudo sh -c 'echo -e "\n" >> /etc/apt/sources.list'
  	sudo sh -c 'cat /tmp/arm-sources.list >> /etc/apt/sources.list'
