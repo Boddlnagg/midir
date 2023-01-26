@@ -6,7 +6,7 @@ members = [
 
 [package]
 name = "midir"
-version = "0.9.0"
+version = "0.9.1"
 authors = ["Patrick Reisert"]
 description = "A cross-platform, realtime MIDI processing library, inspired by RtMidi."
 repository = "https://github.com/Boddlnagg/midir"

@@ -2,6 +2,9 @@
 
 All major changes to this project will be documented in this file.
 
+## [0.9.1] - 2023-01-27
+- Fix Jack build on ARM and bump jack-sys version ([#127](https://github.com/Boddlnagg/midir/pull/127))
+
 ## [0.9.0] - 2023-01-08
 
 - Upgrade `alsa` and `windows` dependencies (the latter now requires `rustc 1.64`)
