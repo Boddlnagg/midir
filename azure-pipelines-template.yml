@@ -71,12 +71,10 @@ jobs:
         sudo dpkg --add-architecture arm64
         sudo apt-get update
         sudo apt-get install -y libc6-arm64-cross libc6-dev-arm64-cross gcc-aarch64-linux-gnu
-        export PKG_CONFIG_PATH="/usr/lib/aarch64-linux-gnu/pkgconfig"
-        export PKG_CONFIG_ALLOW_CROSS="true"
       displayName: Set up ARM cross-compilation environment
     - script: |
         rustup target add aarch64-unknown-linux-gnu
-        echo -e "[build]\ntarget = \"aarch64-unknown-linux-gnu\"\n[target.aarch64-unknown-linux-gnu]\nlinker = \"aarch64-linux-gnu-gcc\"">$HOME/.cargo/config
+        echo -e "[build]\ntarget = \"aarch64-unknown-linux-gnu\"\n[target.aarch64-unknown-linux-gnu]\nlinker = \"aarch64-linux-gnu-gcc\"\n[env]\nPKG_CONFIG_PATH=\"/usr/lib/aarch64-linux-gnu/pkgconfig\"\nPKG_CONFIG_ALLOW_CROSS=\"true\"">$HOME/.cargo/config
       displayName: Add aarch64-unknown-linux-gnu target
     - script: |
         sudo apt-get install -y libasound2-dev:arm64 libjack-jackd2-dev:arm64
