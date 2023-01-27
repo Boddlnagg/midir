@@ -21,7 +21,7 @@ use windows::Win32::Media::Audio::{
     midiInOpen, midiInPrepareHeader, midiInReset, midiInStart,
     midiInStop, midiInUnprepareHeader, midiOutClose,
     midiOutGetDevCapsW, midiOutGetNumDevs, midiOutLongMsg, midiOutOpen,
-    midiOutPrepareHeader, midiOutReset, midiOutShortMsg,
+    midiOutPrepareHeader, midiOutShortMsg,
     midiOutUnprepareHeader, midiInMessage, midiOutMessage,
     HMIDIIN, HMIDIOUT, MIDIHDR, MIDIINCAPSW, MIDIOUTCAPSW, CALLBACK_FUNCTION, CALLBACK_NULL,
     MIDIERR_NOTREADY, MIDIERR_STILLPLAYING,
@@ -533,9 +533,12 @@ impl MidiOutputConnection {
 
 impl Drop for MidiOutputConnection {
     fn drop(&mut self) {
-        unsafe {
-            midiOutReset(self.out_handle);
-            midiOutClose(self.out_handle);
+        loop {
+            let result = unsafe { midiOutClose(self.out_handle) };
+            if result == MIDIERR_STILLPLAYING {
+                sleep(Duration::from_millis(1));
+                continue;
+            } else { break; }
         }
     }
 }
