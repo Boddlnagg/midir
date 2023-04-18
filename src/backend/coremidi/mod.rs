@@ -46,7 +46,7 @@ impl MidiInput {
         }
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiInputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiInputPort> {
         Sources
             .into_iter()
             .map(|s| crate::common::MidiInputPort {

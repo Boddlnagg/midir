@@ -107,14 +107,14 @@ impl MidiInput {
         })
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiInputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiInputPort> {
         STATIC.with(|s| {
             let mut v = Vec::new();
             let s = s.borrow();
             if let Some(access) = s.access.as_ref() {
                 let inputs: Map = access.inputs().unchecked_into();
                 inputs.for_each(&mut |value, _| {
-                    v.push(::common::MidiInputPort {
+                    v.push(crate::common::MidiInputPort {
                         imp: MidiInputPort {
                             input: value.dyn_into().unwrap(),
                         },
@@ -231,7 +231,7 @@ impl MidiOutput {
         Ok(MidiOutput {})
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiOutputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiOutputPort> {
         STATIC.with(|s| {
             let mut v = Vec::new();
             let s = s.borrow();
@@ -240,7 +240,7 @@ impl MidiOutput {
                     .outputs()
                     .unchecked_into::<Map>()
                     .for_each(&mut |value, _| {
-                        v.push(::common::MidiOutputPort {
+                        v.push(crate::common::MidiOutputPort {
                             imp: MidiOutputPort {
                                 output: value.dyn_into().unwrap(),
                             },
