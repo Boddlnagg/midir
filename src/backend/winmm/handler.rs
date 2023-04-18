@@ -1,8 +1,8 @@
 use std::io::{stderr, Write};
 use std::{mem, slice};
 
-use windows::Win32::Media::Audio::{midiInAddBuffer, HMIDIIN, MIDIHDR};
-use windows::Win32::Media::{MMSYSERR_NOERROR, MM_MIM_DATA, MM_MIM_LONGDATA, MM_MIM_LONGERROR};
+use windows_sys::Win32::Media::Audio::{midiInAddBuffer, HMIDIIN, MIDIHDR};
+use windows_sys::Win32::Media::{MMSYSERR_NOERROR, MM_MIM_DATA, MM_MIM_LONGDATA, MM_MIM_LONGERROR};
 
 use crate::Ignore;
 
@@ -74,7 +74,7 @@ pub extern "system" fn handle_input<T>(
         if !data.ignore_flags.contains(Ignore::Sysex) && input_status != MM_MIM_LONGERROR {
             // Sysex message and we're not ignoring it
             let bytes: &[u8] =
-                unsafe { slice::from_raw_parts(sysex.lpData.0, sysex.dwBytesRecorded as usize) };
+                unsafe { slice::from_raw_parts(sysex.lpData, sysex.dwBytesRecorded as usize) };
             data.message.bytes.extend_from_slice(bytes);
             // TODO: If sysex messages are longer than MIDIR_SYSEX_BUFFER_SIZE, they
             //       are split in chunks. We could reassemble a single message.

@@ -2,6 +2,12 @@
 #[macro_use]
 extern crate bitflags;
 
+#[cfg(all(target_os = "windows", feature = "winrt"))]
+extern crate windows;
+
+#[cfg(all(target_os = "windows", not(feature = "winrt")))]
+extern crate windows_sys;
+
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// An enum that is used to specify what kind of MIDI messages should

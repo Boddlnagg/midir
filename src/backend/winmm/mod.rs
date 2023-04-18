@@ -9,8 +9,9 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::{mem, ptr, slice};
 
-use windows::core::PSTR;
-use windows::Win32::Media::Audio::{
+use windows::Win32::Media::Multimedia::{DRV_QUERYDEVICEINTERFACE, DRV_QUERYDEVICEINTERFACESIZE};
+use windows::Win32::Media::{MMSYSERR_ALLOCATED, MMSYSERR_BADDEVICEID, MMSYSERR_NOERROR};
+use windows_sys::Win32::Media::Audio::{
     midiInAddBuffer, midiInClose, midiInGetDevCapsW, midiInGetNumDevs, midiInMessage, midiInOpen,
     midiInPrepareHeader, midiInReset, midiInStart, midiInStop, midiInUnprepareHeader, midiOutClose,
     midiOutGetDevCapsW, midiOutGetNumDevs, midiOutLongMsg, midiOutMessage, midiOutOpen,
@@ -18,8 +19,10 @@ use windows::Win32::Media::Audio::{
     CALLBACK_NULL, HMIDIIN, HMIDIOUT, MIDIERR_NOTREADY, MIDIERR_STILLPLAYING, MIDIHDR, MIDIINCAPSW,
     MIDIOUTCAPSW,
 };
-use windows::Win32::Media::Multimedia::{DRV_QUERYDEVICEINTERFACE, DRV_QUERYDEVICEINTERFACESIZE};
-use windows::Win32::Media::{MMSYSERR_ALLOCATED, MMSYSERR_BADDEVICEID, MMSYSERR_NOERROR};
+use windows_sys::Win32::Media::Multimedia::{
+    DRV_QUERYDEVICEINTERFACE, DRV_QUERYDEVICEINTERFACESIZE,
+};
+use windows_sys::Win32::Media::{MMSYSERR_ALLOCATED, MMSYSERR_BADDEVICEID, MMSYSERR_NOERROR};
 
 #[allow(non_camel_case_types)]
 type ULONG = u32;
@@ -80,7 +83,7 @@ impl MidiInputPort {
         let mut buffer_size: ULONG = 0;
         let result = unsafe {
             midiInMessage(
-                HMIDIIN(port_number as isize),
+                port_number as _,
                 DRV_QUERYDEVICEINTERFACESIZE,
                 &mut buffer_size as *mut _ as DWORD_PTR,
                 0,
@@ -94,7 +97,7 @@ impl MidiInputPort {
         let mut buffer = Vec::<u16>::with_capacity(buffer_size as usize / 2);
         unsafe {
             let result = midiInMessage(
-                HMIDIIN(port_number as isize),
+                port_number as _,
                 DRV_QUERYDEVICEINTERFACE,
                 buffer.as_mut_ptr() as usize,
                 buffer_size as DWORD_PTR,
@@ -259,12 +262,12 @@ impl MidiInput {
         // Allocate and init the sysex buffers.
         for i in 0..MIDIR_SYSEX_BUFFER_COUNT {
             handler_data.sysex_buffer.0[i] = Box::into_raw(Box::new(MIDIHDR {
-                lpData: PSTR(unsafe {
+                lpData: unsafe {
                     alloc(Layout::from_size_align_unchecked(
                         MIDIR_SYSEX_BUFFER_SIZE,
                         1,
                     ))
-                }),
+                },
                 dwBufferLength: MIDIR_SYSEX_BUFFER_SIZE as u32,
                 dwBytesRecorded: 0,
                 dwUser: i as DWORD_PTR, // We use the dwUser parameter as buffer indicator
@@ -367,7 +370,7 @@ impl<T> MidiInputConnection<T> {
                     mem::size_of::<MIDIHDR>() as u32,
                 );
                 dealloc(
-                    (*self.handler_data.sysex_buffer.0[i]).lpData.0 as *mut _,
+                    (*self.handler_data.sysex_buffer.0[i]).lpData as *mut _,
                     Layout::from_size_align_unchecked(MIDIR_SYSEX_BUFFER_SIZE, 1),
                 );
                 // recreate the Box so that it will be dropped/deallocated at the end of this scope
@@ -422,7 +425,7 @@ impl MidiOutputPort {
         let mut buffer_size: ULONG = 0;
         let result = unsafe {
             midiOutMessage(
-                HMIDIOUT(port_number as isize),
+                port_number as _,
                 DRV_QUERYDEVICEINTERFACESIZE,
                 &mut buffer_size as *mut _ as DWORD_PTR,
                 0,
@@ -436,7 +439,7 @@ impl MidiOutputPort {
         let mut buffer = Vec::<u16>::with_capacity(buffer_size as usize / 2);
         unsafe {
             let result = midiOutMessage(
-                HMIDIOUT(port_number as isize),
+                port_number as _,
                 DRV_QUERYDEVICEINTERFACE,
                 buffer.as_mut_ptr() as DWORD_PTR,
                 buffer_size as DWORD_PTR,
@@ -581,7 +584,7 @@ impl MidiOutputConnection {
 
             // Create and prepare MIDIHDR structure.
             let mut sysex = MIDIHDR {
-                lpData: PSTR(buffer.as_mut_ptr()),
+                lpData: buffer.as_mut_ptr(),
                 dwBufferLength: nbytes as u32,
                 dwBytesRecorded: 0,
                 dwUser: 0,
