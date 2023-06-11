@@ -109,7 +109,7 @@ impl MidiInput {
     pub fn connect<F, T: Send>(
         self, port: &MidiInputPort, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
-        where F: FnMut(u64, &[u8], &mut T) + Send + 'static {
+        where F: FnMut(u64, &[u8], &mut T) + Send + 'static, T: Send {
         match self.imp.connect(&port.imp, port_name, callback, data) {
             Ok(imp) => Ok(MidiInputConnection { imp: imp }),
             Err(imp) => {
