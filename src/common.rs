@@ -106,7 +106,7 @@ impl MidiInput {
     ///
     /// An error will be returned when the port is no longer valid
     /// (e.g. the respective device has been disconnected).
-    pub fn connect<F, T: Send>(
+    pub fn connect<F, T>(
         self, port: &MidiInputPort, port_name: &str, callback: F, data: T
     ) -> Result<MidiInputConnection<T>, ConnectError<MidiInput>>
         where F: FnMut(u64, &[u8], &mut T) + Send + 'static, T: Send {
