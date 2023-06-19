@@ -1,8 +1,5 @@
 [workspace]
-members = [
-    ".",
-    "examples/browser",
-]
+members = [".", "examples/browser"]
 
 [package]
 name = "midir"
@@ -26,7 +23,7 @@ winrt = [
     "windows/Devices_Midi",
     "windows/Devices_Enumeration",
     "windows/Storage_Streams",
-    "windows/Win32_System_WinRT"
+    "windows/Win32_System_WinRT",
 ]
 
 [dependencies]
@@ -49,8 +46,8 @@ windows = { version = "0.43", features = [
     "Win32_Foundation",
     "Win32_Media",
     "Win32_Media_Multimedia",
-    "Win32_Media_Audio"
-]}
+    "Win32_Media_Audio",
+] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3"
@@ -67,8 +64,8 @@ web-sys = { version = "0.3", features = [
     "MidiOutput",
     "MidiOutputMap",
     "MidiPort",
-    "MidiPortType"
-]}
+    "MidiPortType",
+] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "0.2"
