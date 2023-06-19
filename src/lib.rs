@@ -1,5 +1,6 @@
 #[cfg(feature = "jack")]
-#[macro_use] extern crate bitflags;
+#[macro_use]
+extern crate bitflags;
 
 #[cfg(target_os = "windows")]
 extern crate windows;
@@ -16,7 +17,7 @@ pub enum Ignore {
     ActiveSense = 0x04,
     SysexAndActiveSense = 0x05,
     TimeAndActiveSense = 0x06,
-    All = 0x07
+    All = 0x07,
 }
 
 impl std::ops::BitOr for Ignore {
@@ -31,7 +32,7 @@ impl std::ops::BitOr for Ignore {
 impl Ignore {
     #[inline(always)]
     pub fn contains(self, other: Ignore) -> bool {
-        self as u8 & other as u8 != 0 
+        self as u8 & other as u8 != 0
     }
 }
 
@@ -43,14 +44,14 @@ impl Ignore {
 #[derive(Debug, Clone)]
 struct MidiMessage {
     bytes: Vec<u8>,
-    timestamp: u64
+    timestamp: u64,
 }
 
 impl MidiMessage {
     fn new() -> MidiMessage {
         MidiMessage {
             bytes: vec![],
-            timestamp: 0
+            timestamp: 0,
         }
     }
 }

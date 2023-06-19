@@ -43,7 +43,7 @@ impl fmt::Display for PortInfoError {
 /// The kind of error for a `ConnectError`.
 pub enum ConnectErrorKind {
     InvalidPort,
-    Other(&'static str)
+    Other(&'static str),
 }
 
 impl ConnectErrorKind {}
@@ -52,7 +52,7 @@ impl fmt::Display for ConnectErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             ConnectErrorKind::InvalidPort => INVALID_PORT_MSG.fmt(f),
-            ConnectErrorKind::Other(msg) => msg.fmt(f)
+            ConnectErrorKind::Other(msg) => msg.fmt(f),
         }
     }
 }
@@ -60,23 +60,26 @@ impl fmt::Display for ConnectErrorKind {
 /// An error that can occur when trying to connect to a port.
 pub struct ConnectError<T> {
     kind: ConnectErrorKind,
-    inner: T
+    inner: T,
 }
 
 impl<T> ConnectError<T> {
     pub fn new(kind: ConnectErrorKind, inner: T) -> ConnectError<T> {
-        ConnectError { kind: kind, inner: inner }
+        ConnectError {
+            kind: kind,
+            inner: inner,
+        }
     }
-    
+
     /// Helper method to create ConnectErrorKind::Other.
     pub fn other(msg: &'static str, inner: T) -> ConnectError<T> {
         Self::new(ConnectErrorKind::Other(msg), inner)
     }
-    
+
     pub fn kind(&self) -> ConnectErrorKind {
         self.kind
     }
-    
+
     pub fn into_inner(self) -> T {
         self.inner
     }
@@ -100,7 +103,7 @@ impl<T> Error for ConnectError<T> {}
 /// An error that can occur when sending MIDI messages.
 pub enum SendError {
     InvalidData(&'static str),
-    Other(&'static str)
+    Other(&'static str),
 }
 
 impl Error for SendError {}
@@ -108,7 +111,7 @@ impl Error for SendError {}
 impl fmt::Display for SendError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            SendError::InvalidData(msg) | SendError::Other(msg) => msg.fmt(f)
+            SendError::InvalidData(msg) | SendError::Other(msg) => msg.fmt(f),
         }
     }
 }
