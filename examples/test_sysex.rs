@@ -39,9 +39,9 @@ mod example {
         let new_port = out_ports.last().unwrap();
         println!(
             "Connecting to port '{}' ...",
-            midi_out.port_name(&new_port).unwrap()
+            midi_out.port_name(new_port).unwrap()
         );
-        let mut conn_out = midi_out.connect(&new_port, "midir-test")?;
+        let mut conn_out = midi_out.connect(new_port, "midir-test")?;
         println!("Starting to send messages ...");
         //sleep(Duration::from_millis(2000));
         println!("Sending NoteOn message");
@@ -53,9 +53,7 @@ mod example {
         println!("Sending large SysEx message ...");
         let mut v = Vec::with_capacity(LARGE_SYSEX_SIZE);
         v.push(0xF0u8);
-        for _ in 1..LARGE_SYSEX_SIZE - 1 {
-            v.push(0u8);
-        }
+        v.extend([0].iter().cycle().take(LARGE_SYSEX_SIZE - 2));
         v.push(0xF7u8);
         assert_eq!(v.len(), LARGE_SYSEX_SIZE);
         conn_out.send(&v)?;
@@ -72,7 +70,7 @@ mod example {
         println!("Closing output ...");
         conn_out.close();
         println!("Closing virtual input ...");
-        conn_in.close().0;
+        conn_in.close();
         Ok(())
     }
 }

@@ -28,7 +28,7 @@ fn end_to_end() {
 
     assert_eq!(midi_out.port_count(), previous_count + 1);
 
-    let new_port: MidiOutputPort = midi_out.ports().into_iter().rev().next().unwrap();
+    let new_port: MidiOutputPort = midi_out.ports().into_iter().next_back().unwrap();
 
     println!(
         "Connecting to port '{}' ...",
@@ -57,7 +57,7 @@ fn end_to_end() {
     let mut conn_out = midi_out.create_virtual("midir-test").unwrap();
     assert_eq!(midi_in.port_count(), previous_count + 1);
 
-    let new_port = midi_in.ports().into_iter().rev().next().unwrap();
+    let new_port = midi_in.ports().into_iter().next_back().unwrap();
 
     println!(
         "Connecting to port '{}' ...",

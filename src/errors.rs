@@ -65,13 +65,10 @@ pub struct ConnectError<T> {
 
 impl<T> ConnectError<T> {
     pub fn new(kind: ConnectErrorKind, inner: T) -> ConnectError<T> {
-        ConnectError {
-            kind: kind,
-            inner: inner,
-        }
+        ConnectError { kind, inner }
     }
 
-    /// Helper method to create ConnectErrorKind::Other.
+    /// Helper method to create [`ConnectErrorKind::Other`].
     pub fn other(msg: &'static str, inner: T) -> ConnectError<T> {
         Self::new(ConnectErrorKind::Other(msg), inner)
     }

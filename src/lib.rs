@@ -37,7 +37,7 @@ impl Ignore {
 /// messages. Each message represents one and only one MIDI message.
 /// The timestamp is represented as the elapsed microseconds since
 /// a point in time that is arbitrary, but does not change for the
-/// lifetime of a given MidiInputConnection.
+/// lifetime of a given [`MidiInputConnection`].
 #[derive(Debug, Clone)]
 struct MidiMessage {
     bytes: Vec<u8>,

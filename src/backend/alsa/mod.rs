@@ -1,14 +1,15 @@
 use std::ffi::{CStr, CString};
 use std::io::{stderr, Write};
 use std::mem;
+use std::ptr::addr_of_mut;
 use std::thread::{Builder, JoinHandle};
 
-use crate::{errors, Ignore, MidiMessage};
+use crate::backend::Callback;
+use crate::errors::{ConnectError, ConnectErrorKind, InitError, PortInfoError, SendError};
+use crate::{Ignore, MidiMessage};
 
 use alsa::seq::{Addr, EventType, PortCap, PortInfo, PortSubscribe, PortType, QueueTempo};
 use alsa::{Direction, Seq};
-
-use errors::*;
 
 mod helpers {
     use crate::errors::PortInfoError;
@@ -50,9 +51,8 @@ mod helpers {
     pub fn get_port_name(s: &Seq, addr: Addr) -> Result<String, PortInfoError> {
         use std::fmt::Write;
 
-        let pinfo = match s.get_any_port_info(addr) {
-            Ok(p) => p,
-            Err(_) => return Err(PortInfoError::InvalidPort),
+        let Ok(pinfo) = s.get_any_port_info(addr) else {
+            return Err(PortInfoError::InvalidPort);
         };
 
         let cinfo = s
@@ -104,7 +104,7 @@ mod helpers {
         pub fn new(buffer_size: u32) -> EventEncoder {
             EventEncoder {
                 ev: MidiEvent::new(buffer_size).unwrap(),
-                buffer_size: buffer_size,
+                buffer_size,
             }
         }
 
@@ -154,17 +154,14 @@ struct HandlerData<T: 'static> {
     ignore_flags: Ignore,
     seq: Seq,
     trigger_rcv_fd: i32,
-    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send>,
+    callback: Callback<T>,
     queue_id: i32, // an input queue is needed to get timestamped events
 }
 
 impl MidiInput {
     pub fn new(client_name: &str) -> Result<Self, InitError> {
-        let seq = match Seq::open(None, None, true) {
-            Ok(s) => s,
-            Err(_) => {
-                return Err(InitError);
-            }
+        let Ok(seq) = Seq::open(None, None, true) else {
+            return Err(InitError);
         };
 
         let c_client_name = CString::new(client_name).map_err(|_| InitError)?;
@@ -246,7 +243,7 @@ impl MidiInput {
         }
 
         pinfo.set_name(port_name);
-        match self.seq.as_mut().unwrap().create_port(&mut pinfo) {
+        match self.seq.as_mut().unwrap().create_port(&pinfo) {
             Ok(_) => Ok(pinfo.get_port()),
             Err(_) => Err(()),
         }
@@ -270,41 +267,31 @@ impl MidiInput {
     where
         F: FnMut(u64, &[u8], &mut T) + Send + 'static,
     {
-        let trigger_fds = match self.init_trigger() {
-            Ok(fds) => fds,
-            Err(()) => {
-                return Err(ConnectError::other(
-                    "could not create communication pipe for ALSA handler",
-                    self,
-                ));
-            }
+        let Ok(trigger_fds) = self.init_trigger() else {
+            return Err(ConnectError::other(
+                "could not create communication pipe for ALSA handler",
+                self,
+            ));
         };
 
         let queue_id = self.init_queue();
 
-        let src_pinfo = match self.seq.as_ref().unwrap().get_any_port_info(port.addr) {
-            Ok(p) => p,
-            Err(_) => return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self)),
+        let Ok(src_pinfo) = self.seq.as_ref().unwrap().get_any_port_info(port.addr) else {
+            return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self));
         };
 
-        let c_port_name = match CString::new(port_name) {
-            Ok(c_port_name) => c_port_name,
-            Err(_) => {
-                return Err(ConnectError::other(
-                    "port_name must not contain null bytes",
-                    self,
-                ))
-            }
+        let Ok(c_port_name )= CString::new(port_name) else {
+            return Err(ConnectError::other(
+                "port_name must not contain null bytes",
+                self,
+            ))
         };
 
-        let vport = match self.create_port(&c_port_name, queue_id) {
-            Ok(vp) => vp,
-            Err(_) => {
-                return Err(ConnectError::other(
-                    "could not create ALSA input port",
-                    self,
-                ));
-            }
+        let Ok(vport) = self.create_port(&c_port_name, queue_id) else {
+            return Err(ConnectError::other(
+                "could not create ALSA input port",
+                self,
+            ));
         };
 
         // Make subscription
@@ -331,31 +318,28 @@ impl MidiInput {
             seq: self.seq.take().unwrap(),
             trigger_rcv_fd: trigger_fds[0],
             callback: Box::new(callback),
-            queue_id: queue_id,
+            queue_id,
         };
 
         let threadbuilder = Builder::new();
-        let name = format!("midir ALSA input handler (port '{}')", port_name);
+        let name = format!("midir ALSA input handler (port '{port_name}')");
         let threadbuilder = threadbuilder.name(name);
-        let thread = match threadbuilder.spawn(move || {
+        let Ok(thread) = threadbuilder.spawn(move || {
             let mut d = data;
             let h = handle_input(handler_data, &mut d);
             (h, d) // return both the handler data and the user data
-        }) {
-            Ok(handle) => handle,
-            Err(_) => {
-                //unsafe { snd_seq_unsubscribe_port(self.seq.as_mut_ptr(), sub.as_ptr()) };
-                return Err(ConnectError::other(
-                    "could not start ALSA input handler thread",
-                    self,
-                ));
-            }
+        }) else {
+            //unsafe { snd_seq_unsubscribe_port(self.seq.as_mut_ptr(), sub.as_ptr()) };
+            return Err(ConnectError::other(
+                "could not start ALSA input handler thread",
+                self,
+            ));
         };
 
         Ok(MidiInputConnection {
             subscription: Some(subscription),
             thread: Some(thread),
-            vport: vport,
+            vport,
             trigger_send_fd: trigger_fds[1],
         })
     }
@@ -369,36 +353,27 @@ impl MidiInput {
     where
         F: FnMut(u64, &[u8], &mut T) + Send + 'static,
     {
-        let trigger_fds = match self.init_trigger() {
-            Ok(fds) => fds,
-            Err(()) => {
-                return Err(ConnectError::other(
-                    "could not create communication pipe for ALSA handler",
-                    self,
-                ));
-            }
+        let Ok(trigger_fds) = self.init_trigger() else {
+            return Err(ConnectError::other(
+                "could not create communication pipe for ALSA handler",
+                self,
+            ));
         };
 
         let queue_id = self.init_queue();
 
-        let c_port_name = match CString::new(port_name) {
-            Ok(c_port_name) => c_port_name,
-            Err(_) => {
-                return Err(ConnectError::other(
-                    "port_name must not contain null bytes",
-                    self,
-                ))
-            }
+        let Ok(c_port_name) = CString::new(port_name) else {
+            return Err(ConnectError::other(
+                "port_name must not contain null bytes",
+                self,
+            ))
         };
 
-        let vport = match self.create_port(&c_port_name, queue_id) {
-            Ok(vp) => vp,
-            Err(_) => {
-                return Err(ConnectError::other(
-                    "could not create ALSA input port",
-                    self,
-                ));
-            }
+        let Ok(vport) = self.create_port(&c_port_name, queue_id) else {
+            return Err(ConnectError::other(
+                "could not create ALSA input port",
+                self,
+            ));
         };
 
         // Start the input queue
@@ -410,29 +385,26 @@ impl MidiInput {
             seq: self.seq.take().unwrap(),
             trigger_rcv_fd: trigger_fds[0],
             callback: Box::new(callback),
-            queue_id: queue_id,
+            queue_id,
         };
 
         let threadbuilder = Builder::new();
-        let thread = match threadbuilder.spawn(move || {
+        let Ok(thread) = threadbuilder.spawn(move || {
             let mut d = data;
             let h = handle_input(handler_data, &mut d);
             (h, d) // return both the handler data and the user data
-        }) {
-            Ok(handle) => handle,
-            Err(_) => {
-                //unsafe { snd_seq_unsubscribe_port(self.seq.as_mut_ptr(), sub.as_ptr()) };
-                return Err(ConnectError::other(
-                    "could not start ALSA input handler thread",
-                    self,
-                ));
-            }
+        }) else {
+            //unsafe { snd_seq_unsubscribe_port(self.seq.as_mut_ptr(), sub.as_ptr()) };
+            return Err(ConnectError::other(
+                "could not start ALSA input handler thread",
+                self,
+            ));
         };
 
         Ok(MidiInputConnection {
             subscription: None,
             thread: Some(thread),
-            vport: vport,
+            vport,
             trigger_send_fd: trigger_fds[1],
         })
     }
@@ -457,7 +429,7 @@ impl<T> MidiInputConnection<T> {
         let _res = unsafe {
             libc::write(
                 self.trigger_send_fd,
-                &false as *const bool as *const _,
+                (&false as *const bool).cast(),
                 mem::size_of::<bool>() as libc::size_t,
             )
         };
@@ -469,9 +441,9 @@ impl<T> MidiInputConnection<T> {
             // TODO: handle this more gracefully?
             Err(e) => {
                 if let Some(e) = e.downcast_ref::<&'static str>() {
-                    panic!("Error when joining ALSA thread: {}", e);
+                    panic!("Error when joining ALSA thread: {e}");
                 } else {
-                    panic!("Unknown error when joining ALSA thread: {:?}", e);
+                    panic!("Unknown error when joining ALSA thread: {e:?}");
                 }
             }
         };
@@ -532,11 +504,8 @@ pub struct MidiOutputConnection {
 
 impl MidiOutput {
     pub fn new(client_name: &str) -> Result<Self, InitError> {
-        let seq = match Seq::open(None, Some(Direction::Playback), true) {
-            Ok(s) => s,
-            Err(_) => {
-                return Err(InitError);
-            }
+        let Ok(seq) = Seq::open(None, Some(Direction::Playback), true) else {
+            return Err(InitError);
         };
 
         let c_client_name = CString::new(client_name).map_err(|_| InitError)?;
@@ -571,33 +540,26 @@ impl MidiOutput {
         port: &MidiOutputPort,
         port_name: &str,
     ) -> Result<MidiOutputConnection, ConnectError<Self>> {
-        let pinfo = match self.seq.as_ref().unwrap().get_any_port_info(port.addr) {
-            Ok(p) => p,
-            Err(_) => return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self)),
+        let Ok(pinfo) = self.seq.as_ref().unwrap().get_any_port_info(port.addr) else {
+            return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self));
         };
 
-        let c_port_name = match CString::new(port_name) {
-            Ok(c_port_name) => c_port_name,
-            Err(_) => {
-                return Err(ConnectError::other(
-                    "port_name must not contain null bytes",
-                    self,
-                ))
-            }
+        let Ok(c_port_name) = CString::new(port_name) else {
+            return Err(ConnectError::other(
+                "port_name must not contain null bytes",
+                self,
+            ))
         };
 
-        let vport = match self.seq.as_ref().unwrap().create_simple_port(
+        let Ok(vport) = self.seq.as_ref().unwrap().create_simple_port(
             &c_port_name,
             PortCap::READ | PortCap::SUBS_READ,
             PortType::MIDI_GENERIC | PortType::APPLICATION,
-        ) {
-            Ok(vport) => vport,
-            Err(_) => {
-                return Err(ConnectError::other(
-                    "could not create ALSA output port",
-                    self,
-                ))
-            }
+        ) else {
+            return Err(ConnectError::other(
+                "could not create ALSA output port",
+                self,
+            ))
         };
 
         // Make subscription
@@ -618,7 +580,7 @@ impl MidiOutput {
 
         Ok(MidiOutputConnection {
             seq: self.seq.take(),
-            vport: vport,
+            vport,
             coder: helpers::EventEncoder::new(INITIAL_CODER_BUFFER_SIZE as u32),
             subscription: Some(sub),
         })
@@ -628,33 +590,27 @@ impl MidiOutput {
         mut self,
         port_name: &str,
     ) -> Result<MidiOutputConnection, ConnectError<Self>> {
-        let c_port_name = match CString::new(port_name) {
-            Ok(c_port_name) => c_port_name,
-            Err(_) => {
-                return Err(ConnectError::other(
-                    "port_name must not contain null bytes",
-                    self,
-                ))
-            }
+        let Ok(c_port_name) = CString::new(port_name) else {
+            return Err(ConnectError::other(
+                "port_name must not contain null bytes",
+                self,
+            ))
         };
 
-        let vport = match self.seq.as_ref().unwrap().create_simple_port(
+        let Ok(vport) = self.seq.as_ref().unwrap().create_simple_port(
             &c_port_name,
             PortCap::READ | PortCap::SUBS_READ,
             PortType::MIDI_GENERIC | PortType::APPLICATION,
-        ) {
-            Ok(vport) => vport,
-            Err(_) => {
-                return Err(ConnectError::other(
-                    "could not create ALSA output port",
-                    self,
-                ))
-            }
+        ) else {
+            return Err(ConnectError::other(
+                "could not create ALSA output port",
+                self,
+            ))
         };
 
         Ok(MidiOutputConnection {
             seq: self.seq.take(),
-            vport: vport,
+            vport,
             coder: helpers::EventEncoder::new(INITIAL_CODER_BUFFER_SIZE as u32),
             subscription: None,
         })
@@ -672,17 +628,16 @@ impl MidiOutputConnection {
 
     pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
         let nbytes = message.len();
-        assert!(nbytes <= u32::max_value() as usize);
+        assert!(u32::try_from(nbytes).is_ok());
 
-        if nbytes > self.coder.get_buffer_size() as usize {
-            if self.coder.resize_buffer(nbytes as u32).is_err() {
-                return Err(SendError::Other("could not resize ALSA encoding buffer"));
-            }
+        if nbytes > self.coder.get_buffer_size() as usize
+            && self.coder.resize_buffer(nbytes as u32).is_err()
+        {
+            return Err(SendError::Other("could not resize ALSA encoding buffer"));
         }
 
-        let mut ev = match self.coder.get_wrapped().encode(message) {
-            Ok((_, Some(ev))) => ev,
-            _ => return Err(SendError::InvalidData("ALSA encoder reported invalid data")),
+        let Ok((_, Some(mut ev))) = self.coder.get_wrapped().encode(message) else{
+            return Err(SendError::InvalidData("ALSA encoder reported invalid data"));
         };
 
         ev.set_source(self.vport);
@@ -758,7 +713,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
 
         let mut do_input = true;
         while do_input {
-            if let Ok(0) = seq_input.event_input_pending(true) {
+            if seq_input.event_input_pending(true) == Ok(0) {
                 // No data pending
                 if helpers::poll(&mut poll_fds, -1) >= 0 {
                     // Read from our "channel" whether we should stop the thread
@@ -766,7 +721,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
                         let _res = unsafe {
                             libc::read(
                                 poll_fds[0].fd,
-                                mem::transmute(&mut do_input),
+                                addr_of_mut!(do_input).cast::<libc::c_void>(),
                                 mem::size_of::<bool>() as libc::size_t,
                             )
                         };
@@ -789,7 +744,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
             //       call the user callback with the byte buffer directly, without the
             //       copying to `message.bytes` first.
             if !continue_sysex {
-                message.bytes.clear()
+                message.bytes.clear();
             }
 
             let ignore_flags = data.ignore_flags;
@@ -814,8 +769,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
                 Err(ref e) => {
                     let _ = writeln!(
                         stderr(),
-                        "\nError in handle_input: unknown ALSA MIDI input error ({})!\n",
-                        e
+                        "\nError in handle_input: unknown ALSA MIDI input error ({e})!\n"
                     );
                     //perror("System reports");
                     continue;
@@ -825,7 +779,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
             let do_decode = match ev.get_type() {
                 EventType::PortSubscribed => {
                     if cfg!(debug) {
-                        println!("Notice from handle_input: ALSA port connection made!")
+                        println!("Notice from handle_input: ALSA port connection made!");
                     };
                     false
                 }
@@ -883,7 +837,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
                 }
             }
 
-            if message.bytes.len() == 0 || continue_sysex {
+            if message.bytes.is_empty() || continue_sysex {
                 continue;
             }
 
@@ -894,7 +848,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
             let secs = alsa_time.as_secs();
             let nsecs = alsa_time.subsec_nanos();
 
-            message.timestamp = (secs as u64 * 1_000_000) + (nsecs as u64 / 1_000);
+            message.timestamp = (secs * 1_000_000) + (nsecs as u64 / 1_000);
             (data.callback)(message.timestamp, &message.bytes, user_data);
         }
     } // close scope where data.seq is borrowed

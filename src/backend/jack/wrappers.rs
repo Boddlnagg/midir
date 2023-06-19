@@ -52,9 +52,7 @@ impl Client {
     }
 
     pub fn open(name: &str, options: JackOpenOptions) -> Result<Client, ()> {
-        let c_name = CString::new(name)
-            .ok()
-            .expect("client name must not contain null bytes");
+        let c_name = CString::new(name).expect("client name must not contain null bytes");
         let result = unsafe { jack_client_open(c_name.as_ptr(), options.bits(), ptr::null_mut()) };
         if result.is_null() {
             Err(())
@@ -86,9 +84,7 @@ impl Client {
     }
 
     pub fn register_midi_port(&mut self, name: &str, flags: PortFlags) -> Result<MidiPort, ()> {
-        let c_name = CString::new(name)
-            .ok()
-            .expect("port name must not contain null bytes");
+        let c_name = CString::new(name).expect("port name must not contain null bytes");
         let result = unsafe {
             jack_port_register(
                 self.p,
@@ -172,15 +168,13 @@ impl<'a> Index<usize> for PortInfos<'a> {
 
     fn index(&self, index: usize) -> &Self::Output {
         let slice = self.get_c_name(index).to_bytes();
-        str::from_utf8(slice)
-            .ok()
-            .expect("Error converting port name to UTF8")
+        str::from_utf8(slice).expect("Error converting port name to UTF8")
     }
 }
 
 impl<'a> Drop for PortInfos<'a> {
     fn drop(&mut self) {
-        if self.p.len() > 0 {
+        if !self.p.is_empty() {
             unsafe { jack_free(self.p.as_ptr() as *mut _) }
         }
     }
@@ -242,19 +236,16 @@ impl Ringbuffer {
     }
 
     pub fn get_read_space(&self) -> usize {
-        unsafe { jack_ringbuffer_read_space(self.p) as usize }
+        unsafe { jack_ringbuffer_read_space(self.p) }
     }
 
     pub fn read(&mut self, destination: *mut u8, count: usize) -> usize {
-        let bytes_read =
-            unsafe { jack_ringbuffer_read(self.p, destination as *mut _, count as size_t) };
-        bytes_read as usize
+        unsafe { jack_ringbuffer_read(self.p, destination as *mut _, count as size_t) }
     }
 
     pub fn write(&mut self, source: &[u8]) -> usize {
         unsafe {
             jack_ringbuffer_write(self.p, source.as_ptr() as *const _, source.len() as size_t)
-                as usize
         }
     }
 }
