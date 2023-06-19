@@ -4,20 +4,16 @@
 //! * [W3C Editor's Draft](https://webaudio.github.io/web-midi-api/)
 //! * [MDN web docs](https://developer.mozilla.org/en-US/docs/Web/API/MIDIAccess)
 
-extern crate js_sys;
-extern crate wasm_bindgen;
-extern crate web_sys;
-
-use self::js_sys::{Map, Promise, Uint8Array};
-use self::wasm_bindgen::prelude::*;
-use self::wasm_bindgen::JsCast;
-use self::web_sys::{MidiAccess, MidiMessageEvent, MidiOptions};
+use js_sys::{Map, Promise, Uint8Array};
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
+use web_sys::{MidiAccess, MidiMessageEvent, MidiOptions};
 
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
-use errors::*;
-use Ignore;
+use crate::errors::*;
+use crate::Ignore;
 
 thread_local! {
     static STATIC : RefCell<Static> = RefCell::new(Static::new());
@@ -111,14 +107,14 @@ impl MidiInput {
         })
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiInputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiInputPort> {
         STATIC.with(|s| {
             let mut v = Vec::new();
             let s = s.borrow();
             if let Some(access) = s.access.as_ref() {
                 let inputs: Map = access.inputs().unchecked_into();
                 inputs.for_each(&mut |value, _| {
-                    v.push(::common::MidiInputPort {
+                    v.push(crate::common::MidiInputPort {
                         imp: MidiInputPort {
                             input: value.dyn_into().unwrap(),
                         },
@@ -235,7 +231,7 @@ impl MidiOutput {
         Ok(MidiOutput {})
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiOutputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiOutputPort> {
         STATIC.with(|s| {
             let mut v = Vec::new();
             let s = s.borrow();
@@ -244,7 +240,7 @@ impl MidiOutput {
                     .outputs()
                     .unchecked_into::<Map>()
                     .for_each(&mut |value, _| {
-                        v.push(::common::MidiOutputPort {
+                        v.push(crate::common::MidiOutputPort {
                             imp: MidiOutputPort {
                                 output: value.dyn_into().unwrap(),
                             },

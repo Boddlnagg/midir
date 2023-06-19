@@ -4,10 +4,11 @@ use std::{mem, slice};
 use windows::Win32::Media::Audio::{midiInAddBuffer, HMIDIIN, MIDIHDR};
 use windows::Win32::Media::{MMSYSERR_NOERROR, MM_MIM_DATA, MM_MIM_LONGDATA, MM_MIM_LONGERROR};
 
+use crate::Ignore;
+
 use super::{DWORD, DWORD_PTR, UINT};
 
 use super::HandlerData;
-use Ignore;
 
 pub extern "system" fn handle_input<T>(
     _: HMIDIIN,

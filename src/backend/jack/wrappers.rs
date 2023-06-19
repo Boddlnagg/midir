@@ -4,9 +4,9 @@ use std::ffi::{CStr, CString};
 use std::ops::Index;
 use std::{ptr, slice, str};
 
-use super::libc::{c_void, size_t};
+use libc::{c_void, size_t};
 
-use super::jack_sys::{
+use jack_sys::{
     jack_activate, jack_client_close, jack_client_open, jack_client_t, jack_connect,
     jack_deactivate, jack_free, jack_get_ports, jack_get_time, jack_midi_clear_buffer,
     jack_midi_data_t, jack_midi_event_get, jack_midi_event_reserve, jack_midi_event_t,

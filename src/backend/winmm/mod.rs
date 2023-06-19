@@ -30,8 +30,8 @@ type DWORD = u32;
 #[allow(non_camel_case_types)]
 type DWORD_PTR = usize;
 
-use errors::*;
-use {Ignore, MidiMessage};
+use crate::errors::*;
+use crate::{Ignore, MidiMessage};
 
 mod handler;
 
@@ -187,7 +187,7 @@ impl MidiInput {
         self.ignore_flags = flags;
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiInputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiInputPort> {
         let count = MidiInputPort::count();
         let mut result = Vec::with_capacity(count as usize);
         for i in 0..count {
@@ -195,7 +195,7 @@ impl MidiInput {
                 Ok(p) => p,
                 Err(_) => continue,
             };
-            result.push(::common::MidiInputPort { imp: port });
+            result.push(crate::common::MidiInputPort { imp: port });
         }
         result
     }
@@ -503,7 +503,7 @@ impl MidiOutput {
         Ok(MidiOutput)
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiOutputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiOutputPort> {
         let count = MidiOutputPort::count();
         let mut result = Vec::with_capacity(count as usize);
         for i in 0..count {
@@ -511,7 +511,7 @@ impl MidiOutput {
                 Ok(p) => p,
                 Err(_) => continue,
             };
-            result.push(::common::MidiOutputPort { imp: port });
+            result.push(crate::common::MidiOutputPort { imp: port });
         }
         result
     }
