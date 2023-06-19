@@ -1,8 +1,8 @@
 use std::convert::TryInto;
 use std::sync::{Arc, Mutex};
 
-use errors::*;
-use Ignore;
+use crate::errors::*;
+use crate::Ignore;
 
 use windows::core::HSTRING;
 
@@ -36,7 +36,7 @@ impl MidiInput {
         self.ignore_flags = flags;
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiInputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiInputPort> {
         let device_collection = DeviceInformation::FindAllAsyncAqsFilter(&self.selector)
             .unwrap()
             .get()
@@ -45,7 +45,7 @@ impl MidiInput {
         let mut result = Vec::with_capacity(count as usize);
         for device_info in device_collection.into_iter() {
             let device_id = device_info.Id().expect("Id failed");
-            result.push(::common::MidiInputPort {
+            result.push(crate::common::MidiInputPort {
                 imp: MidiInputPort { id: device_id },
             });
         }
@@ -203,7 +203,7 @@ impl MidiOutput {
         })
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiOutputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiOutputPort> {
         let device_collection = DeviceInformation::FindAllAsyncAqsFilter(&self.selector)
             .unwrap()
             .get()
@@ -212,7 +212,7 @@ impl MidiOutput {
         let mut result = Vec::with_capacity(count as usize);
         for device_info in device_collection.into_iter() {
             let device_id = device_info.Id().expect("Id failed");
-            result.push(::common::MidiOutputPort {
+            result.push(crate::common::MidiOutputPort {
                 imp: MidiOutputPort { id: device_id },
             });
         }

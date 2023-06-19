@@ -1,5 +1,4 @@
-use ConnectError;
-use {MidiInputConnection, MidiOutputConnection};
+use crate::{ConnectError, MidiInputConnection, MidiOutputConnection};
 
 // TODO: maybe move to module `virtual` instead of `os::unix`?
 

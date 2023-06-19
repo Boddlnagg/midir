@@ -1,12 +1,9 @@
-extern crate coremidi;
-
 use std::sync::{Arc, Mutex};
 
-use errors::*;
-use Ignore;
-use MidiMessage;
+use crate::errors::*;
+use crate::{Ignore, MidiMessage};
 
-use self::coremidi::*;
+use coremidi::*;
 
 mod external {
     #[link(name = "CoreAudio", kind = "framework")]
@@ -48,10 +45,10 @@ impl MidiInput {
         }
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiInputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiInputPort> {
         Sources
             .into_iter()
-            .map(|s| ::common::MidiInputPort {
+            .map(|s| crate::common::MidiInputPort {
                 imp: MidiInputPort {
                     source: Arc::new(s),
                 },
@@ -314,10 +311,10 @@ impl MidiOutput {
         }
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiOutputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiOutputPort> {
         Destinations
             .into_iter()
-            .map(|d| ::common::MidiOutputPort {
+            .map(|d| crate::common::MidiOutputPort {
                 imp: MidiOutputPort { dest: Arc::new(d) },
             })
             .collect()

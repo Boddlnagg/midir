@@ -1,5 +1,3 @@
-extern crate midir;
-
 fn main() {
     match example::run() {
         Ok(_) => (),

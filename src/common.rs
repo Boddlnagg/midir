@@ -6,7 +6,8 @@ use backend::{
     MidiOutputConnection as MidiOutputConnectionImpl, MidiOutputPort as MidiOutputPortImpl,
 };
 use errors::*;
-use Ignore;
+
+use crate::{backend, errors, Ignore, InitError};
 
 /// Trait that abstracts over input and output ports.
 pub trait MidiIO {
@@ -145,7 +146,7 @@ impl MidiIO for MidiInput {
 }
 
 #[cfg(unix)]
-impl<T: Send> ::os::unix::VirtualInput<T> for MidiInput {
+impl<T: Send> crate::os::unix::VirtualInput<T> for MidiInput {
     fn create_virtual<F>(
         self,
         port_name: &str,
@@ -280,7 +281,7 @@ impl MidiIO for MidiOutput {
 }
 
 #[cfg(unix)]
-impl ::os::unix::VirtualOutput for MidiOutput {
+impl crate::os::unix::VirtualOutput for MidiOutput {
     fn create_virtual(
         self,
         port_name: &str,

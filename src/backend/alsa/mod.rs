@@ -1,25 +1,21 @@
-extern crate alsa;
-extern crate libc;
-
 use std::ffi::{CStr, CString};
 use std::io::{stderr, Write};
 use std::mem;
 use std::thread::{Builder, JoinHandle};
 
-use self::alsa::seq::{Addr, EventType, PortCap, PortInfo, PortSubscribe, PortType, QueueTempo};
-use self::alsa::{Direction, Seq};
+use crate::{errors, Ignore, MidiMessage};
+
+use alsa::seq::{Addr, EventType, PortCap, PortInfo, PortSubscribe, PortType, QueueTempo};
+use alsa::{Direction, Seq};
 
 use errors::*;
-use {Ignore, MidiMessage};
 
 mod helpers {
-    use super::alsa::seq::{
-        Addr, ClientIter, MidiEvent, PortCap, PortInfo, PortIter, PortType, Seq,
-    };
-    use errors::PortInfoError;
+    use crate::errors::PortInfoError;
+    use alsa::seq::{Addr, ClientIter, MidiEvent, PortCap, PortInfo, PortIter, PortType, Seq};
 
-    pub fn poll(fds: &mut [super::libc::pollfd], timeout: i32) -> i32 {
-        unsafe { super::libc::poll(fds.as_mut_ptr(), fds.len() as super::libc::nfds_t, timeout) }
+    pub fn poll(fds: &mut [libc::pollfd], timeout: i32) -> i32 {
+        unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, timeout) }
     }
 
     #[inline]
@@ -184,11 +180,11 @@ impl MidiInput {
         self.ignore_flags = flags;
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiInputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiInputPort> {
         helpers::get_ports(
             self.seq.as_ref().unwrap(),
             PortCap::READ | PortCap::SUBS_READ,
-            |p| ::common::MidiInputPort {
+            |p| crate::common::MidiInputPort {
                 imp: MidiInputPort { addr: p.addr() },
             },
         )
@@ -227,7 +223,7 @@ impl MidiInput {
     fn init_trigger(&mut self) -> Result<[i32; 2], ()> {
         let mut trigger_fds = [-1, -1];
 
-        if unsafe { self::libc::pipe(trigger_fds.as_mut_ptr()) } == -1 {
+        if unsafe { libc::pipe(trigger_fds.as_mut_ptr()) } == -1 {
             Err(())
         } else {
             Ok(trigger_fds)
@@ -459,10 +455,10 @@ impl<T> MidiInputConnection<T> {
     fn close_internal(&mut self) -> (HandlerData<T>, T) {
         // Request the thread to stop.
         let _res = unsafe {
-            self::libc::write(
+            libc::write(
                 self.trigger_send_fd,
                 &false as *const bool as *const _,
-                mem::size_of::<bool>() as self::libc::size_t,
+                mem::size_of::<bool>() as libc::size_t,
             )
         };
 
@@ -489,8 +485,8 @@ impl<T> MidiInputConnection<T> {
 
         // Close the trigger fds (TODO: make sure that these are closed even in the presence of panic in thread)
         unsafe {
-            self::libc::close(handler_data.trigger_rcv_fd);
-            self::libc::close(self.trigger_send_fd);
+            libc::close(handler_data.trigger_rcv_fd);
+            libc::close(self.trigger_send_fd);
         }
 
         // Stop and free the input queue
@@ -549,11 +545,11 @@ impl MidiOutput {
         Ok(MidiOutput { seq: Some(seq) })
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiOutputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiOutputPort> {
         helpers::get_ports(
             self.seq.as_ref().unwrap(),
             PortCap::WRITE | PortCap::SUBS_WRITE,
-            |p| ::common::MidiOutputPort {
+            |p| crate::common::MidiOutputPort {
                 imp: MidiOutputPort { addr: p.addr() },
             },
         )
@@ -726,9 +722,9 @@ impl Drop for MidiOutputConnection {
 }
 
 fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T> {
-    use self::alsa::seq::Connect;
-    use self::alsa::PollDescriptors;
-    use self::libc::pollfd;
+    use alsa::seq::Connect;
+    use alsa::PollDescriptors;
+    use libc::pollfd;
 
     const INVALID_POLLFD: pollfd = pollfd {
         fd: -1,
@@ -748,7 +744,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
     let mut poll_fds = vec![INVALID_POLLFD; poll_desc_info.count() + 1];
     poll_fds[0] = pollfd {
         fd: data.trigger_rcv_fd,
-        events: self::libc::POLLIN,
+        events: libc::POLLIN,
         revents: 0,
     };
 
@@ -766,12 +762,12 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
                 // No data pending
                 if helpers::poll(&mut poll_fds, -1) >= 0 {
                     // Read from our "channel" whether we should stop the thread
-                    if poll_fds[0].revents & self::libc::POLLIN != 0 {
+                    if poll_fds[0].revents & libc::POLLIN != 0 {
                         let _res = unsafe {
-                            self::libc::read(
+                            libc::read(
                                 poll_fds[0].fd,
                                 mem::transmute(&mut do_input),
-                                mem::size_of::<bool>() as self::libc::size_t,
+                                mem::size_of::<bool>() as libc::size_t,
                             )
                         };
                     }

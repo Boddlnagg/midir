@@ -1,8 +1,5 @@
-extern crate jack_sys;
-extern crate libc;
-
-use self::jack_sys::jack_nframes_t;
-use self::libc::c_void;
+use jack_sys::jack_nframes_t;
+use libc::c_void;
 
 use std::ffi::CString;
 use std::{mem, slice};
@@ -10,8 +7,8 @@ use std::{mem, slice};
 mod wrappers;
 use self::wrappers::*;
 
-use errors::*;
-use {Ignore, MidiMessage};
+use crate::errors::*;
+use crate::{Ignore, MidiMessage};
 
 const OUTPUT_RINGBUFFER_SIZE: usize = 16384;
 
@@ -56,7 +53,7 @@ impl MidiInput {
         self.ignore_flags = flags;
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiInputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiInputPort> {
         let ports = self
             .client
             .as_ref()
@@ -64,7 +61,7 @@ impl MidiInput {
             .get_midi_ports(PortFlags::PortIsOutput);
         let mut result = Vec::with_capacity(ports.count());
         for i in 0..ports.count() {
-            result.push(::common::MidiInputPort {
+            result.push(crate::common::MidiInputPort {
                 imp: MidiInputPort {
                     name: ports.get_c_name(i).into(),
                 },
@@ -280,7 +277,7 @@ impl MidiOutput {
         })
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiOutputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiOutputPort> {
         let ports = self
             .client
             .as_ref()
@@ -288,7 +285,7 @@ impl MidiOutput {
             .get_midi_ports(PortFlags::PortIsInput);
         let mut result = Vec::with_capacity(ports.count());
         for i in 0..ports.count() {
-            result.push(::common::MidiOutputPort {
+            result.push(crate::common::MidiOutputPort {
                 imp: MidiOutputPort {
                     name: ports.get_c_name(i).into(),
                 },

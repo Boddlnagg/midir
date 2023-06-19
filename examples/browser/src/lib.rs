@@ -1,9 +1,3 @@
-extern crate console_error_panic_hook;
-extern crate js_sys;
-extern crate midir;
-extern crate wasm_bindgen;
-extern crate web_sys;
-
 use js_sys::Array;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -74,8 +68,8 @@ fn run() -> Result<bool, Box<dyn Error>> {
             loop {
                 if let Ok(Some(port_str)) = window.prompt_with_message_and_default(&msg, "0") {
                     if let Ok(port_int) = port_str.parse::<usize>() {
-                        if let Some(port) = &ports.get(port_int) {
-                            break port.clone();
+                        if let Some(port) = ports.get(port_int) {
+                            break port;
                         }
                     }
                 }
