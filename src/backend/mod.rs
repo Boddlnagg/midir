@@ -3,6 +3,7 @@
 // TODO: improve feature selection (make sure that there is always exactly one implementation, or enable dynamic backend selection)
 // TODO: allow to disable build dependency on ALSA
 
+#[allow(unused)]
 pub type Callback<T> = Box<dyn FnMut(u64, &[u8], &mut T) + Send>;
 
 #[cfg(all(target_os = "windows", not(feature = "winrt")))]

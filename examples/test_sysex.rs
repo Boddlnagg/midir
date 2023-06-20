@@ -1,7 +1,7 @@
 fn main() {
     match example::run() {
         Ok(_) => (),
-        Err(err) => println!("Error: {}", err),
+        Err(err) => println!("Error: {err}"),
     }
 }
 

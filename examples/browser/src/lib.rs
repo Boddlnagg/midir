@@ -24,7 +24,7 @@ pub fn start() {
     let token_outer = Arc::new(Mutex::new(None));
     let token = token_outer.clone();
     let closure: Closure<dyn FnMut()> = Closure::wrap(Box::new(move || {
-        if run().unwrap() == true {
+        if run().unwrap() {
             if let Some(token) = *token.lock().unwrap() {
                 web_sys::window().unwrap().clear_interval_with_handle(token);
             }

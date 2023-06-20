@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use crate::backend::Callback;
 use crate::errors::*;
 use crate::{Ignore, MidiMessage};
 
@@ -279,7 +280,7 @@ struct HandlerData<T> {
     message: MidiMessage,
     ignore_flags: Ignore,
     continue_sysex: bool,
-    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send>,
+    callback: Callback<T>,
     user_data: Option<T>,
 }
 

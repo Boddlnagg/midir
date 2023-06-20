@@ -1,14 +1,15 @@
 use std::convert::TryInto;
 use std::sync::{Arc, Mutex};
 
-use crate::errors::*;
+use crate::backend::Callback;
+use crate::errors::{ConnectError, ConnectErrorKind, InitError, PortInfoError, SendError};
 use crate::Ignore;
 
 use windows::core::HSTRING;
 
 use windows::{
     Devices::Enumeration::DeviceInformation,
-    Devices::Midi::*,
+    Devices::Midi::{IMidiOutPort, MidiInPort, MidiMessageReceivedEventArgs, MidiOutPort},
     Foundation::{EventRegistrationToken, IClosable, TypedEventHandler},
     Storage::Streams::{DataReader, DataWriter},
 };
@@ -42,8 +43,8 @@ impl MidiInput {
             .get()
             .expect("FindAllAsyncAqsFilter failed");
         let count = device_collection.Size().expect("Size failed") as usize;
-        let mut result = Vec::with_capacity(count as usize);
-        for device_info in device_collection.into_iter() {
+        let mut result = Vec::with_capacity(count);
+        for device_info in device_collection {
             let device_id = device_info.Id().expect("Id failed");
             result.push(crate::common::MidiInputPort {
                 imp: MidiInputPort { id: device_id },
@@ -139,8 +140,8 @@ impl MidiInput {
 
         Ok(MidiInputConnection {
             port: RtMidiInPort(in_port),
-            event_token: event_token,
-            handler_data: handler_data,
+            event_token,
+            handler_data,
         })
     }
 }
@@ -182,7 +183,7 @@ impl<T> MidiInputConnection<T> {
 /// offsets after monomorphization.
 struct HandlerData<T> {
     ignore_flags: Ignore,
-    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send>,
+    callback: Callback<T>,
     user_data: Option<T>,
 }
 
@@ -209,8 +210,8 @@ impl MidiOutput {
             .get()
             .expect("FindAllAsyncAqsFilter failed");
         let count = device_collection.Size().expect("Size failed") as usize;
-        let mut result = Vec::with_capacity(count as usize);
-        for device_info in device_collection.into_iter() {
+        let mut result = Vec::with_capacity(count);
+        for device_info in device_collection {
             let device_id = device_info.Id().expect("Id failed");
             result.push(crate::common::MidiOutputPort {
                 imp: MidiOutputPort { id: device_id },

@@ -8,7 +8,7 @@ use midir::{MidiOutput, MidiOutputPort};
 fn main() {
     match run() {
         Ok(_) => (),
-        Err(err) => println!("Error: {}", err),
+        Err(err) => println!("Error: {err}"),
     }
 }
 

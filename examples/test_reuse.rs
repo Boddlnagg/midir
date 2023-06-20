@@ -8,7 +8,7 @@ use midir::{Ignore, MidiInput, MidiOutput};
 fn main() {
     match run() {
         Ok(_) => (),
-        Err(err) => println!("Error: {}", err),
+        Err(err) => println!("Error: {err}"),
     }
 }
 
@@ -70,18 +70,17 @@ fn run() -> Result<(), Box<dyn Error>> {
             stdin().read_line(&mut input)?;
             if input.trim() == "q" {
                 break;
-            } else {
-                conn_out.send(&[144, 60, 1])?;
-                sleep(Duration::from_millis(200));
-                conn_out.send(&[144, 60, 0])?;
             }
+            conn_out.send(&[144, 60, 1])?;
+            sleep(Duration::from_millis(200));
+            conn_out.send(&[144, 60, 0])?;
         }
         println!("Closing connections");
         let (midi_in_, log_all_bytes) = conn_in.close();
         midi_in = midi_in_;
         midi_out = conn_out.close();
         println!("Connections closed");
-        println!("Received bytes: {:?}", log_all_bytes);
+        println!("Received bytes: {log_all_bytes:?}");
     }
     Ok(())
 }

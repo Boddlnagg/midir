@@ -33,11 +33,12 @@ pub extern "system" fn handle_input<T>(
         // Channel or system message
         // Make sure the first byte is a status byte.
         let status: u8 = (midi_message & 0x000000FF) as u8;
-        if !(status & 0x80 != 0) {
+        if status & 0x80 == 0 {
             return;
         }
 
         // Determine the number of bytes in the MIDI message.
+        #[allow(clippy::if_same_then_else)]
         let nbytes: u16 = if status < 0xC0 {
             3
         } else if status < 0xE0 {
@@ -47,9 +48,8 @@ pub extern "system" fn handle_input<T>(
         } else if status == 0xF1 {
             if data.ignore_flags.contains(Ignore::Time) {
                 return;
-            } else {
-                2
             }
+            2
         } else if status == 0xF2 {
             3
         } else if status == 0xF3 {
@@ -65,7 +65,7 @@ pub extern "system" fn handle_input<T>(
         };
 
         // Copy bytes to our MIDI message.
-        let ptr = (&midi_message) as *const DWORD_PTR as *const u8;
+        let ptr = std::ptr::addr_of!(midi_message).cast();
         let bytes: &[u8] = unsafe { slice::from_raw_parts(ptr, nbytes as usize) };
         data.message.bytes.extend_from_slice(bytes);
     } else {
@@ -88,13 +88,13 @@ pub extern "system" fn handle_input<T>(
         // buffer when an application closes and in this case, we should
         // avoid requeueing it, else the computer suddenly reboots after
         // one or two minutes.
-        if (unsafe { *data.sysex_buffer.0[sysex.dwUser as usize] }).dwBytesRecorded > 0 {
+        if (unsafe { *data.sysex_buffer.0[sysex.dwUser] }).dwBytesRecorded > 0 {
             //if ( sysex->dwBytesRecorded > 0 ) {
             let in_handle = data.in_handle.as_ref().unwrap().0.lock().unwrap();
             let result = unsafe {
                 midiInAddBuffer(
                     *in_handle,
-                    data.sysex_buffer.0[sysex.dwUser as usize],
+                    data.sysex_buffer.0[sysex.dwUser],
                     mem::size_of::<MIDIHDR>() as u32,
                 )
             };

@@ -6,7 +6,7 @@ use midir::{Ignore, MidiIO, MidiInput, MidiOutput};
 fn main() {
     match run() {
         Ok(_) => (),
-        Err(err) => println!("Error: {}", err),
+        Err(err) => println!("Error: {err}"),
     }
 }
 
@@ -40,8 +40,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     )?;
 
     println!(
-        "Connections open, forwarding from '{}' to '{}' (press enter to exit) ...",
-        in_port_name, out_port_name
+        "Connections open, forwarding from '{in_port_name}' to '{out_port_name}' (press enter to exit) ...",
     );
 
     let mut input = String::new();
@@ -52,12 +51,12 @@ fn run() -> Result<(), Box<dyn Error>> {
 }
 
 fn select_port<T: MidiIO>(midi_io: &T, descr: &str) -> Result<T::Port, Box<dyn Error>> {
-    println!("Available {} ports:", descr);
+    println!("Available {descr} ports:");
     let midi_ports = midi_io.ports();
     for (i, p) in midi_ports.iter().enumerate() {
         println!("{}: {}", i, midi_io.port_name(p)?);
     }
-    print!("Please select {} port: ", descr);
+    print!("Please select {descr} port: ");
     stdout().flush()?;
     let mut input = String::new();
     stdin().read_line(&mut input)?;

@@ -3,7 +3,7 @@ use std::ffi::OsString;
 use std::io::{stderr, Write};
 use std::mem::MaybeUninit;
 use std::os::windows::ffi::OsStringExt;
-use std::ptr::null_mut;
+use std::ptr::{addr_of_mut, null_mut};
 use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::Duration;
@@ -21,16 +21,22 @@ use windows::Win32::Media::Audio::{
 use windows::Win32::Media::Multimedia::{DRV_QUERYDEVICEINTERFACE, DRV_QUERYDEVICEINTERFACESIZE};
 use windows::Win32::Media::{MMSYSERR_ALLOCATED, MMSYSERR_BADDEVICEID, MMSYSERR_NOERROR};
 
+use crate::backend::Callback;
+
 #[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)]
 type ULONG = u32;
 #[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)]
 type UINT = u32;
 #[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)]
 type DWORD = u32;
 #[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)]
 type DWORD_PTR = usize;
 
-use crate::errors::*;
+use crate::errors::{ConnectError, ConnectErrorKind, InitError, PortInfoError, SendError};
 use crate::{Ignore, MidiMessage};
 
 mod handler;
@@ -82,7 +88,7 @@ impl MidiInputPort {
             midiInMessage(
                 HMIDIIN(port_number as isize),
                 DRV_QUERYDEVICEINTERFACESIZE,
-                &mut buffer_size as *mut _ as DWORD_PTR,
+                addr_of_mut!(buffer_size) as DWORD_PTR,
                 0,
             )
         };
@@ -126,7 +132,7 @@ impl MidiInputPort {
         }
         let device_caps = unsafe { device_caps.assume_init() };
         let pname_ptr: *const [u16; 32] = std::ptr::addr_of!(device_caps.szPname);
-        let output = from_wide_ptr(pname_ptr as *const _, 32)
+        let output = from_wide_ptr(pname_ptr.cast(), 32)
             .to_string_lossy()
             .into_owned();
         Ok(output)
@@ -172,7 +178,7 @@ struct HandlerData<T> {
     sysex_buffer: SysexBuffer,
     in_handle: Option<MidiInHandle>,
     ignore_flags: Ignore,
-    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send + 'static>,
+    callback: Callback<T>,
     user_data: Option<T>,
 }
 
@@ -191,9 +197,8 @@ impl MidiInput {
         let count = MidiInputPort::count();
         let mut result = Vec::with_capacity(count as usize);
         for i in 0..count {
-            let port = match MidiInputPort::from_port_number(i) {
-                Ok(p) => p,
-                Err(_) => continue,
+            let Ok(port) = MidiInputPort::from_port_number(i) else {
+                continue;
             };
             result.push(crate::common::MidiInputPort { imp: port });
         }
@@ -218,9 +223,8 @@ impl MidiInput {
     where
         F: FnMut(u64, &[u8], &mut T) + Send + 'static,
     {
-        let port_number = match port.current_port_number() {
-            Some(p) => p,
-            None => return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self)),
+        let Some(port_number) = port.current_port_number() else {
+            return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self));
         };
 
         let mut handler_data = Box::new(HandlerData {
@@ -322,9 +326,7 @@ impl MidiInput {
             ));
         }
 
-        Ok(MidiInputConnection {
-            handler_data: handler_data,
-        })
+        Ok(MidiInputConnection { handler_data })
     }
 }
 
@@ -367,7 +369,7 @@ impl<T> MidiInputConnection<T> {
                     mem::size_of::<MIDIHDR>() as u32,
                 );
                 dealloc(
-                    (*self.handler_data.sysex_buffer.0[i]).lpData.0 as *mut _,
+                    (*self.handler_data.sysex_buffer.0[i]).lpData.0.cast(),
                     Layout::from_size_align_unchecked(MIDIR_SYSEX_BUFFER_SIZE, 1),
                 );
                 // recreate the Box so that it will be dropped/deallocated at the end of this scope
@@ -387,7 +389,7 @@ impl<T> Drop for MidiInputConnection<T> {
     fn drop(&mut self) {
         // If user_data has been emptied, we know that we already have closed the connection
         if self.handler_data.user_data.is_some() {
-            self.close_internal()
+            self.close_internal();
         }
     }
 }
@@ -424,7 +426,7 @@ impl MidiOutputPort {
             midiOutMessage(
                 HMIDIOUT(port_number as isize),
                 DRV_QUERYDEVICEINTERFACESIZE,
-                &mut buffer_size as *mut _ as DWORD_PTR,
+                addr_of_mut!(buffer_size) as DWORD_PTR,
                 0,
             )
         };
@@ -468,7 +470,7 @@ impl MidiOutputPort {
         }
         let device_caps = unsafe { device_caps.assume_init() };
         let pname_ptr: *const [u16; 32] = std::ptr::addr_of!(device_caps.szPname);
-        let output = from_wide_ptr(pname_ptr as *const _, 32)
+        let output = from_wide_ptr(pname_ptr.cast(), 32)
             .to_string_lossy()
             .into_owned();
         Ok(output)
@@ -507,9 +509,8 @@ impl MidiOutput {
         let count = MidiOutputPort::count();
         let mut result = Vec::with_capacity(count as usize);
         for i in 0..count {
-            let port = match MidiOutputPort::from_port_number(i) {
-                Ok(p) => p,
-                Err(_) => continue,
+            let Ok(port) = MidiOutputPort::from_port_number(i) else {
+                continue
             };
             result.push(crate::common::MidiOutputPort { imp: port });
         }
@@ -529,9 +530,8 @@ impl MidiOutput {
         port: &MidiOutputPort,
         _port_name: &str,
     ) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
-        let port_number = match port.current_port_number() {
-            Some(p) => p,
-            None => return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self)),
+        let Some(port_number) = port.current_port_number() else {
+            return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self));
         };
         let mut out_handle: MaybeUninit<HMIDIOUT> = MaybeUninit::uninit();
         let result = unsafe {
@@ -609,21 +609,16 @@ impl MidiOutputConnection {
             // Send the message.
             loop {
                 let result = unsafe {
-                    midiOutLongMsg(
-                        self.out_handle,
-                        &mut sysex,
-                        mem::size_of::<MIDIHDR>() as u32,
-                    )
+                    midiOutLongMsg(self.out_handle, &sysex, mem::size_of::<MIDIHDR>() as u32)
                 };
                 if result == MIDIERR_NOTREADY {
                     sleep(Duration::from_millis(1));
                     continue;
-                } else {
-                    if result != MMSYSERR_NOERROR {
-                        return Err(SendError::Other("sending sysex message failed"));
-                    }
-                    break;
                 }
+                if result != MMSYSERR_NOERROR {
+                    return Err(SendError::Other("sending sysex message failed"));
+                }
+                break;
             }
 
             loop {
@@ -637,9 +632,8 @@ impl MidiOutputConnection {
                 if result == MIDIERR_STILLPLAYING {
                     sleep(Duration::from_millis(1));
                     continue;
-                } else {
-                    break;
                 }
+                break;
             }
         } else {
             // Channel or system message.
@@ -651,10 +645,10 @@ impl MidiOutputConnection {
             }
 
             // Pack MIDI bytes into double word.
-            let packet: u32 = 0;
-            let ptr = &packet as *const u32 as *mut u8;
-            for i in 0..nbytes {
-                unsafe { *ptr.offset(i as isize) = message[i] };
+            let mut packet: u32 = 0;
+            let ptr = addr_of_mut!(packet).cast::<u8>();
+            for (i, item) in message.iter().enumerate().take(nbytes) {
+                unsafe { *ptr.add(i) = *item };
             }
 
             // Send the message immediately.
@@ -663,12 +657,11 @@ impl MidiOutputConnection {
                 if result == MIDIERR_NOTREADY {
                     sleep(Duration::from_millis(1));
                     continue;
-                } else {
-                    if result != MMSYSERR_NOERROR {
-                        return Err(SendError::Other("sending non-sysex message failed"));
-                    }
-                    break;
                 }
+                if result != MMSYSERR_NOERROR {
+                    return Err(SendError::Other("sending non-sysex message failed"));
+                }
+                break;
             }
         }
 

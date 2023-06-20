@@ -6,7 +6,7 @@ use midir::{Ignore, MidiInput};
 fn main() {
     match run() {
         Ok(_) => (),
-        Err(err) => println!("Error: {}", err),
+        Err(err) => println!("Error: {err}"),
     }
 }
 
@@ -55,10 +55,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         (),
     )?;
 
-    println!(
-        "Connection open, reading input from '{}' (press enter to exit) ...",
-        in_port_name
-    );
+    println!("Connection open, reading input from '{in_port_name}' (press enter to exit) ...");
 
     input.clear();
     stdin().read_line(&mut input)?; // wait for next enter key press
