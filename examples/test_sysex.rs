@@ -53,7 +53,7 @@ mod example {
         println!("Sending large SysEx message ...");
         let mut v = Vec::with_capacity(LARGE_SYSEX_SIZE);
         v.push(0xF0u8);
-        v.extend([0].iter().cycle().take(LARGE_SYSEX_SIZE - 2));
+        v.extend(std::iter::repeat(0).take(LARGE_SYSEX_SIZE - 2));
         v.push(0xF7u8);
         assert_eq!(v.len(), LARGE_SYSEX_SIZE);
         conn_out.send(&v)?;
