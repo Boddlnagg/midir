@@ -17,7 +17,7 @@ edition = "2021"
 default = []
 avoid_timestamping = []
 coremidi_send_timestamped = []
-jack = ["jack-sys", "libc"]
+jack = ["jack-sys", "libc", "bitflags"]
 winrt = [
     "windows/Foundation",
     "windows/Foundation_Collections",
@@ -28,7 +28,7 @@ winrt = [
 ]
 
 [dependencies]
-bitflags = "1.2"
+bitflags = { version = "2", optional = true }
 jack-sys = { version = "0.5", optional = true }
 libc = { version = "0.2.21", optional = true }
 
