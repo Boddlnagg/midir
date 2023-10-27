@@ -3,7 +3,7 @@ members = [".", "examples/browser"]
 
 [package]
 name = "midir"
-version = "0.9.1"
+version = "0.9.2"
 authors = ["Patrick Reisert"]
 description = "A cross-platform, realtime MIDI processing library, inspired by RtMidi."
 repository = "https://github.com/Boddlnagg/midir"
@@ -37,10 +37,10 @@ alsa = "0.7.0"
 libc = "0.2.21"
 
 [target.'cfg(target_os = "ios")'.dependencies]
-coremidi = "0.6.0"
+coremidi = "0.7.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-coremidi = "0.6.0"
+coremidi = "0.7.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.43", features = [
