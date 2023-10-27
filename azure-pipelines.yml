@@ -24,8 +24,8 @@ jobs:
     name: Linux_WASM
     vmImage: ubuntu-latest
     target: x86_64-unknown-linux-gnu
-- template: azure-pipelines-template.yml
-  parameters:
-    name: Linux_ARM
-    vmImage: ubuntu-latest
-    target: x86_64-unknown-linux-gnu
+#- template: azure-pipelines-template.yml
+#  parameters:
+#    name: Linux_ARM
+#    vmImage: ubuntu-latest
+#    target: x86_64-unknown-linux-gnu
