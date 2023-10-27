@@ -1,10 +1,3 @@
-#[cfg(feature = "jack")]
-#[macro_use]
-extern crate bitflags;
-
-#[cfg(target_os = "windows")]
-extern crate windows;
-
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// An enum that is used to specify what kind of MIDI messages should
@@ -40,7 +33,8 @@ impl Ignore {
 /// messages. Each message represents one and only one MIDI message.
 /// The timestamp is represented as the elapsed microseconds since
 /// a point in time that is arbitrary, but does not change for the
-/// lifetime of a given MidiInputConnection.
+/// lifetime of a given [`MidiInputConnection`].
+#[allow(unused)]
 #[derive(Debug, Clone)]
 struct MidiMessage {
     bytes: Vec<u8>,
@@ -48,6 +42,7 @@ struct MidiMessage {
 }
 
 impl MidiMessage {
+    #[allow(unused)]
     fn new() -> MidiMessage {
         MidiMessage {
             bytes: vec![],

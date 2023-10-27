@@ -5,8 +5,9 @@ use backend::{
     MidiInputPort as MidiInputPortImpl, MidiOutput as MidiOutputImpl,
     MidiOutputConnection as MidiOutputConnectionImpl, MidiOutputPort as MidiOutputPortImpl,
 };
-use errors::*;
-use Ignore;
+use errors::{ConnectError, PortInfoError, SendError};
+
+use crate::{backend, errors, Ignore, InitError};
 
 /// Trait that abstracts over input and output ports.
 pub trait MidiIO {
@@ -53,7 +54,7 @@ pub struct MidiInput {
 impl MidiInput {
     /// Creates a new `MidiInput` object that is required for any MIDI input functionality.
     pub fn new(client_name: &str) -> Result<Self, InitError> {
-        MidiInputImpl::new(client_name).map(|imp| MidiInput { imp: imp })
+        MidiInputImpl::new(client_name).map(|imp| MidiInput { imp })
     }
 
     /// Set flags to decide what kind of messages should be ignored (i.e., filtered out)
@@ -114,7 +115,7 @@ impl MidiInput {
         F: FnMut(u64, &[u8], &mut T) + Send + 'static,
     {
         match self.imp.connect(&port.imp, port_name, callback, data) {
-            Ok(imp) => Ok(MidiInputConnection { imp: imp }),
+            Ok(imp) => Ok(MidiInputConnection { imp }),
             Err(imp) => {
                 let kind = imp.kind();
                 Err(ConnectError::new(
@@ -145,7 +146,7 @@ impl MidiIO for MidiInput {
 }
 
 #[cfg(unix)]
-impl<T: Send> ::os::unix::VirtualInput<T> for MidiInput {
+impl<T: Send> crate::os::unix::VirtualInput<T> for MidiInput {
     fn create_virtual<F>(
         self,
         port_name: &str,
@@ -156,7 +157,7 @@ impl<T: Send> ::os::unix::VirtualInput<T> for MidiInput {
         F: FnMut(u64, &[u8], &mut T) + Send + 'static,
     {
         match self.imp.create_virtual(port_name, callback, data) {
-            Ok(imp) => Ok(MidiInputConnection { imp: imp }),
+            Ok(imp) => Ok(MidiInputConnection { imp }),
             Err(imp) => {
                 let kind = imp.kind();
                 Err(ConnectError::new(
@@ -182,7 +183,7 @@ impl<T> MidiInputConnection<T> {
     /// but they can be safely ignored.
     pub fn close(self) -> (MidiInput, T) {
         let (imp, data) = self.imp.close();
-        (MidiInput { imp: imp }, data)
+        (MidiInput { imp }, data)
     }
 }
 
@@ -210,7 +211,7 @@ pub struct MidiOutput {
 impl MidiOutput {
     /// Creates a new `MidiOutput` object that is required for any MIDI output functionality.
     pub fn new(client_name: &str) -> Result<Self, InitError> {
-        MidiOutputImpl::new(client_name).map(|imp| MidiOutput { imp: imp })
+        MidiOutputImpl::new(client_name).map(|imp| MidiOutput { imp })
     }
 
     /// Get a collection of all MIDI output ports that *midir* can connect to.
@@ -249,7 +250,7 @@ impl MidiOutput {
         port_name: &str,
     ) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
         match self.imp.connect(&port.imp, port_name) {
-            Ok(imp) => Ok(MidiOutputConnection { imp: imp }),
+            Ok(imp) => Ok(MidiOutputConnection { imp }),
             Err(imp) => {
                 let kind = imp.kind();
                 Err(ConnectError::new(
@@ -280,13 +281,13 @@ impl MidiIO for MidiOutput {
 }
 
 #[cfg(unix)]
-impl ::os::unix::VirtualOutput for MidiOutput {
+impl crate::os::unix::VirtualOutput for MidiOutput {
     fn create_virtual(
         self,
         port_name: &str,
     ) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
         match self.imp.create_virtual(port_name) {
-            Ok(imp) => Ok(MidiOutputConnection { imp: imp }),
+            Ok(imp) => Ok(MidiOutputConnection { imp }),
             Err(imp) => {
                 let kind = imp.kind();
                 Err(ConnectError::new(
@@ -315,7 +316,7 @@ impl MidiOutputConnection {
     }
 
     /// Send a message to the port that this output connection is connected to.
-    /// The message must be a valid MIDI message (see https://www.midi.org/specifications-old/item/table-1-summary-of-midi-message).
+    /// The message must be a valid MIDI message (see <https://www.midi.org/specifications-old/item/table-1-summary-of-midi-message>).
     pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
         self.imp.send(message)
     }

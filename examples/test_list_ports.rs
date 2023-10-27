@@ -1,5 +1,3 @@
-extern crate midir;
-
 use std::error::Error;
 use std::io::{stdin, stdout, Write};
 
@@ -8,7 +6,7 @@ use midir::{Ignore, MidiInput, MidiOutput};
 fn main() {
     match run() {
         Ok(_) => (),
-        Err(err) => println!("Error: {}", err),
+        Err(err) => println!("Error: {err}"),
     }
 }
 

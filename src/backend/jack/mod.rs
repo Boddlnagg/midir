@@ -1,24 +1,21 @@
-extern crate jack_sys;
-extern crate libc;
-
-use self::jack_sys::jack_nframes_t;
-use self::libc::c_void;
+use jack_sys::jack_nframes_t;
+use libc::c_void;
 
 use std::ffi::CString;
 use std::{mem, slice};
-
 mod wrappers;
 use self::wrappers::*;
 
-use errors::*;
-use {Ignore, MidiMessage};
+use crate::backend::Callback;
+use crate::errors::*;
+use crate::{Ignore, MidiMessage};
 
 const OUTPUT_RINGBUFFER_SIZE: usize = 16384;
 
 struct InputHandlerData<T> {
     port: Option<MidiPort>,
     ignore_flags: Ignore,
-    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send>,
+    callback: Callback<T>,
     user_data: Option<T>,
 }
 
@@ -56,7 +53,7 @@ impl MidiInput {
         self.ignore_flags = flags;
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiInputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiInputPort> {
         let ports = self
             .client
             .as_ref()
@@ -64,7 +61,7 @@ impl MidiInput {
             .get_midi_ports(PortFlags::PortIsOutput);
         let mut result = Vec::with_capacity(ports.count());
         for i in 0..ports.count() {
-            result.push(::common::MidiInputPort {
+            result.push(crate::common::MidiInputPort {
                 imp: MidiInputPort {
                     name: ports.get_c_name(i).into(),
                 },
@@ -132,11 +129,12 @@ impl MidiInput {
         };
 
         // ... and connect it to the output
-        if let Err(_) = self
+        if self
             .client
             .as_mut()
             .unwrap()
             .connect(&port.name, dest_port.get_name())
+            .is_err()
         {
             return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self));
         }
@@ -144,7 +142,7 @@ impl MidiInput {
         handler_data.port = Some(dest_port);
 
         Ok(MidiInputConnection {
-            handler_data: handler_data,
+            handler_data,
             client: self.client.take(),
         })
     }
@@ -176,7 +174,7 @@ impl MidiInput {
         handler_data.port = Some(port);
 
         Ok(MidiInputConnection {
-            handler_data: handler_data,
+            handler_data,
             client: self.client.take(),
         })
     }
@@ -229,9 +227,7 @@ extern "C" fn handle_input<T>(nframes: jack_nframes_t, arg: *mut c_void) -> i32 
             let event = unsafe { event.assume_init() };
 
             for i in 0..event.size {
-                message
-                    .bytes
-                    .push(unsafe { *event.buffer.offset(i as isize) });
+                message.bytes.push(unsafe { *event.buffer.add(i) });
             }
 
             message.timestamp = Client::get_time(); // this is in microseconds
@@ -243,7 +239,7 @@ extern "C" fn handle_input<T>(nframes: jack_nframes_t, arg: *mut c_void) -> i32 
         }
     }
 
-    return 0;
+    0
 }
 
 struct OutputHandlerData {
@@ -280,7 +276,7 @@ impl MidiOutput {
         })
     }
 
-    pub(crate) fn ports_internal(&self) -> Vec<::common::MidiOutputPort> {
+    pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiOutputPort> {
         let ports = self
             .client
             .as_ref()
@@ -288,7 +284,7 @@ impl MidiOutput {
             .get_midi_ports(PortFlags::PortIsInput);
         let mut result = Vec::with_capacity(ports.count());
         for i in 0..ports.count() {
-            result.push(::common::MidiOutputPort {
+            result.push(crate::common::MidiOutputPort {
                 imp: MidiOutputPort {
                     name: ports.get_c_name(i).into(),
                 },
@@ -347,11 +343,12 @@ impl MidiOutput {
         };
 
         // ... and connect it to the input
-        if let Err(_) = self
+        if self
             .client
             .as_mut()
             .unwrap()
             .connect(source_port.get_name(), &port.name)
+            .is_err()
         {
             return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self));
         }
@@ -359,7 +356,7 @@ impl MidiOutput {
         handler_data.port = Some(source_port);
 
         Ok(MidiOutputConnection {
-            handler_data: handler_data,
+            handler_data,
             client: self.client.take(),
         })
     }
@@ -386,7 +383,7 @@ impl MidiOutput {
         handler_data.port = Some(port);
 
         Ok(MidiOutputConnection {
-            handler_data: handler_data,
+            handler_data,
             client: self.client.take(),
         })
     }
@@ -440,7 +437,8 @@ impl Drop for MidiOutputConnection {
 }
 
 extern "C" fn handle_output(nframes: jack_nframes_t, arg: *mut c_void) -> i32 {
-    let data: &mut OutputHandlerData = unsafe { mem::transmute(arg) };
+    let data: &mut OutputHandlerData =
+        unsafe { &mut *(arg as *mut crate::backend::jack::OutputHandlerData) };
 
     // Is port created?
     if let Some(ref port) = data.port {
@@ -466,5 +464,5 @@ extern "C" fn handle_output(nframes: jack_nframes_t, arg: *mut c_void) -> i32 {
         }
     }
 
-    return 0;
+    0
 }
