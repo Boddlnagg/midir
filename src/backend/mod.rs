@@ -6,34 +6,34 @@
 #[cfg(all(target_os = "windows", not(feature = "winrt")))]
 mod winmm;
 #[cfg(all(target_os = "windows", not(feature = "winrt")))]
-pub use self::winmm::*;
+pub(crate) use self::winmm::*;
 
 #[cfg(all(target_os = "windows", feature = "winrt"))]
 mod winrt;
 #[cfg(all(target_os = "windows", feature = "winrt"))]
-pub use self::winrt::*;
+pub(crate) use self::winrt::*;
 
 #[cfg(all(target_os = "macos", not(feature = "jack")))]
 mod coremidi;
 #[cfg(all(target_os = "macos", not(feature = "jack")))]
-pub use self::coremidi::*;
+pub(crate) use self::coremidi::*;
 
 #[cfg(all(target_os = "ios", not(feature = "jack")))]
 mod coremidi;
 #[cfg(all(target_os = "ios", not(feature = "jack")))]
-pub use self::coremidi::*;
+pub(crate) use self::coremidi::*;
 
 #[cfg(all(target_os = "linux", not(feature = "jack")))]
 mod alsa;
 #[cfg(all(target_os = "linux", not(feature = "jack")))]
-pub use self::alsa::*;
+pub(crate) use self::alsa::*;
 
 #[cfg(all(feature = "jack", not(target_os = "windows")))]
 mod jack;
 #[cfg(all(feature = "jack", not(target_os = "windows")))]
-pub use self::jack::*;
+pub(crate) use self::jack::*;
 
 #[cfg(target_arch = "wasm32")]
 mod webmidi;
 #[cfg(target_arch = "wasm32")]
-pub use self::webmidi::*;
+pub(crate) use self::webmidi::*;

@@ -14,12 +14,12 @@ mod helpers {
     use crate::errors::PortInfoError;
     use alsa::seq::{Addr, ClientIter, MidiEvent, PortCap, PortInfo, PortIter, PortType, Seq};
 
-    pub fn poll(fds: &mut [libc::pollfd], timeout: i32) -> i32 {
+    pub(crate) fn poll(fds: &mut [libc::pollfd], timeout: i32) -> i32 {
         unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, timeout) }
     }
 
     #[inline]
-    pub fn get_ports<F, T>(s: &Seq, capability: PortCap, f: F) -> Vec<T>
+    pub(crate) fn get_ports<F, T>(s: &Seq, capability: PortCap, f: F) -> Vec<T>
     where
         F: Fn(PortInfo) -> T,
     {
@@ -35,7 +35,7 @@ mod helpers {
     }
 
     #[inline]
-    pub fn get_port_count(s: &Seq, capability: PortCap) -> usize {
+    pub(crate) fn get_port_count(s: &Seq, capability: PortCap) -> usize {
         ClientIter::new(s)
             .flat_map(|c| PortIter::new(s, c.get_client()))
             .filter(|p| {
@@ -47,7 +47,7 @@ mod helpers {
     }
 
     #[inline]
-    pub fn get_port_name(s: &Seq, addr: Addr) -> Result<String, PortInfoError> {
+    pub(crate) fn get_port_name(s: &Seq, addr: Addr) -> Result<String, PortInfoError> {
         use std::fmt::Write;
 
         let pinfo = match s.get_any_port_info(addr) {
@@ -75,24 +75,24 @@ mod helpers {
         Ok(output)
     }
 
-    pub struct EventDecoder {
+    pub(crate) struct EventDecoder {
         ev: MidiEvent,
     }
 
     impl EventDecoder {
-        pub fn new(merge_commands: bool) -> EventDecoder {
+        pub(crate) fn new(merge_commands: bool) -> EventDecoder {
             let coder = MidiEvent::new(0).unwrap();
             coder.enable_running_status(merge_commands);
             EventDecoder { ev: coder }
         }
 
         #[inline]
-        pub fn get_wrapped(&mut self) -> &mut MidiEvent {
+        pub(crate) fn get_wrapped(&mut self) -> &mut MidiEvent {
             &mut self.ev
         }
     }
 
-    pub struct EventEncoder {
+    pub(crate) struct EventEncoder {
         ev: MidiEvent,
         buffer_size: u32,
     }
@@ -101,7 +101,7 @@ mod helpers {
 
     impl EventEncoder {
         #[inline]
-        pub fn new(buffer_size: u32) -> EventEncoder {
+        pub(crate) fn new(buffer_size: u32) -> EventEncoder {
             EventEncoder {
                 ev: MidiEvent::new(buffer_size).unwrap(),
                 buffer_size: buffer_size,
@@ -109,12 +109,12 @@ mod helpers {
         }
 
         #[inline]
-        pub fn get_buffer_size(&self) -> u32 {
+        pub(crate) fn get_buffer_size(&self) -> u32 {
             self.buffer_size
         }
 
         #[inline]
-        pub fn resize_buffer(&mut self, bufsize: u32) -> Result<(), ()> {
+        pub(crate) fn resize_buffer(&mut self, bufsize: u32) -> Result<(), ()> {
             match self.ev.resize_buffer(bufsize) {
                 Ok(_) => {
                     self.buffer_size = bufsize;
@@ -125,7 +125,7 @@ mod helpers {
         }
 
         #[inline]
-        pub fn get_wrapped(&mut self) -> &mut MidiEvent {
+        pub(crate) fn get_wrapped(&mut self) -> &mut MidiEvent {
             &mut self.ev
         }
     }
@@ -133,17 +133,17 @@ mod helpers {
 
 const INITIAL_CODER_BUFFER_SIZE: usize = 32;
 
-pub struct MidiInput {
+pub(crate) struct MidiInput {
     ignore_flags: Ignore,
     seq: Option<Seq>,
 }
 
 #[derive(Clone, PartialEq)]
-pub struct MidiInputPort {
+pub(crate) struct MidiInputPort {
     addr: Addr,
 }
 
-pub struct MidiInputConnection<T: 'static> {
+pub(crate) struct MidiInputConnection<T: 'static> {
     subscription: Option<PortSubscribe>,
     thread: Option<JoinHandle<(HandlerData<T>, T)>>,
     vport: i32, // TODO: probably port numbers are only u8, therefore could use Option<u8>
@@ -159,7 +159,7 @@ struct HandlerData<T: 'static> {
 }
 
 impl MidiInput {
-    pub fn new(client_name: &str) -> Result<Self, InitError> {
+    pub(crate) fn new(client_name: &str) -> Result<Self, InitError> {
         let seq = match Seq::open(None, None, true) {
             Ok(s) => s,
             Err(_) => {
@@ -176,7 +176,7 @@ impl MidiInput {
         })
     }
 
-    pub fn ignore(&mut self, flags: Ignore) {
+    pub(crate) fn ignore(&mut self, flags: Ignore) {
         self.ignore_flags = flags;
     }
 
@@ -190,14 +190,14 @@ impl MidiInput {
         )
     }
 
-    pub fn port_count(&self) -> usize {
+    pub(crate) fn port_count(&self) -> usize {
         helpers::get_port_count(
             self.seq.as_ref().unwrap(),
             PortCap::READ | PortCap::SUBS_READ,
         )
     }
 
-    pub fn port_name(&self, port: &MidiInputPort) -> Result<String, PortInfoError> {
+    pub(crate) fn port_name(&self, port: &MidiInputPort) -> Result<String, PortInfoError> {
         helpers::get_port_name(self.seq.as_ref().unwrap(), port.addr)
     }
 
@@ -260,7 +260,7 @@ impl MidiInput {
         }
     }
 
-    pub fn connect<F, T: Send>(
+    pub(crate) fn connect<F, T: Send>(
         mut self,
         port: &MidiInputPort,
         port_name: &str,
@@ -360,7 +360,7 @@ impl MidiInput {
         })
     }
 
-    pub fn create_virtual<F, T: Send>(
+    pub(crate) fn create_virtual<F, T: Send>(
         mut self,
         port_name: &str,
         callback: F,
@@ -439,7 +439,7 @@ impl MidiInput {
 }
 
 impl<T> MidiInputConnection<T> {
-    pub fn close(mut self) -> (MidiInput, T) {
+    pub(crate) fn close(mut self) -> (MidiInput, T) {
         let (handler_data, user_data) = self.close_internal();
 
         (
@@ -514,16 +514,16 @@ impl<T> Drop for MidiInputConnection<T> {
     }
 }
 
-pub struct MidiOutput {
+pub(crate) struct MidiOutput {
     seq: Option<Seq>, // TODO: if `Seq` is marked as non-zero, this should just be pointer-sized
 }
 
 #[derive(Clone, PartialEq)]
-pub struct MidiOutputPort {
+pub(crate) struct MidiOutputPort {
     addr: Addr,
 }
 
-pub struct MidiOutputConnection {
+pub(crate) struct MidiOutputConnection {
     seq: Option<Seq>,
     vport: i32,
     coder: helpers::EventEncoder,
@@ -531,7 +531,7 @@ pub struct MidiOutputConnection {
 }
 
 impl MidiOutput {
-    pub fn new(client_name: &str) -> Result<Self, InitError> {
+    pub(crate) fn new(client_name: &str) -> Result<Self, InitError> {
         let seq = match Seq::open(None, Some(Direction::Playback), true) {
             Ok(s) => s,
             Err(_) => {
@@ -555,18 +555,18 @@ impl MidiOutput {
         )
     }
 
-    pub fn port_count(&self) -> usize {
+    pub(crate) fn port_count(&self) -> usize {
         helpers::get_port_count(
             self.seq.as_ref().unwrap(),
             PortCap::WRITE | PortCap::SUBS_WRITE,
         )
     }
 
-    pub fn port_name(&self, port: &MidiOutputPort) -> Result<String, PortInfoError> {
+    pub(crate) fn port_name(&self, port: &MidiOutputPort) -> Result<String, PortInfoError> {
         helpers::get_port_name(self.seq.as_ref().unwrap(), port.addr)
     }
 
-    pub fn connect(
+    pub(crate) fn connect(
         mut self,
         port: &MidiOutputPort,
         port_name: &str,
@@ -624,7 +624,7 @@ impl MidiOutput {
         })
     }
 
-    pub fn create_virtual(
+    pub(crate) fn create_virtual(
         mut self,
         port_name: &str,
     ) -> Result<MidiOutputConnection, ConnectError<Self>> {
@@ -662,7 +662,7 @@ impl MidiOutput {
 }
 
 impl MidiOutputConnection {
-    pub fn close(mut self) -> MidiOutput {
+    pub(crate) fn close(mut self) -> MidiOutput {
         self.close_internal();
 
         MidiOutput {
@@ -670,7 +670,7 @@ impl MidiOutputConnection {
         }
     }
 
-    pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
+    pub(crate) fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
         let nbytes = message.len();
         assert!(nbytes <= u32::max_value() as usize);
 

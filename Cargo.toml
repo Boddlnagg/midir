@@ -12,6 +12,9 @@ keywords = ["midi", "audio", "music", "sound"]
 categories = ["multimedia::audio", "api-bindings"]
 license = "MIT"
 edition = "2021"
+# Lint configuration through Cargo is supported since Rust 1.74.
+# See also: <https://blog.rust-lang.org/2023/11/16/Rust-1.74.0.html#lint-configuration-through-cargo>
+rust-version = "1.74"
 
 [features]
 default = []
@@ -70,3 +73,16 @@ web-sys = { version = "0.3", features = [
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "0.2"
+
+[lints.rust]
+# Opt-in for allowed-by-default lints (in alphabetical order)
+# See also: <https://doc.rust-lang.org/rustc/lints>
+future_incompatible = "warn"
+rust_2018_idioms = "warn"
+rust_2021_compatibility = "warn"
+unreachable_pub = "warn"
+unused = "warn"
+# TODO: Enable the following lints
+#let_underscore = "warn"
+#missing_debug_implementations = "warn"
+#unsafe_code = "warn"

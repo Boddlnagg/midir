@@ -13,7 +13,7 @@ pub struct InitError;
 impl Error for InitError {}
 
 impl fmt::Display for InitError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         "MIDI support could not be initialized".fmt(f)
     }
 }
@@ -30,7 +30,7 @@ pub enum PortInfoError {
 impl Error for PortInfoError {}
 
 impl fmt::Display for PortInfoError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             PortInfoError::PortNumberOutOfRange => PORT_OUT_OF_RANGE_MSG.fmt(f),
             PortInfoError::InvalidPort => INVALID_PORT_MSG.fmt(f),
@@ -49,7 +49,7 @@ pub enum ConnectErrorKind {
 impl ConnectErrorKind {}
 
 impl fmt::Display for ConnectErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             ConnectErrorKind::InvalidPort => INVALID_PORT_MSG.fmt(f),
             ConnectErrorKind::Other(msg) => msg.fmt(f),
@@ -86,13 +86,13 @@ impl<T> ConnectError<T> {
 }
 
 impl<T> fmt::Debug for ConnectError<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         self.kind.fmt(f)
     }
 }
 
 impl<T> fmt::Display for ConnectError<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.kind.fmt(f)
     }
 }
@@ -109,7 +109,7 @@ pub enum SendError {
 impl Error for SendError {}
 
 impl fmt::Display for SendError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             SendError::InvalidData(msg) | SendError::Other(msg) => msg.fmt(f),
         }
