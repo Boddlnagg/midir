@@ -104,7 +104,7 @@ mod helpers {
         pub(crate) fn new(buffer_size: u32) -> EventEncoder {
             EventEncoder {
                 ev: MidiEvent::new(buffer_size).unwrap(),
-                buffer_size: buffer_size,
+                buffer_size,
             }
         }
 
@@ -331,7 +331,7 @@ impl MidiInput {
             seq: self.seq.take().unwrap(),
             trigger_rcv_fd: trigger_fds[0],
             callback: Box::new(callback),
-            queue_id: queue_id,
+            queue_id,
         };
 
         let threadbuilder = Builder::new();
@@ -355,7 +355,7 @@ impl MidiInput {
         Ok(MidiInputConnection {
             subscription: Some(subscription),
             thread: Some(thread),
-            vport: vport,
+            vport,
             trigger_send_fd: trigger_fds[1],
         })
     }
@@ -410,7 +410,7 @@ impl MidiInput {
             seq: self.seq.take().unwrap(),
             trigger_rcv_fd: trigger_fds[0],
             callback: Box::new(callback),
-            queue_id: queue_id,
+            queue_id,
         };
 
         let threadbuilder = Builder::new();
@@ -432,7 +432,7 @@ impl MidiInput {
         Ok(MidiInputConnection {
             subscription: None,
             thread: Some(thread),
-            vport: vport,
+            vport,
             trigger_send_fd: trigger_fds[1],
         })
     }
@@ -618,7 +618,7 @@ impl MidiOutput {
 
         Ok(MidiOutputConnection {
             seq: self.seq.take(),
-            vport: vport,
+            vport,
             coder: helpers::EventEncoder::new(INITIAL_CODER_BUFFER_SIZE as u32),
             subscription: Some(sub),
         })
@@ -654,7 +654,7 @@ impl MidiOutput {
 
         Ok(MidiOutputConnection {
             seq: self.seq.take(),
-            vport: vport,
+            vport,
             coder: helpers::EventEncoder::new(INITIAL_CODER_BUFFER_SIZE as u32),
             subscription: None,
         })

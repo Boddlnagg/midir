@@ -65,10 +65,7 @@ pub struct ConnectError<T> {
 
 impl<T> ConnectError<T> {
     pub fn new(kind: ConnectErrorKind, inner: T) -> ConnectError<T> {
-        ConnectError {
-            kind: kind,
-            inner: inner,
-        }
+        ConnectError { kind, inner }
     }
 
     /// Helper method to create ConnectErrorKind::Other.
