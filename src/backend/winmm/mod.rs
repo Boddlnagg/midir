@@ -9,8 +9,6 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::{mem, ptr, slice};
 
-use windows::Win32::Media::Multimedia::{DRV_QUERYDEVICEINTERFACE, DRV_QUERYDEVICEINTERFACESIZE};
-use windows::Win32::Media::{MMSYSERR_ALLOCATED, MMSYSERR_BADDEVICEID, MMSYSERR_NOERROR};
 use windows_sys::Win32::Media::Audio::{
     midiInAddBuffer, midiInClose, midiInGetDevCapsW, midiInGetNumDevs, midiInMessage, midiInOpen,
     midiInPrepareHeader, midiInReset, midiInStart, midiInStop, midiInUnprepareHeader, midiOutClose,
