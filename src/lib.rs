@@ -1,3 +1,11 @@
+// Opt-in for allowed-by-default lints (in alphabetical order)
+// See also: <https://doc.rust-lang.org/rustc/lints>
+#![warn(future_incompatible)]
+#![warn(rust_2018_idioms)]
+#![warn(rust_2021_compatibility)]
+#![warn(unreachable_pub)]
+#![warn(unused)]
+
 #[cfg(feature = "jack")]
 #[macro_use]
 extern crate bitflags;
