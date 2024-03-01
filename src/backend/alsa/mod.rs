@@ -797,14 +797,14 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
             // If here, there should be data.
             let mut ev = match seq_input.event_input() {
                 Ok(ev) => ev,
-                Err(ref e) if e.errno() == alsa::nix::errno::Errno::ENOSPC => {
+                Err(ref e) if e.errno() == libc::ENOSPC => {
                     let _ = writeln!(
                         stderr(),
                         "\nError in handle_input: ALSA MIDI input buffer overrun!\n"
                     );
                     continue;
                 }
-                Err(ref e) if e.errno() == alsa::nix::errno::Errno::EAGAIN => {
+                Err(ref e) if e.errno() == libc::EAGAIN => {
                     let _ = writeln!(
                         stderr(),
                         "\nError in handle_input: no input event from ALSA MIDI input buffer!\n"
