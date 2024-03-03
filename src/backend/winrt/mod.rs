@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::sync::{Arc, Mutex};
 
 use crate::errors::*;
@@ -9,7 +8,7 @@ use windows::core::HSTRING;
 use windows::{
     Devices::Enumeration::DeviceInformation,
     Devices::Midi::*,
-    Foundation::{EventRegistrationToken, IClosable, TypedEventHandler},
+    Foundation::{EventRegistrationToken, TypedEventHandler},
     Storage::Streams::{DataReader, DataWriter},
 };
 
@@ -161,8 +160,7 @@ pub struct MidiInputConnection<T> {
 impl<T> MidiInputConnection<T> {
     pub fn close(self) -> (MidiInput, T) {
         let _ = self.port.0.RemoveMessageReceived(self.event_token);
-        let closable: IClosable = self.port.0.try_into().unwrap();
-        let _ = closable.Close();
+        let _ = self.port.0.Close();
         let device_selector = MidiInPort::GetDeviceSelector().expect("GetDeviceSelector failed"); // probably won't ever fail here, because it worked previously
         let mut handler_data_locked = self.handler_data.lock().unwrap();
         (
@@ -263,8 +261,7 @@ unsafe impl Send for MidiOutputConnection {}
 
 impl MidiOutputConnection {
     pub fn close(self) -> MidiOutput {
-        let closable: IClosable = self.port.try_into().unwrap();
-        let _ = closable.Close();
+        let _ = self.port.Close();
         let device_selector = MidiOutPort::GetDeviceSelector().expect("GetDeviceSelector failed"); // probably won't ever fail here, because it worked previously
         MidiOutput {
             selector: device_selector,
