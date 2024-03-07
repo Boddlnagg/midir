@@ -1,3 +1,7 @@
+#![warn(future_incompatible)]
+#![warn(rust_2018_idioms)]
+#![warn(rust_2021_compatibility)]
+
 #[cfg(feature = "jack")]
 #[macro_use]
 extern crate bitflags;
