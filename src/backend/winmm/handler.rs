@@ -33,7 +33,7 @@ pub extern "system" fn handle_input<T>(
         // Channel or system message
         // Make sure the first byte is a status byte.
         let status: u8 = (midi_message & 0x000000FF) as u8;
-        if !(status & 0x80 != 0) {
+        if status & 0x80 == 0 {
             return;
         }
 
@@ -88,13 +88,13 @@ pub extern "system" fn handle_input<T>(
         // buffer when an application closes and in this case, we should
         // avoid requeueing it, else the computer suddenly reboots after
         // one or two minutes.
-        if (unsafe { *data.sysex_buffer.0[sysex.dwUser as usize] }).dwBytesRecorded > 0 {
+        if (unsafe { *data.sysex_buffer.0[sysex.dwUser] }).dwBytesRecorded > 0 {
             //if ( sysex->dwBytesRecorded > 0 ) {
             let in_handle = data.in_handle.as_ref().unwrap().0.lock().unwrap();
             let result = unsafe {
                 midiInAddBuffer(
                     *in_handle,
-                    data.sysex_buffer.0[sysex.dwUser as usize],
+                    data.sysex_buffer.0[sysex.dwUser],
                     mem::size_of::<MIDIHDR>() as u32,
                 )
             };

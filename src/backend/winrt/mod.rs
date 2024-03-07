@@ -42,7 +42,7 @@ impl MidiInput {
             .get()
             .expect("FindAllAsyncAqsFilter failed");
         let count = device_collection.Size().expect("Size failed") as usize;
-        let mut result = Vec::with_capacity(count as usize);
+        let mut result = Vec::with_capacity(count);
         for device_info in device_collection.into_iter() {
             let device_id = device_info.Id().expect("Id failed");
             result.push(crate::common::MidiInputPort {
@@ -139,8 +139,8 @@ impl MidiInput {
 
         Ok(MidiInputConnection {
             port: RtMidiInPort(in_port),
-            event_token: event_token,
-            handler_data: handler_data,
+            event_token,
+            handler_data,
         })
     }
 }
@@ -209,7 +209,7 @@ impl MidiOutput {
             .get()
             .expect("FindAllAsyncAqsFilter failed");
         let count = device_collection.Size().expect("Size failed") as usize;
-        let mut result = Vec::with_capacity(count as usize);
+        let mut result = Vec::with_capacity(count);
         for device_info in device_collection.into_iter() {
             let device_id = device_info.Id().expect("Id failed");
             result.push(crate::common::MidiOutputPort {

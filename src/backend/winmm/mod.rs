@@ -22,12 +22,16 @@ use windows::Win32::Media::Multimedia::{DRV_QUERYDEVICEINTERFACE, DRV_QUERYDEVIC
 use windows::Win32::Media::{MMSYSERR_ALLOCATED, MMSYSERR_BADDEVICEID, MMSYSERR_NOERROR};
 
 #[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)]
 type ULONG = u32;
 #[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)]
 type UINT = u32;
 #[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)]
 type DWORD = u32;
 #[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)]
 type DWORD_PTR = usize;
 
 use crate::errors::*;
@@ -322,9 +326,7 @@ impl MidiInput {
             ));
         }
 
-        Ok(MidiInputConnection {
-            handler_data: handler_data,
-        })
+        Ok(MidiInputConnection { handler_data })
     }
 }
 
@@ -609,11 +611,7 @@ impl MidiOutputConnection {
             // Send the message.
             loop {
                 let result = unsafe {
-                    midiOutLongMsg(
-                        self.out_handle,
-                        &mut sysex,
-                        mem::size_of::<MIDIHDR>() as u32,
-                    )
+                    midiOutLongMsg(self.out_handle, &sysex, mem::size_of::<MIDIHDR>() as u32)
                 };
                 if result == MIDIERR_NOTREADY {
                     sleep(Duration::from_millis(1));
