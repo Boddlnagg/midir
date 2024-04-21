@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::sync::{Arc, Mutex};
 
 use crate::errors::*;
@@ -9,7 +8,7 @@ use windows::core::HSTRING;
 use windows::{
     Devices::Enumeration::DeviceInformation,
     Devices::Midi::*,
-    Foundation::{EventRegistrationToken, IClosable, TypedEventHandler},
+    Foundation::{EventRegistrationToken, TypedEventHandler},
     Storage::Streams::{DataReader, DataWriter},
 };
 
