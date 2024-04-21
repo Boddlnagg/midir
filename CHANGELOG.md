@@ -2,6 +2,11 @@
 
 All major changes to this project will be documented in this file.
 
+## [0.10.0] 2024-04-21
+- Upgrade to 2021 edition
+- Upgrade `alsa`, `coremidi` and `windows` dependencies
+- [winmm] Fix hanging when closing MIDI input ([#151](https://github.com/Boddlnagg/midir/pull/151) - thanks, @j-n-f)
+
 ## [0.9.1] - 2023-01-27
 - Fix Jack build on ARM and bump jack-sys version ([#127](https://github.com/Boddlnagg/midir/pull/127))
 
