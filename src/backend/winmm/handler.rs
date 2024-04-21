@@ -90,7 +90,7 @@ pub extern "system" fn handle_input<T>(
         // one or two minutes.
         if (unsafe { *data.sysex_buffer.0[sysex.dwUser] }).dwBytesRecorded > 0 {
             //if ( sysex->dwBytesRecorded > 0 ) {
-            let in_handle = data.in_handle.as_ref().unwrap().0.lock().unwrap();
+            let in_handle = data.in_handle.as_ref().unwrap().0.lock();
             let result = unsafe {
                 midiInAddBuffer(
                     *in_handle,

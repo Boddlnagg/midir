@@ -4,7 +4,7 @@ use std::io::{stderr, Write};
 use std::mem::MaybeUninit;
 use std::os::windows::ffi::OsStringExt;
 use std::ptr::null_mut;
-use std::sync::Mutex;
+use parking_lot::ReentrantMutex as Mutex;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{mem, ptr, slice};
@@ -343,15 +343,14 @@ impl<T> MidiInputConnection<T> {
     }
 
     fn close_internal(&mut self) {
-        // for information about his lock, see https://groups.google.com/forum/#!topic/mididev/6OUjHutMpEo
+        // for information about this lock, see https://groups.google.com/forum/#!topic/mididev/6OUjHutMpEo
         let in_handle_lock = self
             .handler_data
             .in_handle
             .as_ref()
             .unwrap()
             .0
-            .lock()
-            .unwrap();
+            .lock();
 
         // TODO: Call both reset and stop here? The difference seems to be that
         //       reset "returns all pending input buffers to the callback function"
