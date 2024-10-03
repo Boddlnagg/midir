@@ -95,6 +95,12 @@ pub struct MidiInputPort {
     input: web_sys::MidiInput,
 }
 
+impl MidiInputPort {
+    pub fn id(&self) -> String {
+        self.input.id()
+    }
+}
+
 pub struct MidiInput {
     ignore_flags: Ignore,
 }

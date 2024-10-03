@@ -143,6 +143,12 @@ pub struct MidiInputPort {
     addr: Addr,
 }
 
+impl MidiInputPort {
+    pub fn id(&self) -> String {
+        format!("{}..{}", self.addr.client, self.addr.port)
+    }
+}
+
 pub struct MidiInputConnection<T: 'static> {
     subscription: Option<PortSubscribe>,
     thread: Option<JoinHandle<(HandlerData<T>, T)>>,

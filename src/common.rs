@@ -41,6 +41,16 @@ pub struct MidiInputPort {
     pub(crate) imp: MidiInputPortImpl,
 }
 
+impl MidiInputPort {
+    /// Get a unique stable identifier for this port.
+    /// This identifier must be treated as an opaque string.
+    ///
+    /// This identifier aims to remain stable between system restarts.
+    pub fn id(&self) -> String {
+        self.imp.id()
+    }
+}
+
 /// A collection of input ports.
 pub type MidiInputPorts = Vec<MidiInputPort>;
 

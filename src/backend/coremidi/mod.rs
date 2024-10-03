@@ -23,12 +23,22 @@ pub struct MidiInputPort {
     source: Arc<Source>,
 }
 
+impl MidiInputPort {
+    pub fn id(&self) -> String {
+        self.source
+            .unique_id()
+            // According to macos docs "The system assigns unique IDs to all objects.", so I think we can ignore this case
+            .unwrap_or(0)
+            .to_string()
+    }
+}
+
 impl PartialEq for MidiInputPort {
     fn eq(&self, other: &Self) -> bool {
         if let (Some(id1), Some(id2)) = (self.source.unique_id(), other.source.unique_id()) {
             id1 == id2
         } else {
-            // Acording to macos docs "The system assigns unique IDs to all objects.", so I think we can ignore this case
+            // According to macos docs "The system assigns unique IDs to all objects.", so I think we can ignore this case
             false
         }
     }
