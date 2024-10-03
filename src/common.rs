@@ -44,8 +44,6 @@ pub struct MidiInputPort {
 impl MidiInputPort {
     /// Get a unique stable identifier for this port.
     /// This identifier must be treated as an opaque string.
-    ///
-    /// This identifier aims to remain stable between system restarts.
     pub fn id(&self) -> String {
         self.imp.id()
     }
@@ -212,8 +210,6 @@ pub struct MidiOutputPort {
 impl MidiOutputPort {
     /// Get a unique stable identifier for this port.
     /// This identifier must be treated as an opaque string.
-    ///
-    /// This identifier aims to remain stable between system restarts.
     pub fn id(&self) -> String {
         self.imp.id()
     }
