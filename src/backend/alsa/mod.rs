@@ -529,6 +529,12 @@ pub struct MidiOutputPort {
     addr: Addr,
 }
 
+impl MidiOutputPort {
+    pub fn id(&self) -> String {
+        format!("{}..{}", self.addr.client, self.addr.port)
+    }
+}
+
 pub struct MidiOutputConnection {
     seq: Option<Seq>,
     vport: i32,

@@ -229,6 +229,12 @@ pub struct MidiOutputPort {
     output: web_sys::MidiOutput,
 }
 
+impl MidiInputPort {
+    pub fn id(&self) -> String {
+        self.output.id()
+    }
+}
+
 pub struct MidiOutput {}
 
 impl MidiOutput {

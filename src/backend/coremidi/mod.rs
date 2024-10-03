@@ -302,6 +302,16 @@ pub struct MidiOutputPort {
     dest: Arc<Destination>,
 }
 
+impl MidiOutputPort {
+    pub fn id(&self) -> String {
+        self.dest
+            .unique_id()
+            // According to macos docs "The system assigns unique IDs to all objects.", so I think we can ignore this case
+            .unwrap_or(0)
+            .to_string()
+    }
+}
+
 impl PartialEq for MidiOutputPort {
     fn eq(&self, other: &Self) -> bool {
         if let (Some(id1), Some(id2)) = (self.dest.unique_id(), other.dest.unique_id()) {

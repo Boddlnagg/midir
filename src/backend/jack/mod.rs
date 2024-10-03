@@ -264,6 +264,12 @@ pub struct MidiOutputPort {
     name: CString,
 }
 
+impl MidiOutputPort {
+    pub fn id(&self) -> String {
+        self.name.to_string_lossy()
+    }
+}
+
 pub struct MidiOutputConnection {
     handler_data: Box<OutputHandlerData>,
     client: Option<Client>,

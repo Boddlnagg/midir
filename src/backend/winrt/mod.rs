@@ -195,6 +195,12 @@ pub struct MidiOutputPort {
     id: HSTRING,
 }
 
+impl MidiOutputPort {
+    pub fn id(&self) -> String {
+        self.id.to_string_lossy()
+    }
+}
+
 pub struct MidiOutput {
     selector: HSTRING,
 }
