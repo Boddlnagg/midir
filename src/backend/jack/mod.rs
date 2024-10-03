@@ -31,7 +31,7 @@ pub struct MidiInputPort {
 
 impl MidiInputPort {
     pub fn id(&self) -> String {
-        self.name.to_string_lossy()
+        self.name.to_string_lossy().to_string()
     }
 }
 
@@ -266,7 +266,7 @@ pub struct MidiOutputPort {
 
 impl MidiOutputPort {
     pub fn id(&self) -> String {
-        self.name.to_string_lossy()
+        self.name.to_string_lossy().to_string()
     }
 }
 

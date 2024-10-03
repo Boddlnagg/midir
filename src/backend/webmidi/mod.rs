@@ -229,7 +229,7 @@ pub struct MidiOutputPort {
     output: web_sys::MidiOutput,
 }
 
-impl MidiInputPort {
+impl MidiOutputPort {
     pub fn id(&self) -> String {
         self.output.id()
     }
