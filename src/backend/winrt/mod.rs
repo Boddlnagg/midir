@@ -17,6 +17,12 @@ pub struct MidiInputPort {
     id: HSTRING,
 }
 
+impl MidiInputPort {
+    pub fn id(&self) -> String {
+        self.id.to_string_lossy()
+    }
+}
+
 pub struct MidiInput {
     selector: HSTRING,
     ignore_flags: Ignore,
@@ -187,6 +193,12 @@ struct HandlerData<T> {
 #[derive(Clone, PartialEq)]
 pub struct MidiOutputPort {
     id: HSTRING,
+}
+
+impl MidiOutputPort {
+    pub fn id(&self) -> String {
+        self.id.to_string_lossy()
+    }
 }
 
 pub struct MidiOutput {
