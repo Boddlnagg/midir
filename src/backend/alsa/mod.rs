@@ -145,7 +145,7 @@ pub struct MidiInputPort {
 
 impl MidiInputPort {
     pub fn id(&self) -> String {
-        format!("{}..{}", self.addr.client, self.addr.port)
+        format!("{}:{}", self.addr.client, self.addr.port)
     }
 }
 
@@ -531,7 +531,7 @@ pub struct MidiOutputPort {
 
 impl MidiOutputPort {
     pub fn id(&self) -> String {
-        format!("{}..{}", self.addr.client, self.addr.port)
+        format!("{}:{}", self.addr.client, self.addr.port)
     }
 }
 
