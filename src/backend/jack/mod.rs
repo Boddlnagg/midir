@@ -29,6 +29,12 @@ pub struct MidiInputPort {
     name: CString,
 }
 
+impl MidiInputPort {
+    pub fn id(&self) -> String {
+        self.name.to_string_lossy().to_string()
+    }
+}
+
 pub struct MidiInputConnection<T> {
     handler_data: Box<InputHandlerData<T>>,
     client: Option<Client>,
@@ -256,6 +262,12 @@ pub struct MidiOutput {
 #[derive(Clone, PartialEq)]
 pub struct MidiOutputPort {
     name: CString,
+}
+
+impl MidiOutputPort {
+    pub fn id(&self) -> String {
+        self.name.to_string_lossy().to_string()
+    }
 }
 
 pub struct MidiOutputConnection {

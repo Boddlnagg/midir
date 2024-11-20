@@ -95,6 +95,12 @@ pub struct MidiInputPort {
     input: web_sys::MidiInput,
 }
 
+impl MidiInputPort {
+    pub fn id(&self) -> String {
+        self.input.id()
+    }
+}
+
 pub struct MidiInput {
     ignore_flags: Ignore,
 }
@@ -221,6 +227,12 @@ impl<T> MidiInputConnection<T> {
 #[derive(Clone, PartialEq)]
 pub struct MidiOutputPort {
     output: web_sys::MidiOutput,
+}
+
+impl MidiOutputPort {
+    pub fn id(&self) -> String {
+        self.output.id()
+    }
 }
 
 pub struct MidiOutput {}

@@ -65,6 +65,12 @@ pub struct MidiInputPort {
     interface_id: Box<[u16]>,
 }
 
+impl MidiInputPort {
+    pub fn id(&self) -> String {
+        String::from_utf16_lossy(&self.interface_id)
+    }
+}
+
 impl PartialEq for MidiInputPort {
     fn eq(&self, other: &Self) -> bool {
         self.interface_id == other.interface_id
@@ -394,6 +400,12 @@ pub struct MidiOutput;
 pub struct MidiOutputPort {
     name: String,
     interface_id: Box<[u16]>,
+}
+
+impl MidiOutputPort {
+    pub fn id(&self) -> String {
+        String::from_utf16_lossy(&self.interface_id)
+    }
 }
 
 impl PartialEq for MidiOutputPort {

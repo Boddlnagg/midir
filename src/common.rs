@@ -41,6 +41,14 @@ pub struct MidiInputPort {
     pub(crate) imp: MidiInputPortImpl,
 }
 
+impl MidiInputPort {
+    /// Get a unique stable identifier for this port.
+    /// This identifier must be treated as an opaque string.
+    pub fn id(&self) -> String {
+        self.imp.id()
+    }
+}
+
 /// A collection of input ports.
 pub type MidiInputPorts = Vec<MidiInputPort>;
 
@@ -82,6 +90,11 @@ impl MidiInput {
     /// (e.g. the respective device has been disconnected).
     pub fn port_name(&self, port: &MidiInputPort) -> Result<String, PortInfoError> {
         self.imp.port_name(&port.imp)
+    }
+
+    /// Get a MIDI input port by its unique identifier.
+    pub fn find_port_by_id(&self, id: String) -> Option<MidiInputPort> {
+        self.ports().into_iter().find(|port| port.id() == id)
     }
 
     /// Connect to a specified MIDI input port in order to receive messages.
@@ -199,6 +212,14 @@ pub struct MidiOutputPort {
     pub(crate) imp: MidiOutputPortImpl,
 }
 
+impl MidiOutputPort {
+    /// Get a unique stable identifier for this port.
+    /// This identifier must be treated as an opaque string.
+    pub fn id(&self) -> String {
+        self.imp.id()
+    }
+}
+
 /// A collection of output ports.
 pub type MidiOutputPorts = Vec<MidiOutputPort>;
 
@@ -233,6 +254,11 @@ impl MidiOutput {
     /// (e.g. the respective device has been disconnected).
     pub fn port_name(&self, port: &MidiOutputPort) -> Result<String, PortInfoError> {
         self.imp.port_name(&port.imp)
+    }
+
+    /// Get a MIDI output port by its unique identifier.
+    pub fn find_port_by_id(&self, id: String) -> Option<MidiOutputPort> {
+        self.ports().into_iter().find(|port| port.id() == id)
     }
 
     /// Connect to a specified MIDI output port in order to send messages.
