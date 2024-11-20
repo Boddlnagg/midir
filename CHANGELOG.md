@@ -2,6 +2,9 @@
 
 All major changes to this project will be documented in this file.
 
+## [0.10.1] 2024-11-20
+- Add `id()` and `find_port_by_id()` to `MidiInputPort` and `MidiOutputPort` ([#157](https://github.com/Boddlnagg/midir/pull/157) - thanks @oscartbeaumont)
+
 ## [0.10.0] 2024-04-21
 - Upgrade to 2021 edition
 - Upgrade `alsa`, `coremidi` and `windows` dependencies
