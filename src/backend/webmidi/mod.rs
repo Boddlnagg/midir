@@ -5,11 +5,13 @@
 //! * [MDN web docs](https://developer.mozilla.org/en-US/docs/Web/API/MIDIAccess)
 
 use js_sys::{Map, Promise, Uint8Array};
+use std::fmt;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{MidiAccess, MidiMessageEvent, MidiOptions};
 
 use std::cell::RefCell;
+use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Mutex};
 
 use crate::errors::*;
@@ -90,7 +92,7 @@ impl Static {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MidiInputPort {
     input: web_sys::MidiInput,
 }
@@ -98,6 +100,13 @@ pub struct MidiInputPort {
 impl MidiInputPort {
     pub fn id(&self) -> String {
         self.input.id()
+    }
+}
+
+// Implement Hash manually using the MIDI device ID
+impl std::hash::Hash for MidiInputPort {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.input.id().hash(state);
     }
 }
 
@@ -224,7 +233,15 @@ impl<T> MidiInputConnection<T> {
     }
 }
 
-#[derive(Clone, PartialEq)]
+impl<T> Debug for MidiInputConnection<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiInputConnection")
+            .field("input", &self.input)
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MidiOutputPort {
     output: web_sys::MidiOutput,
 }
@@ -282,10 +299,16 @@ impl MidiOutput {
         port: &MidiOutputPort,
         _port_name: &str,
     ) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
-        let _ = port.output.open(); // NOTE: asyncronous!
+        let _ = port.output.open(); // NOTE: asynchronous!
         Ok(MidiOutputConnection {
             output: port.output.clone(),
         })
+    }
+}
+
+impl std::hash::Hash for MidiOutputPort {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.output.id().hash(state);
     }
 }
 
@@ -295,7 +318,7 @@ pub struct MidiOutputConnection {
 
 impl MidiOutputConnection {
     pub fn close(self) -> MidiOutput {
-        let _ = self.output.close(); // NOTE: asyncronous!
+        let _ = self.output.close(); // NOTE: asynchronous!
         MidiOutput {}
     }
 
@@ -303,5 +326,13 @@ impl MidiOutputConnection {
         self.output
             .send(unsafe { Uint8Array::view(message) }.as_ref())
             .map_err(|_| SendError::Other("JavaScript exception"))
+    }
+}
+
+impl Debug for MidiOutputConnection {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiOutputConnection")
+            .field("output", &self.output)
+            .finish()
     }
 }

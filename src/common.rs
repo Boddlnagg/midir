@@ -6,6 +6,8 @@ use backend::{
     MidiOutputConnection as MidiOutputConnectionImpl, MidiOutputPort as MidiOutputPortImpl,
 };
 use errors::*;
+use std::fmt;
+use std::fmt::{Debug, Formatter};
 
 use crate::{backend, errors, Ignore, InitError};
 
@@ -36,7 +38,7 @@ pub trait MidiIO {
 ///
 /// Use the `ports` method of a `MidiInput` instance to obtain
 /// available ports.
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MidiInputPort {
     pub(crate) imp: MidiInputPortImpl,
 }
@@ -200,6 +202,14 @@ impl<T> MidiInputConnection<T> {
     }
 }
 
+impl<T: Debug> Debug for MidiInputConnection<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiInputConnection")
+            .field("imp", &self.imp)
+            .finish()
+    }
+}
+
 /// An object representing a single output port.
 /// How the port is identified internally is backend-dependent.
 /// If the backend allows it, port objects remain valid when
@@ -207,7 +217,7 @@ impl<T> MidiInputConnection<T> {
 ///
 /// Use the `ports` method of a `MidiOutput` instance to obtain
 /// available ports.
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MidiOutputPort {
     pub(crate) imp: MidiOutputPortImpl,
 }
@@ -348,9 +358,18 @@ impl MidiOutputConnection {
     }
 }
 
+impl Debug for MidiOutputConnection {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiOutputConnection")
+            .field("imp", &self.imp)
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_trait_impls() {
@@ -376,5 +395,93 @@ mod tests {
 
         is_partial_eq::<MidiInputPort>();
         is_partial_eq::<MidiOutputPort>();
+    }
+
+    #[test]
+    fn test_port_traits() {
+        // Get actual ports for testing
+        let midi_in = MidiInput::new("test_client").unwrap();
+        let ports = midi_in.ports();
+
+        if ports.len() >= 2 {
+            let port1 = ports[0].clone();
+            let port2 = ports[1].clone();
+
+            // Test Debug
+            assert!(!format!("{:?}", port1).is_empty());
+
+            // Test PartialEq
+            assert_ne!(port1, port2);
+            assert_eq!(port1, port1.clone());
+
+            // Test Hash
+            let mut map = HashMap::new();
+            map.insert(port1.clone(), "test");
+            assert!(map.contains_key(&port1));
+            assert!(!map.contains_key(&port2));
+        }
+    }
+
+    #[test]
+    fn test_connection_debug() {
+        let midi_in = MidiInput::new("test_client").unwrap();
+        let ports = midi_in.ports();
+
+        if !ports.is_empty() {
+            let conn = midi_in
+                .connect(&ports[0], "test_port", |_, _, _| {}, ())
+                .unwrap();
+
+            let debug_str = format!("{:?}", conn);
+            assert!(!debug_str.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_port_id_consistency() {
+        let midi_in = MidiInput::new("test_client").unwrap();
+        let ports = midi_in.ports();
+
+        for port in ports {
+            let id1 = port.id();
+            let id2 = port.clone().id();
+            assert_eq!(id1, id2, "Port ID should be consistent across clones");
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use std::collections::HashMap;
+
+        fn try_midi_input() -> Option<MidiInput> {
+            MidiInput::new("test_client").ok()
+        }
+
+        #[test]
+        fn test_port_creation_and_traits() {
+            // Skip if we can't create a MIDI input
+            if let Some(midi_in) = try_midi_input() {
+                let ports = midi_in.ports();
+
+                if !ports.is_empty() {
+                    let port = &ports[0];
+
+                    let debug_str = format!("{:?}", port);
+                    assert!(!debug_str.is_empty());
+
+                    let port_clone = port.clone();
+                    assert_eq!(port, &port_clone);
+
+                    let mut map = HashMap::new();
+                    map.insert(port_clone, "test");
+                    assert!(map.contains_key(port));
+                } else {
+                    println!("Skipping test: no MIDI ports available");
+                }
+            } else {
+                println!("Skipping test: MIDI system unavailable");
+            }
+        }
     }
 }

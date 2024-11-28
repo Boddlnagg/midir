@@ -7,8 +7,8 @@ use std::os::windows::ffi::OsStringExt;
 use std::ptr::null_mut;
 use std::thread::sleep;
 use std::time::Duration;
-use std::{mem, ptr, slice};
-
+use std::{fmt, mem, ptr, slice};
+use std::fmt::{Debug, Formatter};
 use windows::core::PSTR;
 use windows::Win32::Media::Audio::{
     midiInAddBuffer, midiInClose, midiInGetDevCapsW, midiInGetNumDevs, midiInMessage, midiInOpen,
@@ -59,7 +59,7 @@ pub struct MidiInput {
     ignore_flags: Ignore,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Eq, Hash)]
 pub struct MidiInputPort {
     name: String,
     interface_id: Box<[u16]>,
@@ -393,10 +393,18 @@ impl<T> Drop for MidiInputConnection<T> {
     }
 }
 
+impl<T> Debug for MidiInputConnection<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiInputConnection")
+            .field("handler_data", &"<handler>")  // Hide sensitive data
+            .finish()
+    }
+}
+
 #[derive(Debug)]
 pub struct MidiOutput;
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Eq, Hash)]
 pub struct MidiOutputPort {
     name: String,
     interface_id: Box<[u16]>,
@@ -414,6 +422,7 @@ impl PartialEq for MidiOutputPort {
     }
 }
 
+#[derive(Debug)]
 pub struct MidiOutputConnection {
     out_handle: HMIDIOUT,
 }
@@ -684,6 +693,57 @@ impl Drop for MidiOutputConnection {
         unsafe {
             midiOutReset(self.out_handle);
             midiOutClose(self.out_handle);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    #[test]
+    fn test_backend_port_traits() {
+        let port = create_test_port();
+        let port_clone = port.clone();
+
+        // Test PartialEq
+        assert_eq!(port, port_clone);
+
+        // Test Hash consistency
+        let hash1 = {
+            let mut hasher = DefaultHasher::new();
+            port.hash(&mut hasher);
+            hasher.finish()
+        };
+
+        let hash2 = {
+            let mut hasher = DefaultHasher::new();
+            port_clone.hash(&mut hasher);
+            hasher.finish()
+        };
+
+        assert_eq!(hash1, hash2);
+
+        // Test Debug
+        let debug_str = format!("{:?}", port);
+        assert!(debug_str.contains("Test Port"));
+    }
+
+    #[test]
+    fn test_port_id() {
+        let port = create_test_port();
+        assert_eq!(port.id(), "TEST:1\0");
+    }
+
+    fn create_test_port() -> MidiInputPort {
+        MidiInputPort {
+            name: String::from("Test Port"),
+            interface_id: vec![
+                'T' as u16, 'E' as u16, 'S' as u16, 'T' as u16,
+                ':' as u16, '1' as u16, '\0' as u16
+            ].into_boxed_slice(),
         }
     }
 }
