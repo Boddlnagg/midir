@@ -1,3 +1,6 @@
+use std::fmt;
+use std::fmt::{Debug, Formatter};
+use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 
 use crate::errors::*;
@@ -5,6 +8,7 @@ use crate::{Ignore, MidiMessage};
 
 use coremidi::*;
 
+#[allow(non_snake_case)]
 mod external {
     #[link(name = "CoreAudio", kind = "framework")]
     extern "C" {
@@ -32,6 +36,23 @@ impl MidiInputPort {
             .to_string()
     }
 }
+
+// Manual implementations since Source doesn't implement these traits
+impl Debug for MidiInputPort {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiInputPort")
+            .field("id", &self.id())
+            .finish()
+    }
+}
+
+impl Hash for MidiInputPort {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id().hash(state);
+    }
+}
+
+impl Eq for MidiInputPort {}
 
 impl PartialEq for MidiInputPort {
     fn eq(&self, other: &Self) -> bool {
@@ -94,13 +115,13 @@ impl MidiInput {
 
             let mut timestamp = p.timestamp();
             if timestamp == 0 {
-                // this might happen for asnychronous sysex messages (?)
+                // this might happen for asynchronous sysex messages (?)
                 timestamp = unsafe { external::AudioGetCurrentHostTime() };
             }
 
             if !*continue_sysex {
                 message.timestamp =
-                    unsafe { external::AudioConvertHostTimeToNanos(timestamp) } as u64 / 1000;
+                    unsafe { external::AudioConvertHostTimeToNanos(timestamp) } / 1000;
             }
 
             let mut cur_byte = 0;
@@ -216,7 +237,7 @@ impl MidiInput {
         Ok(MidiInputConnection {
             client: self.client,
             details: InputConnectionDetails::Explicit(iport),
-            handler_data: handler_data,
+            handler_data,
         })
     }
 
@@ -246,7 +267,7 @@ impl MidiInput {
         Ok(MidiInputConnection {
             client: self.client,
             details: InputConnectionDetails::Virtual(vrt),
-            handler_data: handler_data,
+            handler_data,
         })
     }
 }
@@ -277,6 +298,14 @@ impl<T> MidiInputConnection<T> {
             },
             handler_data_locked.user_data.take().unwrap(),
         )
+    }
+}
+
+impl<T> Debug for MidiInputConnection<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiInputConnection")
+            .field("client", &"<client>")  // Hide internal client details
+            .finish()
     }
 }
 
@@ -311,6 +340,23 @@ impl MidiOutputPort {
             .to_string()
     }
 }
+
+// Manual implementations since Source doesn't implement these traits
+impl Debug for MidiOutputPort {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiOutputPort")
+            .field("id", &self.id())
+            .finish()
+    }
+}
+
+impl Hash for MidiOutputPort {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id().hash(state);
+    }
+}
+
+impl Eq for MidiOutputPort {}
 
 impl PartialEq for MidiOutputPort {
     fn eq(&self, other: &Self) -> bool {
@@ -417,6 +463,65 @@ impl MidiOutputConnection {
             OutputConnectionDetails::Virtual(ref vrt) => vrt
                 .received(&packets)
                 .map_err(|_| SendError::Other("error sending MIDI to virtual destinations")),
+        }
+    }
+}
+
+impl Debug for MidiOutputConnection {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiOutputConnection")
+            .field("client", &"<client>")  // Hide internal client details
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_port() -> Result<MidiInputPort, i32> {
+        let client = Client::new("midir-test")?;
+        let endpoints = Sources::count();
+        if endpoints == 0 {
+            return Err(0); // Or a more meaningful error code
+        }
+        let source = Source::from_index(endpoints - 1)
+            .ok_or(0)?;
+
+        Ok(MidiInputPort {
+            source: Arc::new(source),
+        })
+    }
+
+    #[test]
+    fn test_backend_port_traits() {
+        match create_test_port() {
+            Ok(port) => {
+                let port_clone = port.clone();
+                assert_eq!(port, port_clone);
+
+                // Hash test
+                use std::hash::{Hash, Hasher};
+                use std::collections::hash_map::DefaultHasher;
+
+                let hash1 = {
+                    let mut hasher = DefaultHasher::new();
+                    port.hash(&mut hasher);
+                    hasher.finish()
+                };
+
+                let hash2 = {
+                    let mut hasher = DefaultHasher::new();
+                    port_clone.hash(&mut hasher);
+                    hasher.finish()
+                };
+
+                assert_eq!(hash1, hash2);
+            },
+            Err(_) => {
+                // Skip test if we couldn't create a port
+                println!("Skipping test: could not create test port");
+            }
         }
     }
 }

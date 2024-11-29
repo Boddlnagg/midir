@@ -1,7 +1,9 @@
 use jack_sys::jack_nframes_t;
 use libc::c_void;
+use std::fmt;
 
 use std::ffi::CString;
+use std::fmt::{Debug, Formatter};
 use std::{mem, slice};
 
 mod wrappers;
@@ -24,7 +26,7 @@ pub struct MidiInput {
     client: Option<Client>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MidiInputPort {
     name: CString,
 }
@@ -213,6 +215,14 @@ impl<T> Drop for MidiInputConnection<T> {
     }
 }
 
+impl<T> Debug for MidiInputConnection<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiInputConnection")
+            .field("port", &self.handler_data.port)
+            .finish()
+    }
+}
+
 extern "C" fn handle_input<T>(nframes: jack_nframes_t, arg: *mut c_void) -> i32 {
     let data: &mut InputHandlerData<T> = unsafe { &mut *(arg as *mut InputHandlerData<T>) };
 
@@ -259,7 +269,7 @@ pub struct MidiOutput {
     client: Option<Client>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MidiOutputPort {
     name: CString,
 }
@@ -448,6 +458,14 @@ impl Drop for MidiOutputConnection {
     }
 }
 
+impl Debug for MidiOutputConnection {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiOutputConnection")
+            .field("port", &self.handler_data.port)
+            .finish()
+    }
+}
+
 extern "C" fn handle_output(nframes: jack_nframes_t, arg: *mut c_void) -> i32 {
     let data: &mut OutputHandlerData = unsafe { mem::transmute(arg) };
 
@@ -476,4 +494,42 @@ extern "C" fn handle_output(nframes: jack_nframes_t, arg: *mut c_void) -> i32 {
     }
 
     return 0;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::hash_map::DefaultHasher;
+    use std::ffi::CString;
+    use std::hash::{Hash, Hasher};
+
+    fn create_test_port() -> Result<MidiInputPort, ()> {
+        Ok(MidiInputPort {
+            name: CString::new("test:0").unwrap(),
+        })
+    }
+
+    #[test]
+    fn test_backend_port_traits() {
+        let port = create_test_port().unwrap();
+        let port_clone = port.clone();
+
+        // Test PartialEq
+        assert_eq!(port, port_clone);
+
+        // Test Hash consistency
+        let hash1 = {
+            let mut hasher = DefaultHasher::new();
+            port.hash(&mut hasher);
+            hasher.finish()
+        };
+
+        let hash2 = {
+            let mut hasher = DefaultHasher::new();
+            port_clone.hash(&mut hasher);
+            hasher.finish()
+        };
+
+        assert_eq!(hash1, hash2);
+    }
 }

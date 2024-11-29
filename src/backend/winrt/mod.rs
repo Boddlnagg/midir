@@ -1,3 +1,5 @@
+use std::fmt;
+use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Mutex};
 
 use crate::errors::*;
@@ -12,7 +14,7 @@ use windows::{
     Storage::Streams::{DataReader, DataWriter},
 };
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MidiInputPort {
     id: HSTRING,
 }
@@ -150,6 +152,7 @@ impl MidiInput {
     }
 }
 
+#[derive(Debug)]
 struct RtMidiInPort(MidiInPort);
 unsafe impl Send for RtMidiInPort {}
 
@@ -161,6 +164,14 @@ pub struct MidiInputConnection<T> {
     //       know that the callback we're in here is never called concurrently
     //       (always in sequence)
     handler_data: Arc<Mutex<HandlerData<T>>>,
+}
+
+impl<T> Debug for MidiInputConnection<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiInputConnection")
+            .field("port", &self.port)  // Hide sensitive data
+            .finish()
+    }
 }
 
 impl<T> MidiInputConnection<T> {
@@ -190,7 +201,7 @@ struct HandlerData<T> {
     user_data: Option<T>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MidiOutputPort {
     id: HSTRING,
 }
@@ -265,6 +276,7 @@ impl MidiOutput {
     }
 }
 
+#[derive(Debug)]
 pub struct MidiOutputConnection {
     port: IMidiOutPort,
 }

@@ -1,9 +1,9 @@
-use std::ffi::{CStr, CString};
-use std::io::{stderr, Write};
-use std::mem;
-use std::thread::{Builder, JoinHandle};
-
 use crate::{errors, Ignore, MidiMessage};
+use std::ffi::{CStr, CString};
+use std::fmt::{Debug, Formatter};
+use std::io::{stderr, Write};
+use std::thread::{Builder, JoinHandle};
+use std::{fmt, mem};
 
 use alsa::seq::{Addr, EventType, PortCap, PortInfo, PortSubscribe, PortType, QueueTempo};
 use alsa::{Direction, Seq};
@@ -104,7 +104,7 @@ mod helpers {
         pub fn new(buffer_size: u32) -> EventEncoder {
             EventEncoder {
                 ev: MidiEvent::new(buffer_size).unwrap(),
-                buffer_size: buffer_size,
+                buffer_size,
             }
         }
 
@@ -138,7 +138,7 @@ pub struct MidiInput {
     seq: Option<Seq>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MidiInputPort {
     addr: Addr,
 }
@@ -337,7 +337,7 @@ impl MidiInput {
             seq: self.seq.take().unwrap(),
             trigger_rcv_fd: trigger_fds[0],
             callback: Box::new(callback),
-            queue_id: queue_id,
+            queue_id,
         };
 
         let threadbuilder = Builder::new();
@@ -361,7 +361,7 @@ impl MidiInput {
         Ok(MidiInputConnection {
             subscription: Some(subscription),
             thread: Some(thread),
-            vport: vport,
+            vport,
             trigger_send_fd: trigger_fds[1],
         })
     }
@@ -416,7 +416,7 @@ impl MidiInput {
             seq: self.seq.take().unwrap(),
             trigger_rcv_fd: trigger_fds[0],
             callback: Box::new(callback),
-            queue_id: queue_id,
+            queue_id,
         };
 
         let threadbuilder = Builder::new();
@@ -520,11 +520,19 @@ impl<T> Drop for MidiInputConnection<T> {
     }
 }
 
+impl<T> Debug for MidiInputConnection<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiInputConnection")
+            .field("vport", &self.vport)
+            .finish()
+    }
+}
+
 pub struct MidiOutput {
     seq: Option<Seq>, // TODO: if `Seq` is marked as non-zero, this should just be pointer-sized
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MidiOutputPort {
     addr: Addr,
 }
@@ -630,7 +638,7 @@ impl MidiOutput {
 
         Ok(MidiOutputConnection {
             seq: self.seq.take(),
-            vport: vport,
+            vport,
             coder: helpers::EventEncoder::new(INITIAL_CODER_BUFFER_SIZE as u32),
             subscription: Some(sub),
         })
@@ -666,7 +674,7 @@ impl MidiOutput {
 
         Ok(MidiOutputConnection {
             seq: self.seq.take(),
-            vport: vport,
+            vport,
             coder: helpers::EventEncoder::new(INITIAL_CODER_BUFFER_SIZE as u32),
             subscription: None,
         })
@@ -730,6 +738,15 @@ impl Drop for MidiOutputConnection {
         if self.seq.is_some() {
             self.close_internal();
         }
+    }
+}
+
+impl Debug for MidiOutputConnection {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiOutputConnection")
+            .field("seq", &"<seq>")  // Hide internal seq details
+            .field("vport", &self.vport)
+            .finish()
     }
 }
 
@@ -836,13 +853,13 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
 
             let do_decode = match ev.get_type() {
                 EventType::PortSubscribed => {
-                    if cfg!(debug) {
+                    if cfg!(debug_assertions) {
                         println!("Notice from handle_input: ALSA port connection made!")
                     };
                     false
                 }
                 EventType::PortUnsubscribed => {
-                    if cfg!(debug) {
+                    if cfg!(debug_assertions) {
                         let _ = writeln!(
                             stderr(),
                             "Notice from handle_input: ALSA port connection has closed!"
@@ -911,4 +928,45 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
         }
     } // close scope where data.seq is borrowed
     data // return data back to thread owner
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    #[test]
+    fn test_backend_port_traits() {
+        let port = create_test_port();
+
+        // Test consistent hashing
+        let hash1 = {
+            let mut hasher = DefaultHasher::new();
+            port.hash(&mut hasher);
+            hasher.finish()
+        };
+
+        let port_clone = port.clone();
+        let hash2 = {
+            let mut hasher = DefaultHasher::new();
+            port_clone.hash(&mut hasher);
+            hasher.finish()
+        };
+
+        assert_eq!(hash1, hash2);
+
+        // Test Debug
+        let debug_str = format!("{:?}", port);
+        assert!(debug_str.contains("client: 128") && debug_str.contains("port: 0"));
+    }
+
+    fn create_test_port() -> MidiInputPort {
+        MidiInputPort {
+            addr: Addr {
+                client: 128, // Using high numbers to avoid conflicts
+                port: 0,
+            },
+        }
+    }
 }

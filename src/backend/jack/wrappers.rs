@@ -63,7 +63,7 @@ impl Client {
         }
     }
 
-    pub fn get_midi_ports(&self, flags: PortFlags) -> PortInfos {
+    pub fn get_midi_ports(&self, flags: PortFlags) -> PortInfos<'_> {
         let ports_ptr = unsafe {
             jack_get_ports(
                 self.p,
@@ -186,6 +186,7 @@ impl<'a> Drop for PortInfos<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct MidiPort {
     p: *mut jack_port_t,
 }
