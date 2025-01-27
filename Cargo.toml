@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "examples/browser"]
+members = [".", "examples/browser/*"]
 
 [package]
 name = "midir"
