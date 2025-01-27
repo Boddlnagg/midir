@@ -65,6 +65,14 @@ impl MidiInput {
         MidiInputImpl::new(client_name).map(|imp| MidiInput { imp })
     }
 
+    /// Creates a new `MidiInput` object that is required for any MIDI input functionality.
+    /// This asynchronous constructor falls back to the synchronous `new` method for all backends except for `webmidi`.
+    pub async fn new_async(client_name: &str) -> Result<Self, InitError> {
+        MidiInputImpl::new_async(client_name)
+            .await
+            .map(|imp| MidiInput { imp })
+    }
+
     /// Set flags to decide what kind of messages should be ignored (i.e., filtered out)
     /// by this `MidiInput`. By default, no messages are ignored.
     pub fn ignore(&mut self, flags: Ignore) {
@@ -233,6 +241,13 @@ impl MidiOutput {
     /// Creates a new `MidiOutput` object that is required for any MIDI output functionality.
     pub fn new(client_name: &str) -> Result<Self, InitError> {
         MidiOutputImpl::new(client_name).map(|imp| MidiOutput { imp })
+    }
+
+    /// Creates a new `MidiOutput` object that is required for any MIDI output functionality.
+    pub async fn new_async(client_name: &str) -> Result<Self, InitError> {
+        MidiOutputImpl::new_async(client_name)
+            .await
+            .map(|imp| MidiOutput { imp })
     }
 
     /// Get a collection of all MIDI output ports that *midir* can connect to.

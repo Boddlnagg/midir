@@ -7,6 +7,7 @@
 use js_sys::{Map, Promise, Uint8Array};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::JsFuture;
 use web_sys::{MidiAccess, MidiMessageEvent, MidiOptions};
 
 use std::cell::RefCell;
@@ -20,74 +21,88 @@ thread_local! {
 }
 
 struct Static {
-    pub access: Option<MidiAccess>,
-    pub request: Option<Promise>,
-    pub ever_requested: bool,
+    access: Option<MidiAccess>,
+    sync_request: Option<SyncRequest>,
+}
 
-    pub on_ok: Closure<dyn FnMut(JsValue)>,
-    pub on_err: Closure<dyn FnMut(JsValue)>,
+struct SyncRequest {
+    _on_resolve: Closure<dyn FnMut(JsValue)>,
+    _on_reject: Closure<dyn FnMut(JsValue)>,
+    _promise: Promise,
+}
+
+impl SyncRequest {
+    fn new() -> Result<Self, InitError> {
+        let on_resolve = Closure::new(|val: JsValue| Static::set_midi_access(val.dyn_into().ok()));
+        let on_reject = Closure::new(|_err: JsValue| Static::set_midi_access(None));
+
+        let promise = create_midi_access_request()?.then2(&on_resolve, &on_reject);
+
+        Ok(Self {
+            _on_resolve: on_resolve,
+            _on_reject: on_reject,
+            _promise: promise,
+        })
+    }
 }
 
 impl Static {
-    pub fn new() -> Self {
-        let mut s = Self {
+    fn new() -> Self {
+        Self {
             access: None,
-            request: None,
-            ever_requested: false,
-
-            on_ok: Closure::wrap(Box::new(|access| {
-                STATIC.with(|s| {
-                    let mut s = s.borrow_mut();
-                    let access: MidiAccess = access.dyn_into().unwrap();
-                    s.request = None;
-                    s.access = Some(access);
-                });
-            })),
-            on_err: Closure::wrap(Box::new(|_error| {
-                STATIC.with(|s| {
-                    let mut s = s.borrow_mut();
-                    s.request = None;
-                });
-            })),
-        };
-        // Some notes on sysex behavior:
-        //  1) Some devices (but not all!) may work without sysex
-        //  2) Chrome will only prompt the end user to grant permission if they requested sysex permissions for now...
-        //      but that's changing soon for "security reasons" (reduced fingerprinting? poorly tested drivers?):
-        //      https://www.chromestatus.com/feature/5138066234671104
-        //
-        //  I've chosen to hardcode sysex=true here, since that'll be compatible with more devices, *and* should change
-        //  less behavior when Chrome's changes land.
-        s.request_midi_access(true);
-        s
+            sync_request: None,
+        }
     }
 
-    fn request_midi_access(&mut self, sysex: bool) {
-        self.ever_requested = true;
-        if self.access.is_some() {
-            return;
-        } // Already have access
-        if self.request.is_some() {
-            return;
-        } // Mid-request already
-        let window = if let Some(w) = web_sys::window() {
-            w
-        } else {
-            return;
-        };
-
-        let _request = match window
-            .navigator()
-            .request_midi_access_with_options(MidiOptions::new().sysex(sysex))
-        {
-            Ok(p) => {
-                self.request = Some(p.then2(&self.on_ok, &self.on_err));
-            }
-            Err(_) => {
-                return;
-            } // node.js? brower doesn't support webmidi? other?
-        };
+    fn set_midi_access(access: Option<MidiAccess>) {
+        STATIC.with(|s| {
+            let mut s = s.borrow_mut();
+            s.access = access;
+            s.sync_request = None;
+        });
     }
+}
+
+fn create_midi_access_request() -> Result<Promise, InitError> {
+    let window = web_sys::window().ok_or(InitError)?;
+
+    let options = MidiOptions::new();
+
+    // Some notes on sysex behavior:
+    //  1) Some devices (but not all!) may work without sysex
+    //  2) Chrome will only prompt the end user to grant permission if they requested sysex permissions for now...
+    //      but that's changing soon for "security reasons" (reduced fingerprinting? poorly tested drivers?):
+    //      https://www.chromestatus.com/feature/5138066234671104
+    //
+    //  I've chosen to hardcode sysex=true here, since that'll be compatible with more devices, *and* should change
+    //  less behavior when Chrome's changes land.
+    options.set_sysex(true);
+
+    window
+        .navigator()
+        .request_midi_access_with_options(&options)
+        .map_err(|_| InitError)
+}
+
+fn initialize_midi_sync() -> Result<(), InitError> {
+    STATIC.with(|s| {
+        let mut s = s.borrow_mut();
+
+        // ensure we still need to request access
+        if s.access.is_none() && s.sync_request.is_none() {
+            s.sync_request = Some(SyncRequest::new()?);
+        }
+
+        Ok(())
+    })
+}
+
+async fn initialize_midi_async() -> Result<(), InitError> {
+    let promise = create_midi_access_request()?;
+    let value = JsFuture::from(promise).await.map_err(|_| InitError)?;
+    let access = value.dyn_into().map_err(|_| InitError)?;
+    Static::set_midi_access(Some(access));
+    Ok(())
 }
 
 #[derive(Clone, PartialEq)]
@@ -107,7 +122,14 @@ pub struct MidiInput {
 
 impl MidiInput {
     pub fn new(_client_name: &str) -> Result<Self, InitError> {
-        STATIC.with(|_| {});
+        initialize_midi_sync()?;
+        Ok(MidiInput {
+            ignore_flags: Ignore::None,
+        })
+    }
+
+    pub async fn new_async(_client_name: &str) -> Result<Self, InitError> {
+        initialize_midi_async().await?;
         Ok(MidiInput {
             ignore_flags: Ignore::None,
         })
@@ -239,7 +261,12 @@ pub struct MidiOutput {}
 
 impl MidiOutput {
     pub fn new(_client_name: &str) -> Result<Self, InitError> {
-        STATIC.with(|_| {});
+        initialize_midi_sync()?;
+        Ok(MidiOutput {})
+    }
+
+    pub async fn new_async(_client_name: &str) -> Result<Self, InitError> {
+        initialize_midi_async().await?;
         Ok(MidiOutput {})
     }
 
