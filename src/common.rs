@@ -244,6 +244,7 @@ impl MidiOutput {
     }
 
     /// Creates a new `MidiOutput` object that is required for any MIDI output functionality.
+    /// This asynchronous constructor falls back to the synchronous `new` method for all backends except for `webmidi`.
     pub async fn new_async(client_name: &str) -> Result<Self, InitError> {
         MidiOutputImpl::new_async(client_name)
             .await
