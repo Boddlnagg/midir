@@ -82,7 +82,6 @@ async fn run() -> Result<(), Box<dyn Error>> {
         let _ = conn_out.send(&[NOTE_OFF_MSG, midi_note, VELOCITY]);
     }
 
-    // sleep(Duration::from_millis(150));
     println!("\nClosing connection");
 
     // This is optional, the connection would automatically be closed as soon as it goes out of scope
