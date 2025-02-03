@@ -124,8 +124,8 @@ jobs:
     #- bash: cargo build --verbose --target wasm32-unknown-unknown --features "$FEATURES"
     #  displayName: Build
     - bash: |
-        cd examples/browser
-        wasm-pack build --target=no-modules --dev
+        cd examples/browser/read_input_async
+        wasm-pack build --target=web --dev
       displayName: Build WASM example program
     - bash: wasm-pack test --chrome
       displayName: Run WASM tests
