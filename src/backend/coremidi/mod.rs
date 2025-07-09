@@ -93,14 +93,17 @@ impl MidiInput {
             }
 
             let mut timestamp = p.timestamp();
-            if timestamp == 0 {
-                // this might happen for asnychronous sysex messages (?)
-                timestamp = unsafe { external::AudioGetCurrentHostTime() };
-            }
 
-            if !*continue_sysex {
-                message.timestamp =
-                    unsafe { external::AudioConvertHostTimeToNanos(timestamp) } as u64 / 1000;
+            if cfg!(not(target_os = "ios")) {
+                if timestamp == 0 {
+                    // this might happen for asnychronous sysex messages (?)
+                    timestamp = unsafe { external::AudioGetCurrentHostTime() };
+                }
+
+                if !*continue_sysex {
+                    message.timestamp =
+                        unsafe { external::AudioConvertHostTimeToNanos(timestamp) } as u64 / 1000;
+                }
             }
 
             let mut cur_byte = 0;
@@ -404,11 +407,12 @@ impl MidiOutputConnection {
     }
 
     pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
-        let send_time = if cfg!(feature = "coremidi_send_timestamped") {
-            unsafe { external::AudioGetCurrentHostTime() }
-        } else {
-            0
-        };
+        let send_time =
+            if cfg!(feature = "coremidi_send_timestamped") && cfg!(not(target_os = "ios")) {
+                unsafe { external::AudioGetCurrentHostTime() }
+            } else {
+                0
+            };
         let packets = PacketBuffer::new(send_time, message);
         match self.details {
             OutputConnectionDetails::Explicit(ref port, ref dest) => port
