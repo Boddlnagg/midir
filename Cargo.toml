@@ -43,7 +43,7 @@ coremidi = "0.8.0"
 coremidi = "0.8.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { version = "0.58", features = [
+windows = { version = ">=0.59.0,<=0.62", features = [
     "Win32_Foundation",
     "Win32_Media",
     "Win32_Media_Multimedia",
