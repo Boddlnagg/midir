@@ -255,7 +255,7 @@ pub struct MidiInputPort {
 
 impl MidiInputPort {
     pub fn id(&self) -> String {
-        format!("{}:out:{}", self.device_id, self.port_number)
+        format!("{}:in:{}", self.device_id, self.port_number)
     }
 }
 
@@ -519,7 +519,7 @@ pub struct MidiOutputPort {
 
 impl MidiOutputPort {
     pub fn id(&self) -> String {
-        format!("{}:in:{}", self.device_id, self.port_number)
+        format!("{}:out:{}", self.device_id, self.port_number)
     }
 }
 
