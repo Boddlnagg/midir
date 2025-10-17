@@ -2,6 +2,7 @@
 
 use std::ffi::{CStr, CString};
 use std::ops::Index;
+use std::os::raw::c_char;
 use std::{ptr, slice, str};
 
 use libc::{c_void, size_t};
@@ -64,25 +65,26 @@ impl Client {
     }
 
     pub fn get_midi_ports(&self, flags: PortFlags) -> PortInfos {
-        let ports_ptr = unsafe {
+        let raw: *mut *const c_char = unsafe {
             jack_get_ports(
                 self.p,
                 ptr::null_mut(),
-                JACK_DEFAULT_MIDI_TYPE.as_ptr() as *const _,
+                JACK_DEFAULT_MIDI_TYPE.as_ptr() as *const c_char,
                 flags.bits() as _,
             )
         };
-        let slice = if ports_ptr.is_null() {
+        let slice: &[*const c_char] = if raw.is_null() {
             &[]
         } else {
             unsafe {
-                let count = (0isize..)
-                    .find(|i| (*ports_ptr.offset(*i)).is_null())
-                    .unwrap() as usize;
-                slice::from_raw_parts(ports_ptr, count)
+                let mut n = 0usize;
+                while !(*raw.add(n)).is_null() {
+                    n += 1;
+                }
+                slice::from_raw_parts(raw as *const *const c_char, n)
             }
         };
-        PortInfos { p: slice }
+        PortInfos { raw, p: slice }
     }
 
     pub fn register_midi_port(&mut self, name: &str, flags: PortFlags) -> Result<MidiPort, ()> {
@@ -144,16 +146,11 @@ impl Drop for Client {
     }
 }
 
-#[cfg(not(any(target_arch = "aarch64", target_arch = "arm")))]
-type PortInfo = i8;
-
-#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
-type PortInfo = u8;
-
 pub struct PortInfos<'a> {
-    p: &'a [*const PortInfo],
+    // Returned by jack_get_ports (NULL-terminated array), needs to be freed with jack_free
+    raw: *mut *const c_char,
+    p: &'a [*const c_char],
 }
-
 unsafe impl<'a> Send for PortInfos<'a> {}
 
 impl<'a> PortInfos<'a> {
@@ -162,7 +159,7 @@ impl<'a> PortInfos<'a> {
     }
 
     pub fn get_c_name(&self, index: usize) -> &CStr {
-        let ptr = self.p[index];
+        let ptr: *const c_char = self.p[index];
         unsafe { CStr::from_ptr(ptr) }
     }
 }
@@ -180,8 +177,8 @@ impl<'a> Index<usize> for PortInfos<'a> {
 
 impl<'a> Drop for PortInfos<'a> {
     fn drop(&mut self) {
-        if self.p.len() > 0 {
-            unsafe { jack_free(self.p.as_ptr() as *mut _) }
+        if !self.raw.is_null() {
+            unsafe { jack_free(self.raw as *mut _) }
         }
     }
 }
