@@ -506,8 +506,8 @@ impl<T> MidiInputConnection<T> {
         }
 
         // Close the trigger fds
-        drop(handler_data.trigger_rcv_fd.take());
-        drop(self.trigger_send_fd.take());
+        handler_data.trigger_rcv_fd = None;
+        self.trigger_send_fd = None;
 
         // Stop and free the input queue
         if !cfg!(feature = "avoid_timestamping") {
