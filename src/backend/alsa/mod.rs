@@ -153,15 +153,30 @@ pub struct MidiInputConnection<T: 'static> {
     subscription: Option<PortSubscribe>,
     thread: Option<JoinHandle<(HandlerData<T>, T)>>,
     vport: i32, // TODO: probably port numbers are only u8, therefore could use Option<u8>
-    trigger_send_fd: i32,
+    trigger_send_fd: Option<PipeFd>,
 }
 
 struct HandlerData<T: 'static> {
     ignore_flags: Ignore,
     seq: Seq,
-    trigger_rcv_fd: i32,
+    trigger_rcv_fd: Option<PipeFd>,
     callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send>,
     queue_id: i32, // an input queue is needed to get timestamped events
+}
+
+#[repr(transparent)]
+struct PipeFd(i32);
+
+impl PipeFd {
+    fn get(&self) -> i32 {
+        self.0
+    }
+}
+
+impl Drop for PipeFd {
+    fn drop(&mut self) {
+        unsafe { libc::close(self.0); }
+    }
 }
 
 impl MidiInput {
@@ -226,13 +241,14 @@ impl MidiInput {
         queue_id
     }
 
-    fn init_trigger(&mut self) -> Result<[i32; 2], ()> {
+    fn init_trigger(&mut self) -> Result<(PipeFd, PipeFd), ()> {
         let mut trigger_fds = [-1, -1];
 
         if unsafe { libc::pipe(trigger_fds.as_mut_ptr()) } == -1 {
             Err(())
         } else {
-            Ok(trigger_fds)
+            // first element: receiver, second element: sender
+            Ok((PipeFd(trigger_fds[0]), PipeFd(trigger_fds[1])))
         }
     }
 
@@ -335,7 +351,7 @@ impl MidiInput {
         let handler_data = HandlerData {
             ignore_flags: self.ignore_flags,
             seq: self.seq.take().unwrap(),
-            trigger_rcv_fd: trigger_fds[0],
+            trigger_rcv_fd: Some(trigger_fds.0),
             callback: Box::new(callback),
             queue_id: queue_id,
         };
@@ -362,7 +378,7 @@ impl MidiInput {
             subscription: Some(subscription),
             thread: Some(thread),
             vport: vport,
-            trigger_send_fd: trigger_fds[1],
+            trigger_send_fd: Some(trigger_fds.1),
         })
     }
 
@@ -414,7 +430,7 @@ impl MidiInput {
         let handler_data = HandlerData {
             ignore_flags: self.ignore_flags,
             seq: self.seq.take().unwrap(),
-            trigger_rcv_fd: trigger_fds[0],
+            trigger_rcv_fd: Some(trigger_fds.0),
             callback: Box::new(callback),
             queue_id: queue_id,
         };
@@ -439,7 +455,7 @@ impl MidiInput {
             subscription: None,
             thread: Some(thread),
             vport: vport,
-            trigger_send_fd: trigger_fds[1],
+            trigger_send_fd: Some(trigger_fds.1),
         })
     }
 }
@@ -462,7 +478,7 @@ impl<T> MidiInputConnection<T> {
         // Request the thread to stop.
         let _res = unsafe {
             libc::write(
-                self.trigger_send_fd,
+                self.trigger_send_fd.as_ref().expect("send_fd already taken").get(),
                 &false as *const bool as *const _,
                 mem::size_of::<bool>() as libc::size_t,
             )
@@ -470,7 +486,7 @@ impl<T> MidiInputConnection<T> {
 
         let thread = self.thread.take().unwrap();
         // Join the thread to get the handler_data back
-        let (handler_data, user_data) = match thread.join() {
+        let (mut handler_data, user_data) = match thread.join() {
             Ok(data) => data,
             // TODO: handle this more gracefully?
             Err(e) => {
@@ -489,11 +505,9 @@ impl<T> MidiInputConnection<T> {
                 .unsubscribe_port(subscription.get_sender(), subscription.get_dest());
         }
 
-        // Close the trigger fds (TODO: make sure that these are closed even in the presence of panic in thread)
-        unsafe {
-            libc::close(handler_data.trigger_rcv_fd);
-            libc::close(self.trigger_send_fd);
-        }
+        // Close the trigger fds
+        handler_data.trigger_rcv_fd = None;
+        self.trigger_send_fd = None;
 
         // Stop and free the input queue
         if !cfg!(feature = "avoid_timestamping") {
@@ -755,7 +769,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
     let poll_desc_info = (&data.seq, Some(Direction::Capture));
     let mut poll_fds = vec![INVALID_POLLFD; poll_desc_info.count() + 1];
     poll_fds[0] = pollfd {
-        fd: data.trigger_rcv_fd,
+        fd: data.trigger_rcv_fd.as_ref().unwrap().get(),
         events: libc::POLLIN,
         revents: 0,
     };
