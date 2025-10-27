@@ -2,6 +2,10 @@
 
 All major changes to this project will be documented in this file.
 
+## [0.10.3] 2025-10-27
+- Fix UB in WinMM backend ([#137](https://github.com/Boddlnagg/midir/issues/137) - thanks @barafael)
+- Fix file descriptor leak in ALSA backend ([#175](https://github.com/Boddlnagg/midir/pull/175) - thanks @abique)
+
 ## [0.10.2] 2025-08-07
 - Support iOS by disabling timestamping there ([#170](https://github.com/Boddlnagg/midir/pull/170) - thanks @joe-noel-dev)
 
