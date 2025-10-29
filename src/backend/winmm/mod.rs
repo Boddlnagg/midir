@@ -67,7 +67,7 @@ pub struct MidiInputPort {
 
 impl MidiInputPort {
     pub fn id(&self) -> String {
-        String::from_utf16_lossy(&self.interface_id)
+        String::from_utf16_lossy(&self.interface_id[..self.interface_id.len() - 1])
     }
 }
 
@@ -86,6 +86,7 @@ impl MidiInputPort {
         unsafe { midiInGetNumDevs() }
     }
 
+    /// Queries the interface ID. The result contains a terminating zero.
     fn interface_id(port_number: UINT) -> Result<Box<[u16]>, PortInfoError> {
         let mut buffer_size: ULONG = 0;
         let result = unsafe {
@@ -117,6 +118,7 @@ impl MidiInputPort {
             buffer.set_len(buffer_size as usize / 2);
         }
         //println!("{}", from_wide_ptr(buffer.as_ptr(), buffer.len()).to_string_lossy().into_owned());
+        assert!(buffer.last().cloned() == Some(0));
         Ok(buffer.into_boxed_slice())
     }
 
@@ -404,7 +406,7 @@ pub struct MidiOutputPort {
 
 impl MidiOutputPort {
     pub fn id(&self) -> String {
-        String::from_utf16_lossy(&self.interface_id)
+        String::from_utf16_lossy(&self.interface_id[..self.interface_id.len() - 1])
     }
 }
 
@@ -425,6 +427,7 @@ impl MidiOutputPort {
         unsafe { midiOutGetNumDevs() }
     }
 
+    /// Queries the interface ID. The result contains a terminating zero.
     fn interface_id(port_number: UINT) -> Result<Box<[u16]>, PortInfoError> {
         let mut buffer_size: ULONG = 0;
         let result = unsafe {
@@ -456,6 +459,7 @@ impl MidiOutputPort {
             buffer.set_len(buffer_size as usize / 2);
         }
         //println!("{}", from_wide_ptr(buffer.as_ptr(), buffer.len()).to_string_lossy().into_owned());
+        assert!(buffer.last().cloned() == Some(0));
         Ok(buffer.into_boxed_slice())
     }
 

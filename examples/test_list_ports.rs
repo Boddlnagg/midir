@@ -20,12 +20,12 @@ fn run() -> Result<(), Box<dyn Error>> {
     loop {
         println!("Available input ports:");
         for (i, p) in midi_in.ports().iter().enumerate() {
-            println!("{}: {}", i, midi_in.port_name(p)?);
+            println!("{}: {} (ID: \"{}\")", i, midi_in.port_name(p)?, p.id());
         }
 
         println!("\nAvailable output ports:");
         for (i, p) in midi_out.ports().iter().enumerate() {
-            println!("{}: {}", i, midi_out.port_name(p)?);
+            println!("{}: {} (ID: \"{}\")", i, midi_out.port_name(p)?, p.id());
         }
 
         // run in endless loop if "--loop" parameter is specified
