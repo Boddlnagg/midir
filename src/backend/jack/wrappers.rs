@@ -19,6 +19,7 @@ use jack_sys::{
 pub const JACK_DEFAULT_MIDI_TYPE: &[u8] = b"8 bit raw midi\0";
 
 bitflags! {
+    #[derive(Debug, Copy, PartialEq, Eq, Clone, PartialOrd, Ord, Hash)]
     pub struct JackOpenOptions: u32 {
         const NoStartServer = 1;
         const UseExactName = 2;
@@ -28,6 +29,7 @@ bitflags! {
 }
 
 bitflags! {
+    #[derive(Debug, Copy, PartialEq, Eq, Clone, PartialOrd, Ord, Hash)]
     pub struct PortFlags: u32 {
         const PortIsInput = 1;
         const PortIsOutput = 2;
