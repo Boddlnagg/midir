@@ -37,6 +37,10 @@ impl MidiInput {
         })
     }
 
+    pub async fn new_async(client_name: &str) -> Result<Self, InitError> {
+        Self::new(client_name)
+    }
+
     pub fn ignore(&mut self, flags: Ignore) {
         self.ignore_flags = flags;
     }
@@ -211,6 +215,10 @@ impl MidiOutput {
         Ok(MidiOutput {
             selector: device_selector,
         })
+    }
+
+    pub async fn new_async(client_name: &str) -> Result<Self, InitError> {
+        Self::new(client_name)
     }
 
     pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiOutputPort> {

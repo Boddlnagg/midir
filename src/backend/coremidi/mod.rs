@@ -55,6 +55,10 @@ impl MidiInput {
         }
     }
 
+    pub async fn new_async(client_name: &str) -> Result<Self, InitError> {
+        Self::new(client_name)
+    }
+
     pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiInputPort> {
         Sources
             .into_iter()
@@ -332,6 +336,10 @@ impl MidiOutput {
             Ok(cl) => Ok(MidiOutput { client: cl }),
             Err(_) => Err(InitError),
         }
+    }
+
+    pub async fn new_async(client_name: &str) -> Result<Self, InitError> {
+        Self::new(client_name)
     }
 
     pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiOutputPort> {
