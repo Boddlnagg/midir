@@ -1,6 +1,6 @@
 use parking_lot::ReentrantMutex as Mutex;
 use std::alloc::{alloc, dealloc, Layout};
-use std::ffi::OsString;
+use std::ffi::{c_void, OsString};
 use std::io::{stderr, Write};
 use std::mem::MaybeUninit;
 use std::os::windows::ffi::OsStringExt;
@@ -91,10 +91,10 @@ impl MidiInputPort {
         let mut buffer_size: ULONG = 0;
         let result = unsafe {
             midiInMessage(
-                HMIDIIN(port_number as isize),
+                Some(HMIDIIN(port_number as *mut c_void)),
                 DRV_QUERYDEVICEINTERFACESIZE,
-                &mut buffer_size as *mut _ as DWORD_PTR,
-                0,
+                Some(&mut buffer_size as *mut _ as DWORD_PTR),
+                None,
             )
         };
         if result == MMSYSERR_BADDEVICEID {
@@ -105,10 +105,10 @@ impl MidiInputPort {
         let mut buffer = Vec::<u16>::with_capacity(buffer_size as usize / 2);
         unsafe {
             let result = midiInMessage(
-                HMIDIIN(port_number as isize),
+                Some(HMIDIIN(port_number as *mut c_void)),
                 DRV_QUERYDEVICEINTERFACE,
-                buffer.as_mut_ptr() as usize,
-                buffer_size as DWORD_PTR,
+                Some(buffer.as_mut_ptr() as usize),
+                Some(buffer_size as DWORD_PTR),
             );
             if result == MMSYSERR_BADDEVICEID {
                 return Err(PortInfoError::PortNumberOutOfRange);
@@ -250,8 +250,8 @@ impl MidiInput {
             midiInOpen(
                 in_handle.as_mut_ptr(),
                 port_number as UINT,
-                handler::handle_input::<T> as DWORD_PTR,
-                handler_data_ptr as DWORD_PTR,
+                Some(handler::handle_input::<T> as DWORD_PTR),
+                Some(handler_data_ptr as DWORD_PTR),
                 CALLBACK_FUNCTION,
             )
         };
@@ -432,10 +432,10 @@ impl MidiOutputPort {
         let mut buffer_size: ULONG = 0;
         let result = unsafe {
             midiOutMessage(
-                HMIDIOUT(port_number as isize),
+                Some(HMIDIOUT(port_number as *mut c_void)),
                 DRV_QUERYDEVICEINTERFACESIZE,
-                &mut buffer_size as *mut _ as DWORD_PTR,
-                0,
+                Some(&mut buffer_size as *mut _ as DWORD_PTR),
+                None,
             )
         };
         if result == MMSYSERR_BADDEVICEID {
@@ -446,10 +446,10 @@ impl MidiOutputPort {
         let mut buffer = Vec::<u16>::with_capacity(buffer_size as usize / 2);
         unsafe {
             let result = midiOutMessage(
-                HMIDIOUT(port_number as isize),
+                Some(HMIDIOUT(port_number as *mut c_void)),
                 DRV_QUERYDEVICEINTERFACE,
-                buffer.as_mut_ptr() as DWORD_PTR,
-                buffer_size as DWORD_PTR,
+                Some(buffer.as_mut_ptr() as DWORD_PTR),
+                Some(buffer_size as DWORD_PTR),
             );
             if result == MMSYSERR_BADDEVICEID {
                 return Err(PortInfoError::PortNumberOutOfRange);
@@ -549,8 +549,8 @@ impl MidiOutput {
             midiOutOpen(
                 out_handle.as_mut_ptr(),
                 port_number as UINT,
-                0,
-                0,
+                None,
+                None,
                 CALLBACK_NULL,
             )
         };

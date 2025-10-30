@@ -8,7 +8,7 @@ use windows::core::HSTRING;
 use windows::{
     Devices::Enumeration::DeviceInformation,
     Devices::Midi::*,
-    Foundation::{EventRegistrationToken, TypedEventHandler},
+    Foundation::TypedEventHandler,
     Storage::Streams::{DataReader, DataWriter},
 };
 
@@ -44,7 +44,7 @@ impl MidiInput {
     pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiInputPort> {
         let device_collection = DeviceInformation::FindAllAsyncAqsFilter(&self.selector)
             .unwrap()
-            .get()
+            .join()
             .expect("FindAllAsyncAqsFilter failed");
         let count = device_collection.Size().expect("Size failed") as usize;
         let mut result = Vec::with_capacity(count);
@@ -60,7 +60,7 @@ impl MidiInput {
     pub fn port_count(&self) -> usize {
         let device_collection = DeviceInformation::FindAllAsyncAqsFilter(&self.selector)
             .unwrap()
-            .get()
+            .join()
             .expect("FindAllAsyncAqsFilter failed");
         device_collection.Size().expect("Size failed") as usize
     }
@@ -69,7 +69,7 @@ impl MidiInput {
         let device_info_async = DeviceInformation::CreateFromIdAsync(&port.id)
             .map_err(|_| PortInfoError::InvalidPort)?;
         let device_info = device_info_async
-            .get()
+            .join()
             .map_err(|_| PortInfoError::InvalidPort)?;
         let device_name = device_info
             .Name()
@@ -113,7 +113,7 @@ impl MidiInput {
         F: FnMut(u64, &[u8], &mut T) + Send + 'static,
     {
         let in_port = match MidiInPort::FromIdAsync(&port.id) {
-            Ok(port_async) => match port_async.get() {
+            Ok(port_async) => match port_async.join() {
                 Ok(port) => port,
                 _ => return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self)),
             },
@@ -129,7 +129,7 @@ impl MidiInput {
 
         type Handler = TypedEventHandler<MidiInPort, MidiMessageReceivedEventArgs>;
         let handler = Handler::new(
-            move |_sender, args: &Option<MidiMessageReceivedEventArgs>| {
+            move |_sender, args: windows::core::Ref<'_, MidiMessageReceivedEventArgs>| {
                 MidiInput::handle_input(
                     args.as_ref()
                         .expect("MidiMessageReceivedEventArgs were null"),
@@ -155,7 +155,7 @@ unsafe impl Send for RtMidiInPort {}
 
 pub struct MidiInputConnection<T> {
     port: RtMidiInPort,
-    event_token: EventRegistrationToken,
+    event_token: i64,
     // TODO: get rid of Arc & Mutex?
     //       synchronization is required because the borrow checker does not
     //       know that the callback we're in here is never called concurrently
@@ -216,7 +216,7 @@ impl MidiOutput {
     pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiOutputPort> {
         let device_collection = DeviceInformation::FindAllAsyncAqsFilter(&self.selector)
             .unwrap()
-            .get()
+            .join()
             .expect("FindAllAsyncAqsFilter failed");
         let count = device_collection.Size().expect("Size failed") as usize;
         let mut result = Vec::with_capacity(count);
@@ -232,7 +232,7 @@ impl MidiOutput {
     pub fn port_count(&self) -> usize {
         let device_collection = DeviceInformation::FindAllAsyncAqsFilter(&self.selector)
             .unwrap()
-            .get()
+            .join()
             .expect("FindAllAsyncAqsFilter failed");
         device_collection.Size().expect("Size failed") as usize
     }
@@ -241,7 +241,7 @@ impl MidiOutput {
         let device_info_async = DeviceInformation::CreateFromIdAsync(&port.id)
             .map_err(|_| PortInfoError::InvalidPort)?;
         let device_info = device_info_async
-            .get()
+            .join()
             .map_err(|_| PortInfoError::InvalidPort)?;
         let device_name = device_info
             .Name()
@@ -255,7 +255,7 @@ impl MidiOutput {
         _port_name: &str,
     ) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
         let out_port = match MidiOutPort::FromIdAsync(&port.id) {
-            Ok(port_async) => match port_async.get() {
+            Ok(port_async) => match port_async.join() {
                 Ok(port) => port,
                 _ => return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self)),
             },
