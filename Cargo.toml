@@ -71,3 +71,13 @@ web-sys = { version = "0.3", features = [
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "0.2"
+
+# Android parts.
+[target.'cfg(target_os = "android")'.dependencies]
+jni = { version = "0.21", default-features = false }
+ndk-context = "0.1"
+jni-min-helper = "0.3"
+
+# is already provided by the NDK. (will show a link error below API 29)
+[target.'cfg(target_os = "android")'.build-dependencies]
+cc = "1.0"

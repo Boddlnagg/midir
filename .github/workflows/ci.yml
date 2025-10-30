@@ -1,0 +1,241 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: "**"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-stable:
+    name: Build (stable) — ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.allow_fail || false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Linux (ALSA), os: ubuntu-latest, target: x86_64-unknown-linux-gnu, features: "", setup: linux-alsa }
+          - { name: Linux (JACK), os: ubuntu-latest, target: x86_64-unknown-linux-gnu, features: "jack", setup: linux-jack }
+          - { name: Linux (WASM), os: ubuntu-latest, target: wasm32-unknown-unknown, features: "", setup: wasm }
+          - { name: Windows (MSVC / WinMM), os: windows-latest, target: x86_64-pc-windows-msvc, features: "", setup: windows-msvc }
+          - { name: Windows (MSVC / WinRT), os: windows-latest, target: x86_64-pc-windows-msvc, features: "winrt", setup: windows-msvc }
+          - { name: Windows (GNU i686 / WinMM), os: windows-latest, target: i686-pc-windows-gnu, features: "", setup: windows-gnu }
+          - { name: Windows (GNU i686 / WinRT), os: windows-latest, target: i686-pc-windows-gnu, features: "winrt", setup: windows-gnu, allow_fail: true }
+          - { name: macOS (CoreMIDI), os: macos-latest, target: "", features: "", setup: macos }
+          - { name: macOS (JACK), os: macos-latest, target: "", features: "jack", setup: macos-jack, allow_fail: true }
+          - { name: iOS (Mac Catalyst aarch64-apple-ios-macabi), os: macos-latest, target: aarch64-apple-ios-macabi, features: "", setup: ios-macabi }
+          - { name: Linux (aarch64-unknown-linux-gnu), os: ubuntu-latest, target: aarch64-unknown-linux-gnu, features: "", setup: linux-aarch64 }
+          - { name: Windows (ARM64 MSVC), os: windows-latest, target: aarch64-pc-windows-msvc, features: "", setup: windows-msvc }
+          - { name: Android (aarch64/armv7/x86_64/i686; API 29), os: ubuntu-latest, target: "", features: "", setup: android }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: true
+
+      - name: Setup Linux dependencies
+        if: runner.os == 'Linux' && matrix.setup != 'linux-aarch64' && matrix.setup != 'wasm' && matrix.setup != 'android'
+        run: |
+          sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
+          if [[ "${{ matrix.setup }}" == "linux-jack" ]]; then
+            sudo apt-get install -y libjack-jackd2-dev
+          fi
+
+      - name: Setup WASM
+        if: matrix.setup == 'wasm'
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install Chrome for WASM tests
+        if: matrix.setup == 'wasm'
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+          install-dependencies: true
+
+      - name: Install wasm-pack
+        if: matrix.setup == 'wasm'
+        run: curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh -s -- -f
+
+      - name: Setup Linux aarch64 (cross-compile)
+        if: matrix.setup == 'linux-aarch64'
+        run: |
+          set -euxo pipefail
+          rustup target add aarch64-unknown-linux-gnu
+
+          sudo dpkg --add-architecture arm64
+          cat <<'EOF' | sudo tee /etc/apt/sources.list.d/ubuntu-arm64.sources
+          Types: deb
+          URIs: http://ports.ubuntu.com/ubuntu-ports
+          Suites: noble noble-updates noble-backports noble-security
+          Components: main restricted universe multiverse
+          Architectures: arm64
+          EOF
+          sudo sed -Ei 's|^Types: deb|Types: deb\nArchitectures: amd64|' \
+              /etc/apt/sources.list.d/ubuntu.sources
+
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            libc6-dev-arm64-cross \
+            pkg-config \
+            libasound2-dev:arm64 \
+            libjack-jackd2-dev:arm64
+
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig" >> $GITHUB_ENV
+
+      - name: Setup Windows MSVC toolchain
+        if: matrix.setup == 'windows-msvc'
+        run: |
+          rustup update stable
+          if [ -n "${{ matrix.target }}" ]; then rustup target add ${{ matrix.target }}; fi
+        shell: bash
+
+      - name: Setup Windows GNU toolchain
+        if: matrix.setup == 'windows-gnu'
+        uses: msys2/setup-msys2@v2
+        with:
+          install: >-
+            base-devel
+            mingw-w64-i686-toolchain
+          msystem: MINGW32
+          update: true
+
+      - name: Setup macOS JACK
+        if: matrix.setup == 'macos-jack'
+        run: |
+          brew install jack
+          echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig" >> $GITHUB_ENV
+
+      - name: Start JACK (macOS)
+        if: matrix.setup == 'macos-jack'
+        run: |
+          jackd -d dummy >/tmp/jack.log 2>&1 & disown
+          sleep 2
+
+      - name: Setup iOS (Mac Catalyst)
+        if: matrix.setup == 'ios-macabi'
+        run: rustup target add aarch64-apple-ios-macabi
+
+      - name: Setup Android NDK
+        if: matrix.setup == 'android'
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+          local-cache: true
+
+      - name: Export ANDROID_NDK_HOME for cargo-ndk
+        if: matrix.setup == 'android'
+        run: echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME:-$NDK_HOME}" >> $GITHUB_ENV
+
+      - name: Install cargo-ndk and Android targets
+        if: matrix.setup == 'android'
+        run: |
+          cargo install cargo-ndk --locked
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
+
+      - name: Build (standard)
+        if: matrix.setup != 'windows-gnu' && matrix.setup != 'android' && matrix.setup != 'wasm'
+        run: |
+          if [ -n "${{ matrix.target }}" ]; then
+            cargo build --verbose --target ${{ matrix.target }} ${{ matrix.features && format('--features {0}', matrix.features) }}
+          else
+            cargo build --verbose ${{ matrix.features && format('--features {0}', matrix.features) }}
+          fi
+        shell: bash
+
+      - name: Build (Windows GNU)
+        if: matrix.setup == 'windows-gnu'
+        shell: msys2 {0}
+        run: |
+          export PATH="$(cygpath -u "$USERPROFILE")/.cargo/bin:$PATH"
+          rustup update stable
+          rustup target add ${{ matrix.target }}
+          export CARGO_TARGET_I686_PC_WINDOWS_GNU_LINKER=i686-w64-mingw32-gcc
+          export CARGO_TARGET_I686_PC_WINDOWS_GNU_AR=i686-w64-mingw32-ar
+          cargo build --verbose --target ${{ matrix.target }} ${{ matrix.features && format('--features {0}', matrix.features) }}
+
+      - name: Build (Android via cargo-ndk, API 29)
+        if: matrix.setup == 'android'
+        run: |
+          cargo ndk \
+            --platform 29 \
+            --target aarch64-linux-android \
+            --target armv7-linux-androideabi \
+            --target x86_64-linux-android \
+            --target i686-linux-android \
+            build --verbose
+
+      - name: Build WASM
+        if: matrix.setup == 'wasm'
+        run: cargo build --verbose --target wasm32-unknown-unknown ${{ matrix.features && format('--features {0}', matrix.features) }}
+
+      - name: Build WASM example (browser)
+        if: matrix.setup == 'wasm' && hashFiles('examples/browser/Cargo.toml') != ''
+        run: |
+          cd examples/browser
+          wasm-pack build --target=no-modules --dev
+
+      - name: Test WASM
+        if: matrix.setup == 'wasm'
+        run: wasm-pack test --chrome --headless
+
+      - name: Start JACK (Linux)
+        if: runner.os == 'Linux' && matrix.setup == 'linux-jack'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jackd2
+          jackd -d dummy >/tmp/jack.log 2>&1 & disown
+          sleep 2
+        shell: bash
+
+      - name: Test (Linux JACK)
+        if: runner.os == 'Linux' && matrix.setup == 'linux-jack'
+        run: cargo test --verbose ${{ matrix.features && format('--features {0}', matrix.features) }}
+        shell: bash
+
+      - name: Test (Linux ALSA with gating)
+        if: runner.os == 'Linux' && matrix.setup == 'linux-alsa'
+        run: |
+          FEATURES='${{ matrix.features && format('--features {0}', matrix.features) }}'
+          if [ -e /dev/snd/seq ]; then
+            echo "ALSA sequencer present; running full tests"
+            cargo test --verbose ${FEATURES}
+          else
+            echo "ALSA sequencer not available; skipping end_to_end"
+            cargo test --verbose ${FEATURES} -- --skip end_to_end
+          fi
+        shell: bash
+
+      - name: Test (non-Linux hosted targets)
+        if: >
+          runner.os != 'Linux' &&
+          (matrix.target == '' ||
+           matrix.target == 'x86_64-pc-windows-msvc' ||
+           startsWith(matrix.name, 'macOS')) &&
+          matrix.setup != 'windows-gnu'
+        run: cargo test --verbose ${{ matrix.features && format('--features {0}', matrix.features) }}
+
+      - name: Test (Windows GNU)
+        if: matrix.setup == 'windows-gnu'
+        shell: msys2 {0}
+        run: |
+          export PATH="$(cygpath -u "$USERPROFILE")/.cargo/bin:$PATH"
+          export CARGO_TARGET_I686_PC_WINDOWS_GNU_LINKER=i686-w64-mingw32-gcc
+          export CARGO_TARGET_I686_PC_WINDOWS_GNU_AR=i686-w64-mingw32-ar
+          cargo test --verbose --target ${{ matrix.target }} ${{ matrix.features && format('--features {0}', matrix.features) }}

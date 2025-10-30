@@ -37,3 +37,8 @@ pub use self::jack::*;
 mod webmidi;
 #[cfg(target_arch = "wasm32")]
 pub use self::webmidi::*;
+
+#[cfg(target_os = "android")]
+mod android;
+#[cfg(target_os = "android")]
+pub use self::android::*;

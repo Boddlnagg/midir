@@ -7,15 +7,25 @@ Cross-platform, realtime MIDI processing in Rust.
 
 <sup>* With the exception of message queues, but these can be implemented on top of callbacks using e.g. Rust's channels.</sup>
 
-**midir** currently supports the following platforms/backends: 
+**midir** currently supports the following platforms/backends:
 - [x] ALSA (Linux)
 - [x] WinMM (Windows)
 - [x] CoreMIDI (macOS, iOS)
 - [x] WinRT (Windows 8+), enable the `winrt` feature
 - [x] Jack (Linux, macOS), enable the `jack` feature
 - [x] Web MIDI (Chrome, Opera, perhaps others browsers)
+- [x] Android (API 29+, NDK AMidi + JNI)
 
 A higher-level API for parsing and assembling MIDI messages might be added in the future.
 
 ## Documentation & Example
 API docs can be found at [docs.rs](https://docs.rs/crate/midir/). You can find some examples in the [`examples`](examples/) directory. Or simply run `cargo run --example test_play` after cloning this repository.
+
+### Android
+- Requires Android API 29+ and the Android NDK (r20b+).
+- Build (example, to remove before merging):
+  - Install: `cargo install cargo-ndk`
+  - Targets: `rustup target add aarch64-linux-android`
+  - Build: `cargo ndk -t arm64-v8a -o ./app/src/main/jniLibs build --release`
+- Permissions/features:
+  - Manifest should declare `<uses-feature android:name="android.software.midi" android:required="false" />` (not needed for USB/BLE MIDI).
