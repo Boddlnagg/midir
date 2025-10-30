@@ -93,7 +93,7 @@ impl MidiInput {
     }
 
     /// Get a MIDI input port by its unique identifier.
-    pub fn find_port_by_id(&self, id: String) -> Option<MidiInputPort> {
+    pub fn find_port_by_id(&self, id: &str) -> Option<MidiInputPort> {
         self.ports().into_iter().find(|port| port.id() == id)
     }
 
@@ -257,7 +257,7 @@ impl MidiOutput {
     }
 
     /// Get a MIDI output port by its unique identifier.
-    pub fn find_port_by_id(&self, id: String) -> Option<MidiOutputPort> {
+    pub fn find_port_by_id(&self, id: &str) -> Option<MidiOutputPort> {
         self.ports().into_iter().find(|port| port.id() == id)
     }
 
