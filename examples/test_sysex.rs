@@ -1,4 +1,5 @@
 fn main() {
+    env_logger::init();
     match example::run() {
         Ok(_) => (),
         Err(err) => println!("Error: {}", err),

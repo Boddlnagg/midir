@@ -1,5 +1,4 @@
 use std::ffi::{CStr, CString};
-use std::io::{stderr, Write};
 use std::mem;
 use std::thread::{Builder, JoinHandle};
 
@@ -7,6 +6,8 @@ use crate::{errors, Ignore, MidiMessage};
 
 use alsa::seq::{Addr, EventType, PortCap, PortInfo, PortSubscribe, PortType, QueueTempo};
 use alsa::{Direction, Seq};
+
+use log::{error, debug, log_enabled, Level};
 
 use errors::*;
 
@@ -824,46 +825,29 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
             let mut ev = match seq_input.event_input() {
                 Ok(ev) => ev,
                 Err(ref e) if e.errno() == libc::ENOSPC => {
-                    let _ = writeln!(
-                        stderr(),
-                        "\nError in handle_input: ALSA MIDI input buffer overrun!\n"
-                    );
+                    error!("Error in handle_input: ALSA MIDI input buffer overrun!");
                     continue;
                 }
                 Err(ref e) if e.errno() == libc::EAGAIN => {
-                    let _ = writeln!(
-                        stderr(),
-                        "\nError in handle_input: no input event from ALSA MIDI input buffer!\n"
-                    );
+                    error!("Error in handle_input: no input event from ALSA MIDI input buffer!");
                     continue;
                 }
                 Err(ref e) => {
-                    let _ = writeln!(
-                        stderr(),
-                        "\nError in handle_input: unknown ALSA MIDI input error ({})!\n",
-                        e
-                    );
-                    //perror("System reports");
+                    error!("Error in handle_input: unknown ALSA MIDI input error ({})!", e);
                     continue;
                 }
             };
 
             let do_decode = match ev.get_type() {
                 EventType::PortSubscribed => {
-                    if cfg!(debug) {
-                        println!("Notice from handle_input: ALSA port connection made!")
-                    };
+                    debug!("Notice from handle_input: ALSA port connection made!");
                     false
                 }
                 EventType::PortUnsubscribed => {
-                    if cfg!(debug) {
-                        let _ = writeln!(
-                            stderr(),
-                            "Notice from handle_input: ALSA port connection has closed!"
-                        );
+                    if log_enabled!(Level::Debug) {
+                        debug!("Notice from handle_input: ALSA port connection has closed!");
                         let connect = ev.get_data::<Connect>().unwrap();
-                        let _ = writeln!(
-                            stderr(),
+                        debug!(
                             "sender = {}:{}, dest = {}:{}",
                             connect.sender.client,
                             connect.sender.port,
