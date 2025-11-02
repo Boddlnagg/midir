@@ -1,4 +1,4 @@
-# midir [![crates.io](https://img.shields.io/crates/v/midir.svg)](https://crates.io/crates/midir) [![Build Status](https://dev.azure.com/Boddlnagg/midir/_apis/build/status/Boddlnagg.midir?branchName=master)](https://dev.azure.com/Boddlnagg/midir/_build/latest?definitionId=1)
+# midir [![crates.io](https://img.shields.io/crates/v/midir.svg)](https://crates.io/crates/midir)
 
 Cross-platform, realtime MIDI processing in Rust.
 
