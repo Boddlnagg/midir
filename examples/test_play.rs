@@ -6,6 +6,7 @@ use std::time::Duration;
 use midir::{MidiOutput, MidiOutputPort};
 
 fn main() {
+    env_logger::init();
     match run() {
         Ok(_) => (),
         Err(err) => println!("Error: {}", err),

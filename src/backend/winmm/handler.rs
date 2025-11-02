@@ -1,5 +1,6 @@
-use std::io::{stderr, Write};
 use std::{mem, slice};
+
+use log::error;
 
 use windows::Win32::Media::Audio::{midiInAddBuffer, HMIDIIN, MIDIHDR};
 use windows::Win32::Media::{MMSYSERR_NOERROR, MM_MIM_DATA, MM_MIM_LONGDATA, MM_MIM_LONGERROR};
@@ -100,10 +101,7 @@ pub extern "system" fn handle_input<T>(
             };
             drop(in_handle);
             if result != MMSYSERR_NOERROR {
-                let _ = writeln!(
-                    stderr(),
-                    "\nError in handle_input: Requeuing WinMM input sysex buffer failed.\n"
-                );
+                error!("Error in handle_input: Requeuing WinMM input sysex buffer failed.");
             }
 
             if data.ignore_flags.contains(Ignore::Sysex) {

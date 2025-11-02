@@ -4,6 +4,7 @@ use std::io::{stdin, stdout, Write};
 use midir::{Ignore, MidiIO, MidiInput, MidiOutput};
 
 fn main() {
+    env_logger::init();
     match run() {
         Ok(_) => (),
         Err(err) => println!("Error: {}", err),

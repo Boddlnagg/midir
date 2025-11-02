@@ -1,13 +1,14 @@
 use parking_lot::ReentrantMutex as Mutex;
 use std::alloc::{alloc, dealloc, Layout};
 use std::ffi::{c_void, OsString};
-use std::io::{stderr, Write};
 use std::mem::MaybeUninit;
 use std::os::windows::ffi::OsStringExt;
 use std::ptr::null_mut;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{mem, ptr, slice};
+
+use log::warn;
 
 use windows::core::PSTR;
 use windows::Win32::Media::Audio::{
@@ -378,7 +379,7 @@ impl<T> MidiInputConnection<T> {
             }
 
             if result != MMSYSERR_NOERROR {
-                let _ = writeln!(stderr(), "Warning: Ignoring error shutting down Windows MM input port (UnprepareHeader).");
+                warn!("Warning: Ignoring error shutting down Windows MM input port (UnprepareHeader).");
             }
         }
 
