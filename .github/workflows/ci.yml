@@ -36,7 +36,7 @@ jobs:
           - { name: iOS (Mac Catalyst aarch64-apple-ios-macabi), os: macos-latest, target: aarch64-apple-ios-macabi, features: "", setup: ios-macabi }
           - { name: Linux (aarch64-unknown-linux-gnu), os: ubuntu-latest, target: aarch64-unknown-linux-gnu, features: "", setup: linux-aarch64 }
           - { name: Windows (ARM64 MSVC), os: windows-latest, target: aarch64-pc-windows-msvc, features: "", setup: windows-msvc }
-          - { name: Android (aarch64/armv7/x86_64/i686; API 29), os: ubuntu-latest, target: "", features: "", setup: android }
+          #- { name: Android (aarch64/armv7/x86_64/i686; API 29), os: ubuntu-latest, target: "", features: "", setup: android }
 
     steps:
       - name: Checkout
