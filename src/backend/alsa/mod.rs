@@ -105,7 +105,7 @@ mod helpers {
         pub fn new(buffer_size: u32) -> EventEncoder {
             EventEncoder {
                 ev: MidiEvent::new(buffer_size).unwrap(),
-                buffer_size: buffer_size,
+                buffer_size,
             }
         }
 
@@ -157,11 +157,13 @@ pub struct MidiInputConnection<T: 'static> {
     trigger_send_fd: Option<PipeFd>,
 }
 
+type CallbackFn<T> = dyn FnMut(u64, &[u8], &mut T) + Send;
+
 struct HandlerData<T: 'static> {
     ignore_flags: Ignore,
     seq: Seq,
     trigger_rcv_fd: Option<PipeFd>,
-    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send>,
+    callback: Box<CallbackFn<T>>,
     queue_id: i32, // an input queue is needed to get timestamped events
 }
 
@@ -229,7 +231,7 @@ impl MidiInput {
         // Create the input queue
         if !cfg!(feature = "avoid_timestamping") {
             queue_id = seq
-                .alloc_named_queue(unsafe { CStr::from_bytes_with_nul_unchecked(b"midir queue\0") })
+                .alloc_named_queue(c"midir queue")
                 .unwrap();
             // Set arbitrary tempo (mm=100) and resolution (240)
             let qtempo = QueueTempo::empty().unwrap();
@@ -269,7 +271,7 @@ impl MidiInput {
         }
 
         pinfo.set_name(port_name);
-        match self.seq.as_mut().unwrap().create_port(&mut pinfo) {
+        match self.seq.as_mut().unwrap().create_port(&pinfo) {
             Ok(_) => Ok(pinfo.get_port()),
             Err(_) => Err(()),
         }
@@ -354,7 +356,7 @@ impl MidiInput {
             seq: self.seq.take().unwrap(),
             trigger_rcv_fd: Some(trigger_fds.0),
             callback: Box::new(callback),
-            queue_id: queue_id,
+            queue_id,
         };
 
         let threadbuilder = Builder::new();
@@ -378,7 +380,7 @@ impl MidiInput {
         Ok(MidiInputConnection {
             subscription: Some(subscription),
             thread: Some(thread),
-            vport: vport,
+            vport,
             trigger_send_fd: Some(trigger_fds.1),
         })
     }
@@ -433,7 +435,7 @@ impl MidiInput {
             seq: self.seq.take().unwrap(),
             trigger_rcv_fd: Some(trigger_fds.0),
             callback: Box::new(callback),
-            queue_id: queue_id,
+            queue_id,
         };
 
         let threadbuilder = Builder::new();
@@ -455,7 +457,7 @@ impl MidiInput {
         Ok(MidiInputConnection {
             subscription: None,
             thread: Some(thread),
-            vport: vport,
+            vport,
             trigger_send_fd: Some(trigger_fds.1),
         })
     }
@@ -645,7 +647,7 @@ impl MidiOutput {
 
         Ok(MidiOutputConnection {
             seq: self.seq.take(),
-            vport: vport,
+            vport,
             coder: helpers::EventEncoder::new(INITIAL_CODER_BUFFER_SIZE as u32),
             subscription: Some(sub),
         })
@@ -681,7 +683,7 @@ impl MidiOutput {
 
         Ok(MidiOutputConnection {
             seq: self.seq.take(),
-            vport: vport,
+            vport,
             coder: helpers::EventEncoder::new(INITIAL_CODER_BUFFER_SIZE as u32),
             subscription: None,
         })
@@ -699,13 +701,12 @@ impl MidiOutputConnection {
 
     pub fn send(&mut self, message: &[u8]) -> Result<(), SendError> {
         let nbytes = message.len();
-        assert!(nbytes <= u32::max_value() as usize);
+        assert!(nbytes <= u32::MAX as usize);
 
-        if nbytes > self.coder.get_buffer_size() as usize {
-            if self.coder.resize_buffer(nbytes as u32).is_err() {
+        if nbytes > self.coder.get_buffer_size() as usize
+            && self.coder.resize_buffer(nbytes as u32).is_err() {
                 return Err(SendError::Other("could not resize ALSA encoding buffer"));
             }
-        }
 
         let mut ev = match self.coder.get_wrapped().encode(message) {
             Ok((_, Some(ev))) => ev,
@@ -793,7 +794,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
                         let _res = unsafe {
                             libc::read(
                                 poll_fds[0].fd,
-                                mem::transmute(&mut do_input),
+                                std::ptr::addr_of_mut!(do_input) as *mut libc::c_void,
                                 mem::size_of::<bool>() as libc::size_t,
                             )
                         };
@@ -893,7 +894,7 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
                 }
             }
 
-            if message.bytes.len() == 0 || continue_sysex {
+            if message.bytes.is_empty() || continue_sysex {
                 continue;
             }
 
