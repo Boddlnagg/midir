@@ -56,7 +56,6 @@ impl Client {
 
     pub fn open(name: &str, options: JackOpenOptions) -> Result<Client, ()> {
         let c_name = CString::new(name)
-            .ok()
             .expect("client name must not contain null bytes");
         let result = unsafe { jack_client_open(c_name.as_ptr(), options.bits(), ptr::null_mut()) };
         if result.is_null() {
@@ -66,7 +65,7 @@ impl Client {
         }
     }
 
-    pub fn get_midi_ports(&self, flags: PortFlags) -> PortInfos {
+    pub fn get_midi_ports(&self, flags: PortFlags) -> PortInfos<'_> {
         let raw: *mut *const c_char = unsafe {
             jack_get_ports(
                 self.p,
@@ -91,7 +90,6 @@ impl Client {
 
     pub fn register_midi_port(&mut self, name: &str, flags: PortFlags) -> Result<MidiPort, ()> {
         let c_name = CString::new(name)
-            .ok()
             .expect("port name must not contain null bytes");
         let result = unsafe {
             jack_port_register(
@@ -172,7 +170,6 @@ impl<'a> Index<usize> for PortInfos<'a> {
     fn index(&self, index: usize) -> &Self::Output {
         let slice = self.get_c_name(index).to_bytes();
         str::from_utf8(slice)
-            .ok()
             .expect("Error converting port name to UTF8")
     }
 }
