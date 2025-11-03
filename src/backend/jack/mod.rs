@@ -235,9 +235,7 @@ extern "C" fn handle_input<T>(nframes: jack_nframes_t, arg: *mut c_void) -> i32 
             let event = unsafe { event.assume_init() };
 
             for i in 0..event.size {
-                message
-                    .bytes
-                    .push(unsafe { *event.buffer.add(i) });
+                message.bytes.push(unsafe { *event.buffer.add(i) });
             }
 
             message.timestamp = Client::get_time(); // this is in microseconds
@@ -363,7 +361,8 @@ impl MidiOutput {
             .client
             .as_mut()
             .unwrap()
-            .connect(source_port.get_name(), &port.name).is_err()
+            .connect(source_port.get_name(), &port.name)
+            .is_err()
         {
             return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self));
         }

@@ -7,7 +7,7 @@ use crate::{errors, Ignore, MidiMessage};
 use alsa::seq::{Addr, EventType, PortCap, PortInfo, PortSubscribe, PortType, QueueTempo};
 use alsa::{Direction, Seq};
 
-use log::{error, debug, log_enabled, Level};
+use log::{debug, error, log_enabled, Level};
 
 use errors::*;
 
@@ -178,7 +178,9 @@ impl PipeFd {
 
 impl Drop for PipeFd {
     fn drop(&mut self) {
-        unsafe { libc::close(self.0); }
+        unsafe {
+            libc::close(self.0);
+        }
     }
 }
 
@@ -230,9 +232,7 @@ impl MidiInput {
         let mut queue_id = 0;
         // Create the input queue
         if !cfg!(feature = "avoid_timestamping") {
-            queue_id = seq
-                .alloc_named_queue(c"midir queue")
-                .unwrap();
+            queue_id = seq.alloc_named_queue(c"midir queue").unwrap();
             // Set arbitrary tempo (mm=100) and resolution (240)
             let qtempo = QueueTempo::empty().unwrap();
             qtempo.set_tempo(600_000);
@@ -481,7 +481,10 @@ impl<T> MidiInputConnection<T> {
         // Request the thread to stop.
         let _res = unsafe {
             libc::write(
-                self.trigger_send_fd.as_ref().expect("send_fd already taken").get(),
+                self.trigger_send_fd
+                    .as_ref()
+                    .expect("send_fd already taken")
+                    .get(),
                 &false as *const bool as *const _,
                 mem::size_of::<bool>() as libc::size_t,
             )
@@ -704,9 +707,10 @@ impl MidiOutputConnection {
         assert!(nbytes <= u32::MAX as usize);
 
         if nbytes > self.coder.get_buffer_size() as usize
-            && self.coder.resize_buffer(nbytes as u32).is_err() {
-                return Err(SendError::Other("could not resize ALSA encoding buffer"));
-            }
+            && self.coder.resize_buffer(nbytes as u32).is_err()
+        {
+            return Err(SendError::Other("could not resize ALSA encoding buffer"));
+        }
 
         let mut ev = match self.coder.get_wrapped().encode(message) {
             Ok((_, Some(ev))) => ev,
@@ -834,7 +838,10 @@ fn handle_input<T>(mut data: HandlerData<T>, user_data: &mut T) -> HandlerData<T
                     continue;
                 }
                 Err(ref e) => {
-                    error!("Error in handle_input: unknown ALSA MIDI input error ({})!", e);
+                    error!(
+                        "Error in handle_input: unknown ALSA MIDI input error ({})!",
+                        e
+                    );
                     continue;
                 }
             };
