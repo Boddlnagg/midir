@@ -12,10 +12,12 @@ use crate::{Ignore, MidiMessage};
 
 const OUTPUT_RINGBUFFER_SIZE: usize = 16384;
 
+type CallbackFn<T> = dyn FnMut(u64, &[u8], &mut T) + Send;
+
 struct InputHandlerData<T> {
     port: Option<MidiPort>,
     ignore_flags: Ignore,
-    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send>,
+    callback: Box<CallbackFn<T>>,
     user_data: Option<T>,
 }
 
@@ -135,11 +137,12 @@ impl MidiInput {
         };
 
         // ... and connect it to the output
-        if let Err(_) = self
+        if self
             .client
             .as_mut()
             .unwrap()
             .connect(&port.name, dest_port.get_name())
+            .is_err()
         {
             return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self));
         }
@@ -147,7 +150,7 @@ impl MidiInput {
         handler_data.port = Some(dest_port);
 
         Ok(MidiInputConnection {
-            handler_data: handler_data,
+            handler_data,
             client: self.client.take(),
         })
     }
@@ -179,7 +182,7 @@ impl MidiInput {
         handler_data.port = Some(port);
 
         Ok(MidiInputConnection {
-            handler_data: handler_data,
+            handler_data,
             client: self.client.take(),
         })
     }
@@ -234,7 +237,7 @@ extern "C" fn handle_input<T>(nframes: jack_nframes_t, arg: *mut c_void) -> i32 
             for i in 0..event.size {
                 message
                     .bytes
-                    .push(unsafe { *event.buffer.offset(i as isize) });
+                    .push(unsafe { *event.buffer.add(i) });
             }
 
             message.timestamp = Client::get_time(); // this is in microseconds
@@ -246,7 +249,7 @@ extern "C" fn handle_input<T>(nframes: jack_nframes_t, arg: *mut c_void) -> i32 
         }
     }
 
-    return 0;
+    0
 }
 
 struct OutputHandlerData {
@@ -356,11 +359,11 @@ impl MidiOutput {
         };
 
         // ... and connect it to the input
-        if let Err(_) = self
+        if self
             .client
             .as_mut()
             .unwrap()
-            .connect(source_port.get_name(), &port.name)
+            .connect(source_port.get_name(), &port.name).is_err()
         {
             return Err(ConnectError::new(ConnectErrorKind::InvalidPort, self));
         }
@@ -368,7 +371,7 @@ impl MidiOutput {
         handler_data.port = Some(source_port);
 
         Ok(MidiOutputConnection {
-            handler_data: handler_data,
+            handler_data,
             client: self.client.take(),
         })
     }
@@ -395,7 +398,7 @@ impl MidiOutput {
         handler_data.port = Some(port);
 
         Ok(MidiOutputConnection {
-            handler_data: handler_data,
+            handler_data,
             client: self.client.take(),
         })
     }
@@ -449,7 +452,7 @@ impl Drop for MidiOutputConnection {
 }
 
 extern "C" fn handle_output(nframes: jack_nframes_t, arg: *mut c_void) -> i32 {
-    let data: &mut OutputHandlerData = unsafe { mem::transmute(arg) };
+    let data: &mut OutputHandlerData = unsafe { &mut *(arg as *mut OutputHandlerData) };
 
     // Is port created?
     if let Some(ref port) = data.port {
@@ -475,5 +478,5 @@ extern "C" fn handle_output(nframes: jack_nframes_t, arg: *mut c_void) -> i32 {
         }
     }
 
-    return 0;
+    0
 }
