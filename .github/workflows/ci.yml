@@ -47,6 +47,9 @@ jobs:
         with:
           cache-all-crates: true
 
+      - name: Check format
+        run: cargo fmt --all -- --check
+
       - name: Setup Linux dependencies
         if: runner.os == 'Linux' && matrix.setup != 'linux-aarch64' && matrix.setup != 'wasm' && matrix.setup != 'android'
         run: |
