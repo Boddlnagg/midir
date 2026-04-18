@@ -35,7 +35,7 @@ impl Static {
             request: None,
             ever_requested: false,
 
-            on_ok: Closure::wrap(Box::new(|access| {
+            on_ok: Closure::wrap(Box::new(|access: JsValue| {
                 STATIC.with(|s| {
                     let mut s = s.borrow_mut();
                     let access: MidiAccess = access.dyn_into().unwrap();
