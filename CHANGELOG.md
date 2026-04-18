@@ -2,6 +2,13 @@
 
 All major changes to this project will be documented in this file.
 
+## [0.11.0] 2026-04-18
+- Add Android platform support ([#174](https://github.com/Boddlnagg/midir/issues/174) - thanks @mlm-games)
+- `find_port_by_id` now takes a `&str` instead of a `String` ([#180](https://github.com/Boddlnagg/midir/issues/180))
+- Cut off terminating zero for WinMM port ID ([#179](https://github.com/Boddlnagg/midir/issues/179))
+- Various dependency upgrades
+- Fix Clippy findings, apply rustfmt, migrate CI from Azure Pipelines to GitHub Actions
+
 ## [0.10.3] 2025-10-27
 - Fix UB in WinMM backend ([#137](https://github.com/Boddlnagg/midir/issues/137) - thanks @barafael)
 - Fix file descriptor leak in ALSA backend ([#175](https://github.com/Boddlnagg/midir/pull/175) - thanks @abique)
