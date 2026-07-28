@@ -12,16 +12,11 @@ use crate::{Ignore, InitError, PortInfoError, SendError};
 /// Which native Linux MIDI implementation a `MidiInput`/`MidiOutput` talks
 /// to. Both are always compiled in on Linux when this crate is built with
 /// the `jack` feature; nothing here disables ALSA.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Backend {
+    #[default]
     Alsa,
     Jack,
-}
-
-impl Default for Backend {
-    fn default() -> Self {
-        Backend::Alsa
-    }
 }
 
 #[derive(Clone, PartialEq)]

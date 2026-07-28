@@ -165,3 +165,88 @@ fn alsa_out_and_jack_in_coexist_and_work() {
     assert_eq!(alsa_received, alsa_sent);
     assert_eq!(jack_received, jack_sent);
 }
+
+// All four handles at once: one alsa in, one alsa out, one jack in, one jack
+// out, in the same process, each wired into its own same-backend loopback
+// (not cross-backend, alsa and jack are separate graphs). Proves four
+// concurrent enum-dispatched instances don't share state or interfere,
+// beyond the two/three-handle cases above.
+#[test]
+fn four_handles_alsa_and_jack_at_once() {
+    let alsa_in = MidiInput::new_with_backend("midir-test-4h-alsa-in", Backend::Alsa)
+        .expect("alsa backend must always be available on linux");
+    let alsa_out = MidiOutput::new_with_backend("midir-test-4h-alsa-out", Backend::Alsa)
+        .expect("alsa backend must always be available on linux");
+    let jack_out = match MidiOutput::new_with_backend("midir-test-4h-jack-out", Backend::Jack) {
+        Ok(client) => client,
+        Err(_) => {
+            eprintln!("skipping: no jack server reachable (run under pw-jack or jackd)");
+            return;
+        }
+    };
+    let jack_in = MidiInput::new_with_backend("midir-test-4h-jack-in", Backend::Jack)
+        .expect("jack server was just reachable for jack_out, should be for jack_in too");
+
+    let (alsa_tx, alsa_rx) = mpsc::channel();
+    let _alsa_conn_in = alsa_in
+        .create_virtual("midir-test-4h-alsa-in-port", move |_timestamp, message, _| {
+            alsa_tx.send(message.to_vec()).unwrap();
+        }, ())
+        .expect("alsa create_virtual should succeed through the Backend::Alsa enum arm");
+    let mut alsa_conn_out = alsa_out
+        .create_virtual("midir-test-4h-alsa-out-port")
+        .expect("alsa create_virtual should succeed through the Backend::Alsa enum arm");
+
+    let (jack_tx, jack_rx) = mpsc::channel();
+    let _jack_conn_in = jack_in
+        .create_virtual("midir-test-4h-jack-in-port", move |_timestamp, message, _| {
+            jack_tx.send(message.to_vec()).unwrap();
+        }, ())
+        .expect("jack create_virtual should succeed through the Backend::Jack enum arm");
+    let mut jack_conn_out = jack_out
+        .create_virtual("midir-test-4h-jack-out-port")
+        .expect("jack create_virtual should succeed through the Backend::Jack enum arm");
+
+    let alsa_wired = std::process::Command::new("aconnect")
+        .args([
+            "midir-test-4h-alsa-out:midir-test-4h-alsa-out-port",
+            "midir-test-4h-alsa-in:midir-test-4h-alsa-in-port",
+        ])
+        .status();
+    if !matches!(alsa_wired, Ok(s) if s.success()) {
+        eprintln!("skipping: aconnect unavailable, can't wire the alsa loopback");
+        return;
+    }
+    let jack_wired = std::process::Command::new("jack_connect")
+        .args([
+            "midir-test-4h-jack-out:midir-test-4h-jack-out-port",
+            "midir-test-4h-jack-in:midir-test-4h-jack-in-port",
+        ])
+        .status();
+    if !matches!(jack_wired, Ok(s) if s.success()) {
+        eprintln!("skipping: jack_connect unavailable, can't wire the jack loopback");
+        return;
+    }
+
+    let alsa_sent = vec![0x90, 0x3c, 0x64];
+    let jack_sent = vec![0x90, 0x45, 0x50];
+
+    // interleave sends across both backends before reading either back, so a
+    // shared-state bug would show up as cross-talk or a hang, not just a
+    // late-but-correct result.
+    alsa_conn_out.send(&alsa_sent).unwrap();
+    jack_conn_out.send(&jack_sent).unwrap();
+    alsa_conn_out.send(&alsa_sent).unwrap();
+    jack_conn_out.send(&jack_sent).unwrap();
+
+    for _ in 0..2 {
+        let alsa_received = alsa_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("alsa handle should keep delivering with 3 other handles live");
+        assert_eq!(alsa_received, alsa_sent);
+        let jack_received = jack_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("jack handle should keep delivering with 3 other handles live");
+        assert_eq!(jack_received, jack_sent);
+    }
+}
