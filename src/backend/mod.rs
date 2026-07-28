@@ -23,15 +23,23 @@ mod coremidi;
 #[cfg(all(target_os = "ios", not(feature = "jack")))]
 pub use self::coremidi::*;
 
-#[cfg(all(target_os = "linux", not(feature = "jack")))]
+// linux: ALSA always compiles in. With the `jack` feature, JACK becomes an
+// additional runtime-selectable backend instead of replacing ALSA (both can
+// be present on a real system at once). See `linux::Backend`.
+#[cfg(target_os = "linux")]
 mod alsa;
 #[cfg(all(target_os = "linux", not(feature = "jack")))]
 pub use self::alsa::*;
 
 #[cfg(all(feature = "jack", not(target_os = "windows")))]
 mod jack;
-#[cfg(all(feature = "jack", not(target_os = "windows")))]
+#[cfg(all(feature = "jack", not(any(target_os = "windows", target_os = "linux"))))]
 pub use self::jack::*;
+
+#[cfg(all(target_os = "linux", feature = "jack"))]
+mod linux;
+#[cfg(all(target_os = "linux", feature = "jack"))]
+pub use self::linux::*;
 
 #[cfg(target_arch = "wasm32")]
 mod webmidi;
