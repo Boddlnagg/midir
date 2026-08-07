@@ -418,6 +418,19 @@ impl MidiInput {
                         continue;
                     }
 
+                    // `AMidiOutputPort_receive` returns the number of messages
+                    // received (0 or 1). On 0 it leaves `opcode`, `nbytes` and
+                    // `ts_ns` untouched, so without this check the loop keeps
+                    // seeing the *previous* message: once a first message has
+                    // arrived `opcode` stays `AMIDI_OPCODE_DATA` and the
+                    // callback is re-invoked with stale data in a tight,
+                    // sleep-free loop (a stale `AMIDI_OPCODE_FLUSH` spins the
+                    // thread just as hard).
+                    if rc == 0 {
+                        std::thread::sleep(Duration::from_millis(1));
+                        continue;
+                    }
+
                     if opcode == AMIDI_OPCODE_FLUSH {
                         continue;
                     }
