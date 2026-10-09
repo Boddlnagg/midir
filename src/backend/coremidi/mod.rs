@@ -168,6 +168,10 @@ impl MidiInput {
                         size = 1;
                     }
 
+                    // A message whose status byte promises more bytes than the packet
+                    // holds ends at the packet's end instead of reading past it.
+                    let size = size.min(pdata.len().saturating_sub(cur_byte));
+
                     // Copy the MIDI data to our vector.
                     if size > 0 {
                         let message_bytes = &pdata[cur_byte..(cur_byte + size)];
@@ -422,5 +426,57 @@ impl MidiOutputConnection {
                 .received(&packets)
                 .map_err(|_| SendError::Other("error sending MIDI to virtual destinations")),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn received(packets: &PacketList, ignore: Ignore) -> Vec<Vec<u8>> {
+        let messages = Arc::new(Mutex::new(Vec::new()));
+        let sink = messages.clone();
+        let mut handler_data = HandlerData {
+            message: MidiMessage::new(),
+            ignore_flags: ignore,
+            continue_sysex: false,
+            callback: Box::new(move |_, bytes: &[u8], _: &mut ()| {
+                sink.lock().unwrap().push(bytes.to_vec())
+            }),
+            user_data: Some(()),
+        };
+        MidiInput::handle_input(packets, &mut handler_data);
+        let out = messages.lock().unwrap().clone();
+        out
+    }
+
+    #[test]
+    fn a_complete_message_is_delivered_whole() {
+        let packets = PacketBuffer::new(1, &[0x90, 0x3C, 0x64]);
+        assert_eq!(
+            received(&packets, Ignore::None),
+            vec![vec![0x90, 0x3C, 0x64]]
+        );
+    }
+
+    #[test]
+    fn a_message_the_packet_cuts_short_is_delivered_up_to_the_packet_end() {
+        let packets = PacketBuffer::new(1, &[0x90, 0x3C]);
+        assert_eq!(received(&packets, Ignore::None), vec![vec![0x90, 0x3C]]);
+
+        let packets = PacketBuffer::new(1, &[0xB0, 0x07, 0x64, 0xB0]);
+        assert_eq!(
+            received(&packets, Ignore::None),
+            vec![vec![0xB0, 0x07, 0x64], vec![0xB0]]
+        );
+    }
+
+    #[test]
+    fn an_ignored_time_code_at_the_packet_end_reads_nothing_past_it() {
+        let packets = PacketBuffer::new(1, &[0x90, 0x3C, 0x64, 0xF1]);
+        assert_eq!(
+            received(&packets, Ignore::Time),
+            vec![vec![0x90, 0x3C, 0x64]]
+        );
     }
 }
