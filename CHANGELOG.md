@@ -2,6 +2,13 @@
 
 All major changes to this project will be documented in this file.
 
+## [0.11.1] 2026-10-10
+- Allow alsa 0.12 (bump upper bound to <0.13) ([#199](https://github.com/Boddlnagg/midir/issues/199) - thanks @gulbrand)
+- fix(android): stop re-delivering the last message when receive() returns 0 ([#200](https://github.com/Boddlnagg/midir/issues/200) - thanks @Guillaume-Fortin)
+- Stop the CoreMIDI input handler reading past a truncated packet ([#206](https://github.com/Boddlnagg/midir/issues/206) - thanks @semnil)
+- winmm: return InvalidPort from port_name() for disconnected ports ([#204](https://github.com/Boddlnagg/midir/issues/204) - thanks @yottanami)
+- Fixes for WinMM and WinRT backend suggested by Microsoft's review ([#207](https://github.com/Boddlnagg/midir/issues/207)/[#208](https://github.com/Boddlnagg/midir/issues/208) - thanks @Psychlist1972)
+
 ## [0.11.0] 2026-04-18
 - Add Android platform support ([#174](https://github.com/Boddlnagg/midir/issues/174) - thanks @mlm-games)
 - `find_port_by_id` now takes a `&str` instead of a `String` ([#180](https://github.com/Boddlnagg/midir/issues/180))
