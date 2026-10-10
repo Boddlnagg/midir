@@ -218,7 +218,10 @@ impl MidiInput {
     }
 
     pub fn port_name(&self, port: &MidiInputPort) -> Result<String, PortInfoError> {
-        Ok(port.name.clone())
+        match port.current_port_number() {
+            Some(_) => Ok(port.name.clone()),
+            None => Err(PortInfoError::InvalidPort),
+        }
     }
 
     pub fn connect<F, T: Send>(
@@ -533,7 +536,10 @@ impl MidiOutput {
     }
 
     pub fn port_name(&self, port: &MidiOutputPort) -> Result<String, PortInfoError> {
-        Ok(port.name.clone())
+        match port.current_port_number() {
+            Some(_) => Ok(port.name.clone()),
+            None => Err(PortInfoError::InvalidPort),
+        }
     }
 
     pub fn connect(
