@@ -12,6 +12,8 @@ use windows::{
     Storage::Streams::{DataReader, DataWriter},
 };
 
+use log::{error, warn};
+
 #[derive(Clone, PartialEq)]
 pub struct MidiInputPort {
     id: HSTRING,
@@ -49,7 +51,11 @@ impl MidiInput {
         let count = device_collection.Size().expect("Size failed") as usize;
         let mut result = Vec::with_capacity(count);
         for device_info in device_collection.into_iter() {
-            let device_id = device_info.Id().expect("Id failed");
+            // skip on error, this matches behavior in WinMM (see `ports_internal`)
+            let device_id = match device_info.Id() {
+                Ok(id) => id,
+                Err(_) => continue,
+            };
             result.push(crate::common::MidiInputPort {
                 imp: MidiInputPort { id: device_id },
             });
@@ -78,13 +84,25 @@ impl MidiInput {
     }
 
     fn handle_input<T>(args: &MidiMessageReceivedEventArgs, handler_data: &mut HandlerData<T>) {
+        macro_rules! unwrap_or_log {
+            ($result:expr, $call:expr) => {
+                match $result {
+                    Ok(v) => v,
+                    Err(e) => {
+                        let call = $call;
+                        error!("handle_input skipped: {call} failed ({e:?})");
+                        return; // exit handle_input() without calling user callback
+                    }
+                }
+            };
+        }
         let ignore = handler_data.ignore_flags;
         let data = &mut handler_data.user_data.as_mut().unwrap();
-        let message = args.Message().expect("Message failed");
-        let timestamp = message.Timestamp().expect("Timestamp failed").Duration as u64 / 10;
-        let buffer = message.RawData().expect("RawData failed");
-        let length = buffer.Length().expect("Length failed") as usize;
-        let data_reader = DataReader::FromBuffer(&buffer).expect("FromBuffer failed");
+        let message = unwrap_or_log!(args.Message(), "Message()");
+        let timestamp = unwrap_or_log!(message.Timestamp(), "Timestamp()").Duration as u64 / 10;
+        let buffer = unwrap_or_log!(message.RawData(), "RawData()");
+        let length = unwrap_or_log!(buffer.Length(), "Length()") as usize;
+        let data_reader = unwrap_or_log!(DataReader::FromBuffer(&buffer), "FromBuffer()");
         let mut message_bytes = vec![0; length];
         data_reader
             .ReadBytes(&mut message_bytes)
@@ -166,7 +184,9 @@ pub struct MidiInputConnection<T> {
 impl<T> MidiInputConnection<T> {
     pub fn close(self) -> (MidiInput, T) {
         let _ = self.port.0.RemoveMessageReceived(self.event_token);
-        self.port.0.Close().expect("failed to close MidiInput");
+        if let Err(e) = self.port.0.Close() {
+            warn!("Closing MidiInPort failed: {e:?}");
+        }
         let device_selector = MidiInPort::GetDeviceSelector().expect("GetDeviceSelector failed"); // probably won't ever fail here, because it worked previously
         let mut handler_data_locked = self.handler_data.lock().unwrap();
         (
@@ -221,7 +241,11 @@ impl MidiOutput {
         let count = device_collection.Size().expect("Size failed") as usize;
         let mut result = Vec::with_capacity(count);
         for device_info in device_collection.into_iter() {
-            let device_id = device_info.Id().expect("Id failed");
+            // skip on error, this matches behavior in WinMM (see `ports_internal`)
+            let device_id = match device_info.Id() {
+                Ok(id) => id,
+                Err(_) => continue,
+            };
             result.push(crate::common::MidiOutputPort {
                 imp: MidiOutputPort { id: device_id },
             });
@@ -273,7 +297,9 @@ unsafe impl Send for MidiOutputConnection {}
 
 impl MidiOutputConnection {
     pub fn close(self) -> MidiOutput {
-        self.port.Close().expect("failed to close MidiOutput");
+        if let Err(e) = self.port.Close() {
+            warn!("Closing IMidiOutPort failed: {e:?}");
+        }
         let device_selector = MidiOutPort::GetDeviceSelector().expect("GetDeviceSelector failed"); // probably won't ever fail here, because it worked previously
         MidiOutput {
             selector: device_selector,
