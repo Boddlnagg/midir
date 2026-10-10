@@ -358,31 +358,34 @@ impl<T> MidiInputConnection<T> {
         // for information about this lock, see https://groups.google.com/forum/#!topic/mididev/6OUjHutMpEo
         let in_handle_lock = self.handler_data.in_handle.as_ref().unwrap().0.lock();
 
-        // TODO: Call both reset and stop here? The difference seems to be that
-        //       reset "returns all pending input buffers to the callback function"
         unsafe {
-            midiInReset(*in_handle_lock);
+            // we need both, in this order: `midiInStop` ends input on the port, then
+            // `midiInReset` marks every pending buffer as done and returns it to the callback.
             midiInStop(*in_handle_lock);
+            midiInReset(*in_handle_lock);
         }
 
         for i in 0..MIDIR_SYSEX_BUFFER_COUNT {
-            let result;
-            unsafe {
-                result = midiInUnprepareHeader(
+            let result = unsafe {
+                midiInUnprepareHeader(
                     *in_handle_lock,
                     self.handler_data.sysex_buffer.0[i],
                     mem::size_of::<MIDIHDR>() as u32,
-                );
-                dealloc(
-                    (*self.handler_data.sysex_buffer.0[i]).lpData.0 as *mut _,
-                    Layout::from_size_align_unchecked(MIDIR_SYSEX_BUFFER_SIZE, 1),
-                );
-                // recreate the Box so that it will be dropped/deallocated at the end of this scope
-                let _ = Box::from_raw(self.handler_data.sysex_buffer.0[i]);
-            }
-
-            if result != MMSYSERR_NOERROR {
-                warn!("Warning: Ignoring error shutting down Windows MM input port (UnprepareHeader).");
+                )
+            };
+            if result == MMSYSERR_NOERROR {
+                unsafe {
+                    dealloc(
+                        (*self.handler_data.sysex_buffer.0[i]).lpData.0 as *mut _,
+                        Layout::from_size_align_unchecked(MIDIR_SYSEX_BUFFER_SIZE, 1),
+                    );
+                    // recreate the Box so that it will be dropped/deallocated at the end of this scope
+                    let _ = Box::from_raw(self.handler_data.sysex_buffer.0[i]);
+                }
+            } else {
+                // Do not free a buffer the driver still owns. Leaking it is far cheaper than
+                // the alternative, and it only happens on a teardown path that already failed.
+                warn!("Leaking input SysEx buffer {i}: UnprepareHeader returned {result:?}");
             }
         }
 
@@ -625,21 +628,32 @@ impl MidiOutputConnection {
             }
 
             // Send the message.
+            let mut retries = 0;
             loop {
                 let result = unsafe {
                     midiOutLongMsg(self.out_handle, &sysex, mem::size_of::<MIDIHDR>() as u32)
                 };
-                if result == MIDIERR_NOTREADY {
-                    sleep(Duration::from_millis(1));
-                    continue;
-                } else {
-                    if result != MMSYSERR_NOERROR {
+                match result {
+                    MMSYSERR_NOERROR => {
+                        break;
+                    }
+                    MIDIERR_NOTREADY => {
+                        retries += 1;
+                        if retries > 500 {
+                            return Err(SendError::Other(
+                                "sending sysex message failed: MIDIERR_NOTREADY after 500 retries",
+                            ));
+                        }
+                        sleep(Duration::from_millis(1));
+                        continue;
+                    }
+                    _ => {
                         return Err(SendError::Other("sending sysex message failed"));
                     }
-                    break;
                 }
             }
 
+            let mut retries = 0;
             loop {
                 let result = unsafe {
                     midiOutUnprepareHeader(
@@ -649,6 +663,12 @@ impl MidiOutputConnection {
                     )
                 };
                 if result == MIDIERR_STILLPLAYING {
+                    retries += 1;
+                    if retries > 2000 {
+                        return Err(SendError::Other(
+                            "midiOutUnprepareHeader failed: MIDIERR_STILLPLAYING after 2000 retries",
+                        ));
+                    }
                     sleep(Duration::from_millis(1));
                     continue;
                 } else {
@@ -672,16 +692,25 @@ impl MidiOutputConnection {
             }
 
             // Send the message immediately.
+            let mut retries = 0;
             loop {
-                let result = unsafe { midiOutShortMsg(self.out_handle, packet) };
-                if result == MIDIERR_NOTREADY {
-                    sleep(Duration::from_millis(1));
-                    continue;
-                } else {
-                    if result != MMSYSERR_NOERROR {
+                match unsafe { midiOutShortMsg(self.out_handle, packet) } {
+                    MMSYSERR_NOERROR => {
+                        break;
+                    }
+                    MIDIERR_NOTREADY => {
+                        retries += 1;
+                        if retries > 500 {
+                            return Err(SendError::Other(
+                            "sending non-sysex message failed: MIDIERR_NOTREADY after 500 retries",
+                        ));
+                        }
+                        sleep(Duration::from_millis(1));
+                        continue;
+                    }
+                    _ => {
                         return Err(SendError::Other("sending non-sysex message failed"));
                     }
-                    break;
                 }
             }
         }
