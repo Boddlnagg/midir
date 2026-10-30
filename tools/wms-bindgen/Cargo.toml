@@ -1,0 +1,13 @@
+[package]
+name = "wms-bindgen"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Regenerates the Windows MIDI Services bindings used by midir's `wms` backend"
+
+# Not part of the midir workspace, so building midir never builds this.
+[workspace]
+
+[dependencies]
+# Must produce code for the windows-core version in midir's Cargo.toml (0.62).
+windows-bindgen = "=0.65.0"

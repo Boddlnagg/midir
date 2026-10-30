@@ -3,15 +3,34 @@
 // TODO: improve feature selection (make sure that there is always exactly one implementation, or enable dynamic backend selection)
 // TODO: allow to disable build dependency on ALSA
 
-#[cfg(all(target_os = "windows", not(feature = "winrt")))]
+#[cfg(all(target_os = "windows", feature = "wms", feature = "winrt"))]
+compile_error!("The `wms` and `winrt` features cannot be used together. Pick one Windows backend.");
+
+#[cfg(all(
+    target_os = "windows",
+    feature = "wms",
+    not(any(
+        target_arch = "x86_64",
+        target_arch = "aarch64",
+        target_arch = "arm64ec"
+    ))
+))]
+compile_error!("The `wms` feature needs 64-bit Windows (x86_64, aarch64 or arm64ec).");
+
+#[cfg(all(target_os = "windows", not(feature = "winrt"), not(feature = "wms")))]
 mod winmm;
-#[cfg(all(target_os = "windows", not(feature = "winrt")))]
+#[cfg(all(target_os = "windows", not(feature = "winrt"), not(feature = "wms")))]
 pub use self::winmm::*;
 
-#[cfg(all(target_os = "windows", feature = "winrt"))]
+#[cfg(all(target_os = "windows", feature = "winrt", not(feature = "wms")))]
 mod winrt;
-#[cfg(all(target_os = "windows", feature = "winrt"))]
+#[cfg(all(target_os = "windows", feature = "winrt", not(feature = "wms")))]
 pub use self::winrt::*;
+
+#[cfg(all(target_os = "windows", feature = "wms", not(feature = "winrt")))]
+mod wms;
+#[cfg(all(target_os = "windows", feature = "wms", not(feature = "winrt")))]
+pub use self::wms::*;
 
 #[cfg(all(target_os = "macos", not(feature = "jack")))]
 mod coremidi;

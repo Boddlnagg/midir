@@ -27,6 +27,14 @@ winrt = [
     "windows/Storage_Streams",
     "windows/Win32_System_WinRT",
 ]
+# Windows MIDI Services (Windows.Devices.Midi2). Windows 11 25H2 or later, 64-bit only.
+# See the README for the runtime requirements.
+wms = [
+    "dep:windows-core",
+    "dep:windows-collections",
+    "windows/Wdk_System_SystemServices",
+    "windows/Win32_System_SystemInformation",
+]
 
 [dependencies]
 log = "0.4"
@@ -53,6 +61,10 @@ windows = { version = ">=0.59.0,<=0.62", features = [
     "Win32_Media_Audio",
 ] }
 parking_lot = { version = "0.12.1" }
+# Only for the `wms` feature. The checked-in bindings in src/backend/wms/bindings.rs were
+# generated for these versions, so they must change together (see tools/wms-bindgen).
+windows-core = { version = "0.62", optional = true }
+windows-collections = { version = "0.3", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3"

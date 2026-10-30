@@ -29,6 +29,8 @@ jobs:
           - { name: Linux (WASM), os: ubuntu-latest, target: wasm32-unknown-unknown, features: "", setup: wasm }
           - { name: Windows (MSVC / WinMM), os: windows-latest, target: x86_64-pc-windows-msvc, features: "", setup: windows-msvc }
           - { name: Windows (MSVC / WinRT), os: windows-latest, target: x86_64-pc-windows-msvc, features: "winrt", setup: windows-msvc }
+          - { name: Windows (MSVC / Windows MIDI Services), os: windows-latest, target: x86_64-pc-windows-msvc, features: "wms", setup: windows-msvc }
+          - { name: Windows (ARM64 MSVC / Windows MIDI Services), os: windows-latest, target: aarch64-pc-windows-msvc, features: "wms", setup: windows-msvc }
           - { name: Windows (GNU i686 / WinMM), os: windows-latest, target: i686-pc-windows-gnu, features: "", setup: windows-gnu }
           - { name: Windows (GNU i686 / WinRT), os: windows-latest, target: i686-pc-windows-gnu, features: "winrt", setup: windows-gnu, allow_fail: true }
           - { name: macOS (CoreMIDI), os: macos-latest, target: "", features: "", setup: macos }
@@ -242,3 +244,45 @@ jobs:
           export CARGO_TARGET_I686_PC_WINDOWS_GNU_LINKER=i686-w64-mingw32-gcc
           export CARGO_TARGET_I686_PC_WINDOWS_GNU_AR=i686-w64-mingw32-ar
           cargo test --verbose --target ${{ matrix.target }} ${{ matrix.features && format('--features {0}', matrix.features) }}
+
+  # GitHub's windows-11-arm runner is Windows 11 client with the MIDI service, so it can run the
+  # Windows MIDI Services backend's loopback test. The Windows Server runners don't have the service.
+  test-wms-service:
+    name: Test (Windows 11 ARM64 / Windows MIDI Services)
+    runs-on: windows-11-arm
+    # A wedged MIDI service would otherwise hang the job until GitHub's six-hour limit.
+    timeout-minutes: 20
+    env:
+      WMS_SDK_RELEASE: inbox-preview-11
+      WMS_SDK_PACKAGE: Windows.Devices.Midi2.0.99.92-preview.11.nupkg
+      MIDIR_WMS_REQUIRE_SERVICE: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Start the MIDI service
+        shell: pwsh
+        run: |
+          Start-Service midisrv
+          Get-Service midisrv | Format-List Name, Status, StartType
+          (Get-Item "$env:WINDIR\System32\midisrv.exe").VersionInfo | Format-List FileVersion, ProductVersion
+
+      - name: Build tests
+        run: cargo test --features wms --no-run
+
+      - name: Put the Windows MIDI Services API next to the test executables
+        shell: pwsh
+        run: |
+          $url = "https://github.com/microsoft/MIDI/releases/download/$env:WMS_SDK_RELEASE/$env:WMS_SDK_PACKAGE"
+          Invoke-WebRequest $url -OutFile sdk.zip
+          Expand-Archive sdk.zip -DestinationPath sdk
+          Copy-Item sdk\runtimes\win-arm64\native\Windows.Devices.Midi2.* target\debug\deps\
+
+      - name: Test
+        run: cargo test --features wms -- --nocapture
