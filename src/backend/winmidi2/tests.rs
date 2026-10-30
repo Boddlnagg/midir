@@ -3,7 +3,7 @@
 //!
 //! These tests need Windows 11 25H2 or later with Windows MIDI Services in full mode, and the
 //! API in Windows or next to the test executable. Elsewhere they print why and pass, unless
-//! `MIDIR_WMS_REQUIRE_SERVICE` is set, which CI does on runners that have the service.
+//! `MIDIR_WINMIDI2_REQUIRE_SERVICE` is set, which CI does on runners that have the service.
 
 use std::sync::mpsc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -18,7 +18,7 @@ use super::*;
 use crate::{Ignore, MidiInput as PublicMidiInput, MidiOutput as PublicMidiOutput};
 
 fn service_required() -> bool {
-    std::env::var_os("MIDIR_WMS_REQUIRE_SERVICE").is_some()
+    std::env::var_os("MIDIR_WINMIDI2_REQUIRE_SERVICE").is_some()
 }
 
 /// Tests that use the service take turns, because the loopback test adds and removes ports.
@@ -35,7 +35,7 @@ fn can_run(what: &str) -> bool {
     }
     if service_required() {
         panic!(
-            "{what}: Windows MIDI Services is not available, and MIDIR_WMS_REQUIRE_SERVICE is set"
+            "{what}: Windows MIDI Services is not available, and MIDIR_WINMIDI2_REQUIRE_SERVICE is set"
         );
     }
     eprintln!("{what}: skipped, Windows MIDI Services is not available on this PC");
@@ -147,9 +147,9 @@ fn loopback_round_trip() {
     let in_id = wait_for_group_0_port(&loopback.endpoint_b, Midi1PortFlow::MidiMessageSource)
         .expect("input port for loopback endpoint B");
 
-    let mut midi_in = PublicMidiInput::new("midir wms test").unwrap();
+    let mut midi_in = PublicMidiInput::new("midir winmidi2 test").unwrap();
     midi_in.ignore(Ignore::None);
-    let midi_out = PublicMidiOutput::new("midir wms test").unwrap();
+    let midi_out = PublicMidiOutput::new("midir winmidi2 test").unwrap();
 
     let in_port = midi_in
         .find_port_by_id(&in_id.to_string_lossy())
