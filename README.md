@@ -32,7 +32,7 @@ API docs can be found at [docs.rs](https://docs.rs/crate/midir/). You can find s
   - Manifest should declare `<uses-feature android:name="android.software.midi" android:required="false" />` (not needed for USB/BLE MIDI).
 
 ### Windows MIDI Services
-The `wms` feature uses [Windows MIDI Services](https://aka.ms/midi) (`Windows.Devices.Midi2`) instead of WinMM. midir's API stays the same. You see the same MIDI 1.0 ports that WinMM apps see, with the same names and in the same order. The one exception is the Microsoft GS Wavetable Synth, which only WinMM lists, so output port indexes can be one lower than with the WinMM backend. Messages from MIDI 2.0 devices are converted to MIDI 1.0, and timestamps are in microseconds, like the other backends.
+The `wms` feature uses [Windows MIDI Services](https://aka.ms/midi) (`Windows.Devices.Midi2`) instead of WinMM. midir's API stays the same. You see the same MIDI 1.0 ports that WinMM apps see, with the same names and in the same order. The one exception is the Microsoft GS Wavetable Synth, which only WinMM lists, so an output port's position in the list can be one lower than with the WinMM backend. Don't save a port's position to find it again later, with any backend: positions change whenever a device is plugged in or removed. Save the port's id or name instead. Messages from MIDI 2.0 devices are converted to MIDI 1.0, and timestamps are in microseconds, like the other backends.
 
 What it needs:
 - **Windows 11 25H2 or later, 64-bit (x64 or Arm64).** On older versions of Windows, `MidiInput::new` and `MidiOutput::new` return an error.
