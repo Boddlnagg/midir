@@ -29,6 +29,7 @@ const TYPES: &[&str] = &[
     "Windows.Devices.Midi2.MidiGroup",
     "Windows.Devices.Midi2.Enumeration.Midi1PortFlow",
     "Windows.Devices.Midi2.Enumeration.Legacy.MidiLegacyPortDeviceInformation",
+    "Windows.Devices.Midi2.Enumeration.Legacy.MidiLegacyPortDeviceWatcher",
     // Used by the backend's tests to create a loopback endpoint pair.
     "Windows.Devices.Midi2.Transports.Loopback.MidiLoopbackManager",
     "Windows.Devices.Midi2.Transports.Loopback.MidiLoopbackCreationConfig",

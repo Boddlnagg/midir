@@ -41,4 +41,13 @@ What it needs:
 
 The `wms` feature can't be combined with `winrt`. Virtual ports aren't supported yet.
 
+#### Ports change while your app runs
+
+midir can't tell your app when a port is added, removed or renamed. That's a gap in midir today, with every backend. Most of this was already true with WinMM, but it happens much more with Windows MIDI Services:
+- **People can rename ports.** A port's name can change while your app is running.
+- **Ports come and go.** Bluetooth LE MIDI, Network MIDI 2.0 and other newer transports add and remove ports often. Windows keeps the WinMM port numbers in one unbroken run, so when a port goes away, the numbers after it move down. A device that's removed and comes back often gets a different number.
+- **Don't check for new ports in a tight loop.** Each full check is hard on Windows' Plug and Play system. If it runs on your UI thread and the PC has more than a few ports, your app can stop responding, and Windows will mark it as not responding.
+
+Windows MIDI Services has a port watcher (`MidiLegacyPortDeviceWatcher`) for exactly these reasons. The `wms` backend uses one behind the scenes. It keeps its own port list up to date, so `ports()`, `port_count()` and `port_name()` read that list instead of asking Plug and Play each time. The first of these calls in a process waits for the watcher's first full list. Still, call them when you need them (for example when the user opens a port menu), not on a timer.
+
 To regenerate the bindings in `src/backend/wms/bindings.rs`, see [`tools/wms-bindgen`](tools/wms-bindgen/src/main.rs).

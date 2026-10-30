@@ -20,6 +20,7 @@ mod bindings;
 #[cfg(test)]
 mod tests;
 mod ump;
+mod watcher;
 
 use std::collections::HashMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -287,28 +288,14 @@ fn port_info(port: &MidiLegacyPortDeviceInformation) -> Option<(u32, PortInfo)> 
 
 /// The MIDI 1.0 ports in one direction, in WinMM port number order.
 fn enumerate_ports(flow: Midi1PortFlow) -> Vec<PortInfo> {
-    let ports = match MidiLegacyPortDeviceInformation::FindAll2(flow) {
-        Ok(Some(ports)) => ports,
-        Ok(None) => {
-            error!("Listing MIDI ports failed");
-            return Vec::new();
-        }
-        Err(e) => {
-            error!("Listing MIDI ports failed: {e:?}");
-            return Vec::new();
-        }
-    };
     let mut result: Vec<(u32, PortInfo)> =
-        ports.into_iter().filter_map(|p| port_info(&p)).collect();
+        watcher::ports(flow).iter().filter_map(port_info).collect();
     result.sort_by_key(|(number, _)| *number);
     result.into_iter().map(|(_, info)| info).collect()
 }
 
-fn port_name(port_device_id: &HSTRING) -> Result<String, PortInfoError> {
-    let port = MidiLegacyPortDeviceInformation::CreateFromPortDeviceId(port_device_id)
-        .ok()
-        .flatten()
-        .ok_or(PortInfoError::InvalidPort)?;
+fn port_name(port_device_id: &HSTRING, flow: Midi1PortFlow) -> Result<String, PortInfoError> {
+    let port = watcher::find_port(port_device_id, flow).ok_or(PortInfoError::InvalidPort)?;
     let name = port.Name();
     if name.is_empty() {
         return Err(PortInfoError::CannotRetrievePortName);
@@ -369,7 +356,7 @@ impl MidiInput {
     }
 
     pub fn port_name(&self, port: &MidiInputPort) -> Result<String, PortInfoError> {
-        port_name(&port.port_device_id)
+        port_name(&port.port_device_id, Midi1PortFlow::MidiMessageSource)
     }
 
     pub fn connect<F, T: Send + 'static>(
@@ -587,7 +574,7 @@ impl MidiOutput {
     }
 
     pub fn port_name(&self, port: &MidiOutputPort) -> Result<String, PortInfoError> {
-        port_name(&port.port_device_id)
+        port_name(&port.port_device_id, Midi1PortFlow::MidiMessageDestination)
     }
 
     pub fn connect(

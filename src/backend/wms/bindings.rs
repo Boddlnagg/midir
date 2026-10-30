@@ -2599,6 +2599,204 @@ pub mod Windows {
                             )
                                 -> windows_core::HRESULT,
                     }
+                    windows_core::imp::define_interface!(
+                        IMidiLegacyPortDeviceWatcher,
+                        IMidiLegacyPortDeviceWatcher_Vtbl,
+                        0x8087b303_0519_c0de_31d1_dd004001e000
+                    );
+                    impl windows_core::RuntimeType for IMidiLegacyPortDeviceWatcher {
+                        const SIGNATURE: windows_core::imp::ConstBuffer =
+                            windows_core::imp::ConstBuffer::for_interface::<Self>();
+                    }
+                    #[repr(C)]
+                    #[doc(hidden)]
+                    pub struct IMidiLegacyPortDeviceWatcher_Vtbl {
+                        pub base__: windows_core::IInspectable_Vtbl,
+                        pub Start: unsafe extern "system" fn(
+                            *mut core::ffi::c_void,
+                        )
+                            -> windows_core::HRESULT,
+                        pub Stop: unsafe extern "system" fn(
+                            *mut core::ffi::c_void,
+                        )
+                            -> windows_core::HRESULT,
+                        pub EnumeratedPorts: unsafe extern "system" fn(
+                            *mut core::ffi::c_void,
+                            *mut *mut core::ffi::c_void,
+                        )
+                            -> windows_core::HRESULT,
+                        Status: usize,
+                        Added: usize,
+                        pub RemoveAdded: unsafe extern "system" fn(
+                            *mut core::ffi::c_void,
+                            i64,
+                        )
+                            -> windows_core::HRESULT,
+                        Updated: usize,
+                        pub RemoveUpdated: unsafe extern "system" fn(
+                            *mut core::ffi::c_void,
+                            i64,
+                        )
+                            -> windows_core::HRESULT,
+                        Removed: usize,
+                        pub RemoveRemoved: unsafe extern "system" fn(
+                            *mut core::ffi::c_void,
+                            i64,
+                        )
+                            -> windows_core::HRESULT,
+                        pub EnumerationCompleted:
+                            unsafe extern "system" fn(
+                                *mut core::ffi::c_void,
+                                *mut core::ffi::c_void,
+                                *mut i64,
+                            )
+                                -> windows_core::HRESULT,
+                        pub RemoveEnumerationCompleted:
+                            unsafe extern "system" fn(
+                                *mut core::ffi::c_void,
+                                i64,
+                            )
+                                -> windows_core::HRESULT,
+                        pub Stopped: unsafe extern "system" fn(
+                            *mut core::ffi::c_void,
+                            *mut core::ffi::c_void,
+                            *mut i64,
+                        )
+                            -> windows_core::HRESULT,
+                        pub RemoveStopped: unsafe extern "system" fn(
+                            *mut core::ffi::c_void,
+                            i64,
+                        )
+                            -> windows_core::HRESULT,
+                        pub GetEnumeratedPortsForFlow:
+                            unsafe extern "system" fn(
+                                *mut core::ffi::c_void,
+                                super::Midi1PortFlow,
+                                *mut *mut core::ffi::c_void,
+                            )
+                                -> windows_core::HRESULT,
+                        pub GetEnumeratedPortForNumber:
+                            unsafe extern "system" fn(
+                                *mut core::ffi::c_void,
+                                u32,
+                                super::Midi1PortFlow,
+                                *mut *mut core::ffi::c_void,
+                            )
+                                -> windows_core::HRESULT,
+                        pub GetEnumeratedPortsForParent:
+                            unsafe extern "system" fn(
+                                *mut core::ffi::c_void,
+                                *mut core::ffi::c_void,
+                                *mut *mut core::ffi::c_void,
+                            )
+                                -> windows_core::HRESULT,
+                        pub GetEnumeratedPortsForParent2:
+                            unsafe extern "system" fn(
+                                *mut core::ffi::c_void,
+                                *mut core::ffi::c_void,
+                                super::Midi1PortFlow,
+                                *mut *mut core::ffi::c_void,
+                            )
+                                -> windows_core::HRESULT,
+                        pub GetEnumeratedPortsForAssociatedEndpoint:
+                            unsafe extern "system" fn(
+                                *mut core::ffi::c_void,
+                                *mut core::ffi::c_void,
+                                *mut *mut core::ffi::c_void,
+                            )
+                                -> windows_core::HRESULT,
+                        pub GetEnumeratedPortsForAssociatedEndpoint2:
+                            unsafe extern "system" fn(
+                                *mut core::ffi::c_void,
+                                *mut core::ffi::c_void,
+                                super::Midi1PortFlow,
+                                *mut *mut core::ffi::c_void,
+                            )
+                                -> windows_core::HRESULT,
+                        pub GetEnumeratedPortsForAssociatedEndpointAndGroup:
+                            unsafe extern "system" fn(
+                                *mut core::ffi::c_void,
+                                *mut core::ffi::c_void,
+                                *mut core::ffi::c_void,
+                                *mut *mut core::ffi::c_void,
+                            )
+                                -> windows_core::HRESULT,
+                        pub GetEnumeratedPortsForAssociatedEndpointAndGroup2:
+                            unsafe extern "system" fn(
+                                *mut core::ffi::c_void,
+                                *mut core::ffi::c_void,
+                                *mut core::ffi::c_void,
+                                super::Midi1PortFlow,
+                                *mut *mut core::ffi::c_void,
+                            )
+                                -> windows_core::HRESULT,
+                        pub GetEnumeratedPortsForName:
+                            unsafe extern "system" fn(
+                                *mut core::ffi::c_void,
+                                *mut core::ffi::c_void,
+                                *mut *mut core::ffi::c_void,
+                            )
+                                -> windows_core::HRESULT,
+                        pub GetEnumeratedPortsForName2:
+                            unsafe extern "system" fn(
+                                *mut core::ffi::c_void,
+                                *mut core::ffi::c_void,
+                                super::Midi1PortFlow,
+                                *mut *mut core::ffi::c_void,
+                            )
+                                -> windows_core::HRESULT,
+                        pub GetEnumeratedPortsForDriverDeviceInterfaceId:
+                            unsafe extern "system" fn(
+                                *mut core::ffi::c_void,
+                                *mut core::ffi::c_void,
+                                *mut *mut core::ffi::c_void,
+                            )
+                                -> windows_core::HRESULT,
+                        pub GetEnumeratedPortsForDriverDeviceInterfaceId2:
+                            unsafe extern "system" fn(
+                                *mut core::ffi::c_void,
+                                *mut core::ffi::c_void,
+                                super::Midi1PortFlow,
+                                *mut *mut core::ffi::c_void,
+                            )
+                                -> windows_core::HRESULT,
+                        pub CountSourcePorts: unsafe extern "system" fn(
+                            *mut core::ffi::c_void,
+                            *mut u32,
+                        )
+                            -> windows_core::HRESULT,
+                        pub CountDestinationPorts:
+                            unsafe extern "system" fn(
+                                *mut core::ffi::c_void,
+                                *mut u32,
+                            )
+                                -> windows_core::HRESULT,
+                    }
+                    windows_core::imp::define_interface!(
+                        IMidiLegacyPortDeviceWatcherStatics,
+                        IMidiLegacyPortDeviceWatcherStatics_Vtbl,
+                        0x8087b303_0519_c0de_31d1_ee004001e000
+                    );
+                    impl windows_core::RuntimeType for IMidiLegacyPortDeviceWatcherStatics {
+                        const SIGNATURE: windows_core::imp::ConstBuffer =
+                            windows_core::imp::ConstBuffer::for_interface::<Self>();
+                    }
+                    #[repr(C)]
+                    #[doc(hidden)]
+                    pub struct IMidiLegacyPortDeviceWatcherStatics_Vtbl {
+                        pub base__: windows_core::IInspectable_Vtbl,
+                        pub Create: unsafe extern "system" fn(
+                            *mut core::ffi::c_void,
+                            *mut *mut core::ffi::c_void,
+                        )
+                            -> windows_core::HRESULT,
+                        pub CreateForFlow: unsafe extern "system" fn(
+                            *mut core::ffi::c_void,
+                            super::Midi1PortFlow,
+                            *mut *mut core::ffi::c_void,
+                        )
+                            -> windows_core::HRESULT,
+                    }
                     #[repr(transparent)]
                     #[derive(Clone, Debug, Eq, PartialEq)]
                     pub struct MidiLegacyPortDeviceInformation(windows_core::IUnknown);
@@ -3002,6 +3200,474 @@ pub mod Windows {
                     }
                     unsafe impl Send for MidiLegacyPortDeviceInformation {}
                     unsafe impl Sync for MidiLegacyPortDeviceInformation {}
+                    #[repr(transparent)]
+                    #[derive(Clone, Debug, Eq, PartialEq)]
+                    pub struct MidiLegacyPortDeviceWatcher(windows_core::IUnknown);
+                    windows_core::imp::interface_hierarchy!(
+                        MidiLegacyPortDeviceWatcher,
+                        windows_core::IUnknown,
+                        windows_core::IInspectable
+                    );
+                    impl MidiLegacyPortDeviceWatcher {
+                        pub fn Start(&self) {
+                            let this = self;
+                            unsafe {
+                                let hresult__ = (windows_core::Interface::vtable(this).Start)(
+                                    windows_core::Interface::as_raw(this),
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                            }
+                        }
+                        pub fn Stop(&self) {
+                            let this = self;
+                            unsafe {
+                                let hresult__ = (windows_core::Interface::vtable(this).Stop)(
+                                    windows_core::Interface::as_raw(this),
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                            }
+                        }
+                        pub fn EnumeratedPorts(
+                            &self,
+                        ) -> Option<
+                            windows_collections::IMapView<
+                                windows_core::HSTRING,
+                                MidiLegacyPortDeviceInformation,
+                            >,
+                        > {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                let hresult__ = (windows_core::Interface::vtable(this)
+                                    .EnumeratedPorts)(
+                                    windows_core::Interface::as_raw(this),
+                                    &mut result__,
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                                core::mem::transmute(result__)
+                            }
+                        }
+                        pub fn RemoveAdded(&self, token: i64) -> windows_core::Result<()> {
+                            let this = self;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).RemoveAdded)(
+                                    windows_core::Interface::as_raw(this),
+                                    token,
+                                )
+                                .ok()
+                            }
+                        }
+                        pub fn RemoveUpdated(&self, token: i64) -> windows_core::Result<()> {
+                            let this = self;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).RemoveUpdated)(
+                                    windows_core::Interface::as_raw(this),
+                                    token,
+                                )
+                                .ok()
+                            }
+                        }
+                        pub fn RemoveRemoved(&self, token: i64) -> windows_core::Result<()> {
+                            let this = self;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).RemoveRemoved)(
+                                    windows_core::Interface::as_raw(this),
+                                    token,
+                                )
+                                .ok()
+                            }
+                        }
+                        pub fn EnumerationCompleted<P0>(
+                            &self,
+                            handler: P0,
+                        ) -> windows_core::Result<i64>
+                        where
+                            P0: windows_core::Param<
+                                super::super::super::super::Foundation::TypedEventHandler<
+                                    MidiLegacyPortDeviceWatcher,
+                                    windows_core::IInspectable,
+                                >,
+                            >,
+                        {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                (windows_core::Interface::vtable(this).EnumerationCompleted)(
+                                    windows_core::Interface::as_raw(this),
+                                    handler.param().abi(),
+                                    &mut result__,
+                                )
+                                .map(|| result__)
+                            }
+                        }
+                        pub fn RemoveEnumerationCompleted(
+                            &self,
+                            token: i64,
+                        ) -> windows_core::Result<()> {
+                            let this = self;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).RemoveEnumerationCompleted)(
+                                    windows_core::Interface::as_raw(this),
+                                    token,
+                                )
+                                .ok()
+                            }
+                        }
+                        pub fn Stopped<P0>(&self, handler: P0) -> windows_core::Result<i64>
+                        where
+                            P0: windows_core::Param<
+                                super::super::super::super::Foundation::TypedEventHandler<
+                                    MidiLegacyPortDeviceWatcher,
+                                    windows_core::IInspectable,
+                                >,
+                            >,
+                        {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                (windows_core::Interface::vtable(this).Stopped)(
+                                    windows_core::Interface::as_raw(this),
+                                    handler.param().abi(),
+                                    &mut result__,
+                                )
+                                .map(|| result__)
+                            }
+                        }
+                        pub fn RemoveStopped(&self, token: i64) -> windows_core::Result<()> {
+                            let this = self;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).RemoveStopped)(
+                                    windows_core::Interface::as_raw(this),
+                                    token,
+                                )
+                                .ok()
+                            }
+                        }
+                        pub fn GetEnumeratedPortsForFlow(
+                            &self,
+                            flow: super::Midi1PortFlow,
+                        ) -> Option<windows_collections::IVectorView<MidiLegacyPortDeviceInformation>>
+                        {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                let hresult__ = (windows_core::Interface::vtable(this)
+                                    .GetEnumeratedPortsForFlow)(
+                                    windows_core::Interface::as_raw(this),
+                                    flow,
+                                    &mut result__,
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                                core::mem::transmute(result__)
+                            }
+                        }
+                        pub fn GetEnumeratedPortForNumber(
+                            &self,
+                            portnumber: u32,
+                            flow: super::Midi1PortFlow,
+                        ) -> Option<MidiLegacyPortDeviceInformation> {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                let hresult__ = (windows_core::Interface::vtable(this)
+                                    .GetEnumeratedPortForNumber)(
+                                    windows_core::Interface::as_raw(this),
+                                    portnumber,
+                                    flow,
+                                    &mut result__,
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                                core::mem::transmute(result__)
+                            }
+                        }
+                        pub fn GetEnumeratedPortsForParent(
+                            &self,
+                            parentdeviceinstanceid: &windows_core::HSTRING,
+                        ) -> Option<windows_collections::IVectorView<MidiLegacyPortDeviceInformation>>
+                        {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                let hresult__ = (windows_core::Interface::vtable(this)
+                                    .GetEnumeratedPortsForParent)(
+                                    windows_core::Interface::as_raw(this),
+                                    core::mem::transmute_copy(parentdeviceinstanceid),
+                                    &mut result__,
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                                core::mem::transmute(result__)
+                            }
+                        }
+                        pub fn GetEnumeratedPortsForParent2(
+                            &self,
+                            parentdeviceinstanceid: &windows_core::HSTRING,
+                            flow: super::Midi1PortFlow,
+                        ) -> Option<windows_collections::IVectorView<MidiLegacyPortDeviceInformation>>
+                        {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                let hresult__ = (windows_core::Interface::vtable(this)
+                                    .GetEnumeratedPortsForParent2)(
+                                    windows_core::Interface::as_raw(this),
+                                    core::mem::transmute_copy(parentdeviceinstanceid),
+                                    flow,
+                                    &mut result__,
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                                core::mem::transmute(result__)
+                            }
+                        }
+                        pub fn GetEnumeratedPortsForAssociatedEndpoint(
+                            &self,
+                            endpointdeviceid: &windows_core::HSTRING,
+                        ) -> Option<windows_collections::IVectorView<MidiLegacyPortDeviceInformation>>
+                        {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                let hresult__ = (windows_core::Interface::vtable(this)
+                                    .GetEnumeratedPortsForAssociatedEndpoint)(
+                                    windows_core::Interface::as_raw(this),
+                                    core::mem::transmute_copy(endpointdeviceid),
+                                    &mut result__,
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                                core::mem::transmute(result__)
+                            }
+                        }
+                        pub fn GetEnumeratedPortsForAssociatedEndpoint2(
+                            &self,
+                            endpointdeviceid: &windows_core::HSTRING,
+                            flow: super::Midi1PortFlow,
+                        ) -> Option<windows_collections::IVectorView<MidiLegacyPortDeviceInformation>>
+                        {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                let hresult__ = (windows_core::Interface::vtable(this)
+                                    .GetEnumeratedPortsForAssociatedEndpoint2)(
+                                    windows_core::Interface::as_raw(this),
+                                    core::mem::transmute_copy(endpointdeviceid),
+                                    flow,
+                                    &mut result__,
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                                core::mem::transmute(result__)
+                            }
+                        }
+                        pub fn GetEnumeratedPortsForAssociatedEndpointAndGroup<P1>(
+                            &self,
+                            endpointdeviceid: &windows_core::HSTRING,
+                            group: P1,
+                        ) -> Option<windows_collections::IVectorView<MidiLegacyPortDeviceInformation>>
+                        where
+                            P1: windows_core::Param<super::super::MidiGroup>,
+                        {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                let hresult__ = (windows_core::Interface::vtable(this)
+                                    .GetEnumeratedPortsForAssociatedEndpointAndGroup)(
+                                    windows_core::Interface::as_raw(this),
+                                    core::mem::transmute_copy(endpointdeviceid),
+                                    group.param().abi(),
+                                    &mut result__,
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                                core::mem::transmute(result__)
+                            }
+                        }
+                        pub fn GetEnumeratedPortsForAssociatedEndpointAndGroup2<P1>(
+                            &self,
+                            endpointdeviceid: &windows_core::HSTRING,
+                            group: P1,
+                            flow: super::Midi1PortFlow,
+                        ) -> Option<windows_collections::IVectorView<MidiLegacyPortDeviceInformation>>
+                        where
+                            P1: windows_core::Param<super::super::MidiGroup>,
+                        {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                let hresult__ = (windows_core::Interface::vtable(this)
+                                    .GetEnumeratedPortsForAssociatedEndpointAndGroup2)(
+                                    windows_core::Interface::as_raw(this),
+                                    core::mem::transmute_copy(endpointdeviceid),
+                                    group.param().abi(),
+                                    flow,
+                                    &mut result__,
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                                core::mem::transmute(result__)
+                            }
+                        }
+                        pub fn GetEnumeratedPortsForName(
+                            &self,
+                            portname: &windows_core::HSTRING,
+                        ) -> Option<windows_collections::IVectorView<MidiLegacyPortDeviceInformation>>
+                        {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                let hresult__ = (windows_core::Interface::vtable(this)
+                                    .GetEnumeratedPortsForName)(
+                                    windows_core::Interface::as_raw(this),
+                                    core::mem::transmute_copy(portname),
+                                    &mut result__,
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                                core::mem::transmute(result__)
+                            }
+                        }
+                        pub fn GetEnumeratedPortsForName2(
+                            &self,
+                            portname: &windows_core::HSTRING,
+                            flow: super::Midi1PortFlow,
+                        ) -> Option<windows_collections::IVectorView<MidiLegacyPortDeviceInformation>>
+                        {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                let hresult__ = (windows_core::Interface::vtable(this)
+                                    .GetEnumeratedPortsForName2)(
+                                    windows_core::Interface::as_raw(this),
+                                    core::mem::transmute_copy(portname),
+                                    flow,
+                                    &mut result__,
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                                core::mem::transmute(result__)
+                            }
+                        }
+                        pub fn GetEnumeratedPortsForDriverDeviceInterfaceId(
+                            &self,
+                            driverdeviceinterfaceid: &windows_core::HSTRING,
+                        ) -> Option<windows_collections::IVectorView<MidiLegacyPortDeviceInformation>>
+                        {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                let hresult__ = (windows_core::Interface::vtable(this)
+                                    .GetEnumeratedPortsForDriverDeviceInterfaceId)(
+                                    windows_core::Interface::as_raw(this),
+                                    core::mem::transmute_copy(driverdeviceinterfaceid),
+                                    &mut result__,
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                                core::mem::transmute(result__)
+                            }
+                        }
+                        pub fn GetEnumeratedPortsForDriverDeviceInterfaceId2(
+                            &self,
+                            driverdeviceinterfaceid: &windows_core::HSTRING,
+                            flow: super::Midi1PortFlow,
+                        ) -> Option<windows_collections::IVectorView<MidiLegacyPortDeviceInformation>>
+                        {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                let hresult__ = (windows_core::Interface::vtable(this)
+                                    .GetEnumeratedPortsForDriverDeviceInterfaceId2)(
+                                    windows_core::Interface::as_raw(this),
+                                    core::mem::transmute_copy(driverdeviceinterfaceid),
+                                    flow,
+                                    &mut result__,
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                                core::mem::transmute(result__)
+                            }
+                        }
+                        pub fn CountSourcePorts(&self) -> u32 {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                let hresult__ = (windows_core::Interface::vtable(this)
+                                    .CountSourcePorts)(
+                                    windows_core::Interface::as_raw(this),
+                                    &mut result__,
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                                result__
+                            }
+                        }
+                        pub fn CountDestinationPorts(&self) -> u32 {
+                            let this = self;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                let hresult__ = (windows_core::Interface::vtable(this)
+                                    .CountDestinationPorts)(
+                                    windows_core::Interface::as_raw(this),
+                                    &mut result__,
+                                );
+                                debug_assert!(hresult__.0 == 0);
+                                result__
+                            }
+                        }
+                        pub fn Create() -> windows_core::Result<Option<MidiLegacyPortDeviceWatcher>>
+                        {
+                            Self::IMidiLegacyPortDeviceWatcherStatics(|this| unsafe {
+                                Ok({
+                                    let mut result__ = core::mem::zeroed();
+                                    let hresult__ = (windows_core::Interface::vtable(this).Create)(
+                                        windows_core::Interface::as_raw(this),
+                                        &mut result__,
+                                    );
+                                    debug_assert!(hresult__.0 == 0);
+                                    core::mem::transmute(result__)
+                                })
+                            })
+                        }
+                        pub fn CreateForFlow(
+                            flow: super::Midi1PortFlow,
+                        ) -> windows_core::Result<Option<MidiLegacyPortDeviceWatcher>>
+                        {
+                            Self::IMidiLegacyPortDeviceWatcherStatics(|this| unsafe {
+                                Ok({
+                                    let mut result__ = core::mem::zeroed();
+                                    let hresult__ = (windows_core::Interface::vtable(this)
+                                        .CreateForFlow)(
+                                        windows_core::Interface::as_raw(this),
+                                        flow,
+                                        &mut result__,
+                                    );
+                                    debug_assert!(hresult__.0 == 0);
+                                    core::mem::transmute(result__)
+                                })
+                            })
+                        }
+                        fn IMidiLegacyPortDeviceWatcherStatics<
+                            R,
+                            F: FnOnce(&IMidiLegacyPortDeviceWatcherStatics) -> windows_core::Result<R>,
+                        >(
+                            callback: F,
+                        ) -> windows_core::Result<R> {
+                            static SHARED: windows_core::imp::FactoryCache<
+                                MidiLegacyPortDeviceWatcher,
+                                IMidiLegacyPortDeviceWatcherStatics,
+                            > = windows_core::imp::FactoryCache::new();
+                            SHARED.call(callback)
+                        }
+                    }
+                    impl windows_core::RuntimeType for MidiLegacyPortDeviceWatcher {
+                        const SIGNATURE: windows_core::imp::ConstBuffer =
+                            windows_core::imp::ConstBuffer::for_class::<
+                                Self,
+                                IMidiLegacyPortDeviceWatcher,
+                            >();
+                    }
+                    unsafe impl windows_core::Interface for MidiLegacyPortDeviceWatcher {
+                        type Vtable =
+                            <IMidiLegacyPortDeviceWatcher as windows_core::Interface>::Vtable;
+                        const IID: windows_core::GUID =
+                            <IMidiLegacyPortDeviceWatcher as windows_core::Interface>::IID;
+                    }
+                    impl windows_core::RuntimeName for MidiLegacyPortDeviceWatcher {
+                        const NAME: &'static str =
+                            "Windows.Devices.Midi2.Enumeration.Legacy.MidiLegacyPortDeviceWatcher";
+                    }
+                    unsafe impl Send for MidiLegacyPortDeviceWatcher {}
+                    unsafe impl Sync for MidiLegacyPortDeviceWatcher {}
                 }
             }
             pub mod ServiceConfig {

@@ -21,6 +21,13 @@ fn service_required() -> bool {
     std::env::var_os("MIDIR_WMS_REQUIRE_SERVICE").is_some()
 }
 
+/// Tests that use the service take turns, because the loopback test adds and removes ports.
+static SERVICE_TESTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn service_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    SERVICE_TESTS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// Returns false, after saying why, when the test can't run on this PC.
 fn can_run(what: &str) -> bool {
     if ensure_available().is_ok() {
@@ -122,6 +129,7 @@ fn wait_for_group_0_port(endpoint: &HSTRING, flow: Midi1PortFlow) -> Option<HSTR
 
 #[test]
 fn loopback_round_trip() {
+    let _turn = service_test_lock();
     if !can_run("loopback_round_trip") {
         return;
     }
@@ -192,6 +200,53 @@ fn loopback_round_trip() {
     conn_out.close();
     let (_midi_in, _sender) = conn_in.close();
     drop(loopback);
+}
+
+/// The watcher's list is the same as a full enumeration.
+#[test]
+fn watcher_matches_full_enumeration() {
+    let _turn = service_test_lock();
+    if !can_run("watcher_matches_full_enumeration") {
+        return;
+    }
+    let describe = |ports: Vec<MidiLegacyPortDeviceInformation>| {
+        let mut list: Vec<(u32, String, String)> = ports
+            .iter()
+            .map(|p| {
+                (
+                    p.Number(),
+                    p.PortDeviceId().to_string_lossy().to_lowercase(),
+                    p.Name().to_string_lossy(),
+                )
+            })
+            .collect();
+        list.sort();
+        list
+    };
+    for flow in [
+        Midi1PortFlow::MidiMessageSource,
+        Midi1PortFlow::MidiMessageDestination,
+    ] {
+        // Ports from an earlier test may still be going away, so give the lists time to settle.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let from_watcher = describe(watcher::ports(flow));
+            let full = describe(
+                MidiLegacyPortDeviceInformation::FindAll2(flow)
+                    .unwrap()
+                    .expect("a port list")
+                    .into_iter()
+                    .collect(),
+            );
+            if from_watcher == full {
+                break;
+            }
+            if Instant::now() > deadline {
+                assert_eq!(from_watcher, full);
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+    }
 }
 
 #[test]
