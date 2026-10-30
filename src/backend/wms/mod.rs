@@ -298,7 +298,8 @@ fn enumerate_ports(flow: Midi1PortFlow) -> Vec<PortInfo> {
             return Vec::new();
         }
     };
-    let mut result: Vec<(u32, PortInfo)> = ports.into_iter().filter_map(|p| port_info(&p)).collect();
+    let mut result: Vec<(u32, PortInfo)> =
+        ports.into_iter().filter_map(|p| port_info(&p)).collect();
     result.sort_by_key(|(number, _)| *number);
     result.into_iter().map(|(_, info)| info).collect()
 }
@@ -387,7 +388,10 @@ impl MidiInput {
         }));
 
         let handler_data_for_event = handler_data.clone();
-        let handler = TypedEventHandler::<IMidiMessageReceivedEventSource, MidiMessageReceivedEventArgs>::new(
+        let handler = TypedEventHandler::<
+            IMidiMessageReceivedEventSource,
+            MidiMessageReceivedEventArgs,
+        >::new(
             move |_sender, args: Ref<'_, MidiMessageReceivedEventArgs>| {
                 if let Some(args) = args.as_ref() {
                     handle_input(args, &handler_data_for_event);
@@ -668,16 +672,19 @@ fn send_words(
     timestamp: u64,
     words: &[u32],
 ) -> Result<(), SendError> {
-    let result =
-        connection.SendMultipleMessagesWordArray(timestamp, 0, words.len() as u32, words);
+    let result = connection.SendMultipleMessagesWordArray(timestamp, 0, words.len() as u32, words);
     check_send_result(result)
 }
 
 /// `MidiSendMessageResults` is a flags type, so use the API's own test for success.
-fn check_send_result(result: windows_core::Result<MidiSendMessageResults>) -> Result<(), SendError> {
+fn check_send_result(
+    result: windows_core::Result<MidiSendMessageResults>,
+) -> Result<(), SendError> {
     match result {
         Ok(r) if MidiEndpointConnection::SendMessageSucceeded(r).unwrap_or(false) => Ok(()),
-        Ok(_) => Err(SendError::Other("the MIDI service did not accept the message")),
+        Ok(_) => Err(SendError::Other(
+            "the MIDI service did not accept the message",
+        )),
         Err(_) => Err(SendError::Other("sending the message failed")),
     }
 }

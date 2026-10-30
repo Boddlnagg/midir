@@ -27,7 +27,9 @@ fn can_run(what: &str) -> bool {
         return true;
     }
     if service_required() {
-        panic!("{what}: Windows MIDI Services is not available, and MIDIR_WMS_REQUIRE_SERVICE is set");
+        panic!(
+            "{what}: Windows MIDI Services is not available, and MIDIR_WMS_REQUIRE_SERVICE is set"
+        );
     }
     eprintln!("{what}: skipped, Windows MIDI Services is not available on this PC");
     false
@@ -101,7 +103,8 @@ impl Drop for Loopback {
 }
 
 fn same_endpoint(a: &HSTRING, b: &HSTRING) -> bool {
-    a.to_string_lossy().eq_ignore_ascii_case(&b.to_string_lossy())
+    a.to_string_lossy()
+        .eq_ignore_ascii_case(&b.to_string_lossy())
 }
 
 /// MIDI 1.0 ports for a new endpoint appear shortly after the endpoint does.
