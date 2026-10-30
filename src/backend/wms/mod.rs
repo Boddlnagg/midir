@@ -13,6 +13,7 @@
     non_upper_case_globals,
     non_camel_case_types,
     dead_code,
+    rust_2018_idioms,
     clippy::all
 )]
 mod bindings;
@@ -176,7 +177,9 @@ impl ConnectionLease {
 
         if guard.is_none() {
             let session = MidiSession::Create(&HSTRING::from(client_name))
-                .map_err(|_| "could not create a Windows MIDI Services session")?;
+                .ok()
+                .flatten()
+                .ok_or("could not create a Windows MIDI Services session")?;
             *guard = Some(SharedState {
                 session,
                 connections: HashMap::new(),
@@ -199,7 +202,7 @@ impl ConnectionLease {
         let connection = state
             .session
             .CreateEndpointConnection(endpoint_device_id)
-            .map_err(|_| "could not create a connection to the endpoint")?;
+            .ok_or("could not create a connection to the endpoint")?;
         let token = match before_open(&connection) {
             Ok(token) => token,
             Err(e) => {
@@ -207,7 +210,7 @@ impl ConnectionLease {
                 return Err(e);
             }
         };
-        if !connection.Open().unwrap_or(false) {
+        if !connection.Open() {
             disconnect(&state.session, &connection);
             return Err("could not open the connection to the endpoint");
         }
@@ -223,14 +226,7 @@ impl ConnectionLease {
 }
 
 fn disconnect(session: &MidiSession, connection: &MidiEndpointConnection) {
-    match connection.ConnectionId() {
-        Ok(id) => {
-            if let Err(e) = session.DisconnectEndpointConnection(id) {
-                warn!("Disconnecting from a MIDI endpoint failed: {e:?}");
-            }
-        }
-        Err(e) => warn!("Could not read a MIDI connection id: {e:?}"),
-    }
+    session.DisconnectEndpointConnection(connection.ConnectionId());
 }
 
 impl Drop for ConnectionLease {
@@ -272,10 +268,10 @@ struct PortInfo {
 }
 
 fn port_info(port: &MidiLegacyPortDeviceInformation) -> Option<(u32, PortInfo)> {
-    let number = port.Number().ok()?;
-    let port_device_id = port.PortDeviceId().ok()?;
-    let endpoint_device_id = port.AssociatedEndpointDeviceId().ok()?;
-    let group = port.Group().ok()?.Index().ok()?;
+    let number = port.Number();
+    let port_device_id = port.PortDeviceId();
+    let endpoint_device_id = port.AssociatedEndpointDeviceId();
+    let group = port.Group()?.Index();
     if port_device_id.is_empty() || endpoint_device_id.is_empty() || group > 15 {
         return None;
     }
@@ -292,7 +288,11 @@ fn port_info(port: &MidiLegacyPortDeviceInformation) -> Option<(u32, PortInfo)> 
 /// The MIDI 1.0 ports in one direction, in WinMM port number order.
 fn enumerate_ports(flow: Midi1PortFlow) -> Vec<PortInfo> {
     let ports = match MidiLegacyPortDeviceInformation::FindAll2(flow) {
-        Ok(ports) => ports,
+        Ok(Some(ports)) => ports,
+        Ok(None) => {
+            error!("Listing MIDI ports failed");
+            return Vec::new();
+        }
         Err(e) => {
             error!("Listing MIDI ports failed: {e:?}");
             return Vec::new();
@@ -306,10 +306,13 @@ fn enumerate_ports(flow: Midi1PortFlow) -> Vec<PortInfo> {
 
 fn port_name(port_device_id: &HSTRING) -> Result<String, PortInfoError> {
     let port = MidiLegacyPortDeviceInformation::CreateFromPortDeviceId(port_device_id)
-        .map_err(|_| PortInfoError::InvalidPort)?;
-    let name = port
-        .Name()
-        .map_err(|_| PortInfoError::CannotRetrievePortName)?;
+        .ok()
+        .flatten()
+        .ok_or(PortInfoError::InvalidPort)?;
+    let name = port.Name();
+    if name.is_empty() {
+        return Err(PortInfoError::CannotRetrievePortName);
+    }
     Ok(name.to_string_lossy())
 }
 
@@ -394,7 +397,13 @@ impl MidiInput {
         >::new(
             move |_sender, args: Ref<'_, MidiMessageReceivedEventArgs>| {
                 if let Some(args) = args.as_ref() {
-                    handle_input(args, &handler_data_for_event);
+                    // A panic must not unwind into the service's thread.
+                    let handled = catch_unwind(AssertUnwindSafe(|| {
+                        handle_input(args, &handler_data_for_event)
+                    }));
+                    if handled.is_err() {
+                        error!("Handling a received MIDI message panicked");
+                    }
                 }
                 Ok(())
             },
@@ -421,13 +430,15 @@ impl MidiInput {
     }
 }
 
+type InputCallback<T> = Box<dyn FnMut(u64, &[u8], &mut T) + Send>;
+
 /// This is all the data that is stored on the heap as long as a connection
 /// is opened and passed to the callback handler.
 struct HandlerData<T> {
     ignore_flags: Ignore,
     decoder: UmpToBytes,
     ticks: TickConverter,
-    callback: Box<dyn FnMut(u64, &[u8], &mut T) + Send>,
+    callback: InputCallback<T>,
     user_data: Option<T>,
 }
 
@@ -444,17 +455,11 @@ fn is_ignored(ignore: Ignore, message: &[u8]) -> bool {
 fn handle_input<T>(args: &MidiMessageReceivedEventArgs, handler_data: &Mutex<HandlerData<T>>) {
     let mut words = [0u32; 4];
     let [w0, w1, w2, w3] = &mut words;
-    let count = match args.FillWords(w0, w1, w2, w3) {
-        Ok(count) => (count as usize).min(4),
-        Err(e) => {
-            error!("Reading a received MIDI message failed: {e:?}");
-            return;
-        }
-    };
+    let count = (args.FillWords(w0, w1, w2, w3) as usize).min(4);
     if count == 0 {
         return;
     }
-    let timestamp = args.Timestamp().unwrap_or(0);
+    let timestamp = args.Timestamp();
 
     let mut guard = match handler_data.lock() {
         Ok(guard) => guard,
@@ -599,7 +604,6 @@ impl MidiOutput {
         let max_words = lease
             .connection
             .GetSupportedMaxMidiWordsPerTransmission()
-            .unwrap_or(0)
             .max(2) as usize;
         let send_now = MidiClock::TimestampConstantSendImmediately().unwrap_or(0);
 
@@ -677,12 +681,10 @@ fn send_words(
 }
 
 /// `MidiSendMessageResults` is a flags type, so use the API's own test for success.
-fn check_send_result(
-    result: windows_core::Result<MidiSendMessageResults>,
-) -> Result<(), SendError> {
-    match result {
-        Ok(r) if MidiEndpointConnection::SendMessageSucceeded(r).unwrap_or(false) => Ok(()),
-        Ok(_) => Err(SendError::Other(
+fn check_send_result(result: MidiSendMessageResults) -> Result<(), SendError> {
+    match MidiEndpointConnection::SendMessageSucceeded(result) {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(SendError::Other(
             "the MIDI service did not accept the message",
         )),
         Err(_) => Err(SendError::Other("sending the message failed")),

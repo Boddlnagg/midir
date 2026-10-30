@@ -11,8 +11,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use windows_core::{GUID, HSTRING};
 
 use super::bindings::Windows::Devices::Midi2::Transports::Loopback::{
-    MidiLoopbackCreationConfig, MidiLoopbackEndpointDefinition, MidiLoopbackManager,
-    MidiLoopbackRemovalConfig,
+    MidiLoopbackCreationConfig, MidiLoopbackEndpointDefinition, MidiLoopbackEndpointEntry,
+    MidiLoopbackManager, MidiLoopbackRemovalConfig,
 };
 use super::*;
 use crate::{Ignore, MidiInput as PublicMidiInput, MidiOutput as PublicMidiOutput};
@@ -67,26 +67,24 @@ impl Loopback {
             .map_err(|e| format!("creation config: {e:?}"))?;
 
         let response = MidiLoopbackManager::CreateTransientLoopback(&config)
-            .map_err(|e| format!("CreateTransientLoopback: {e:?}"))?;
-        if !response.Success().unwrap_or(false) {
-            let message = response
-                .ErrorMessage()
-                .map(|m| m.to_string_lossy())
-                .unwrap_or_default();
+            .map_err(|e| format!("CreateTransientLoopback: {e:?}"))?
+            .ok_or("CreateTransientLoopback returned nothing")?;
+        if !response.Success() {
+            let message = response.ErrorMessage().to_string_lossy();
             return Err(format!("CreateTransientLoopback failed: {message}"));
         }
         let entry = response
             .CreatedLoopbackEntry()
-            .map_err(|e| format!("CreatedLoopbackEntry: {e:?}"))?;
-        let endpoint_id = |e: windows_core::Result<
-            super::bindings::Windows::Devices::Midi2::Transports::Loopback::MidiLoopbackEndpointEntry,
-        >| e.and_then(|e| e.EndpointDeviceId());
+            .ok_or("CreateTransientLoopback returned no loopback entry")?;
+        let endpoint_id = |e: Option<MidiLoopbackEndpointEntry>, side: &str| {
+            e.map(|e| e.EndpointDeviceId())
+                .filter(|id| !id.is_empty())
+                .ok_or(format!("no device id for endpoint {side}"))
+        };
         Ok(Loopback {
-            association_id: entry
-                .AssociationId()
-                .map_err(|e| format!("AssociationId: {e:?}"))?,
-            endpoint_a: endpoint_id(entry.EndpointA()).map_err(|e| format!("EndpointA: {e:?}"))?,
-            endpoint_b: endpoint_id(entry.EndpointB()).map_err(|e| format!("EndpointB: {e:?}"))?,
+            association_id: entry.AssociationId(),
+            endpoint_a: endpoint_id(entry.EndpointA(), "A")?,
+            endpoint_b: endpoint_id(entry.EndpointB(), "B")?,
         })
     }
 }
@@ -95,8 +93,8 @@ impl Drop for Loopback {
     fn drop(&mut self) {
         let removed = MidiLoopbackRemovalConfig::CreateInstance(self.association_id)
             .and_then(|config| MidiLoopbackManager::RemoveTransientLoopback(&config))
-            .and_then(|response| response.Success());
-        if !matches!(removed, Ok(true)) {
+            .map(|response| response.map(|r| r.Success()));
+        if !matches!(removed, Ok(Some(true))) {
             eprintln!("Removing the test loopback failed: {removed:?}");
         }
     }
