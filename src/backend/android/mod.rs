@@ -1,3 +1,4 @@
+use std::marker::{PhantomData, PhantomPinned};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc, Arc,
@@ -8,25 +9,37 @@ use std::time::Duration;
 use crate::errors::*;
 use crate::Ignore;
 
-use jni::errors::Error as JniError;
-use jni::objects::{GlobalRef, JObject, JObjectArray, JString, JValue};
-use jni::sys::{jint, jobject, JNIEnv as JNISys};
-use jni::JNIEnv;
+use jni::objects::{Global, JObject, JObjectArray, JString, JValue};
+use jni::refs::LoaderContext;
+use jni::sys::{jobject, JNIEnv as JNISys};
+use jni::Env;
+use jni::{errors::Error as JniError, jni_sig, jni_str};
 
-use jni_min_helper::{android_context, jni_with_env, JObjectGet, JniProxy};
+use jni_min_helper::{android_context, jni_with_env, DynamicProxy};
 
 // AMidi (NDK) FFI
 
 #[allow(non_camel_case_types)]
 type media_status_t = i32;
 
+type GlobalMidiDevice = Global<JObject<'static>>;
+
 // Opaque types
 #[repr(C)]
-struct AMidiDevice;
+struct AMidiDevice {
+    _data: (),
+    _marker: PhantomData<(*mut u8, PhantomPinned)>,
+}
 #[repr(C)]
-struct AMidiInputPort;
+struct AMidiInputPort {
+    _data: (),
+    _marker: PhantomData<(*mut u8, PhantomPinned)>,
+}
 #[repr(C)]
-struct AMidiOutputPort;
+struct AMidiOutputPort {
+    _data: (),
+    _marker: PhantomData<(*mut u8, PhantomPinned)>,
+}
 
 // opcodes for AMidiOutputPort_receive
 const AMIDI_OPCODE_DATA: i32 = 1;
@@ -74,17 +87,21 @@ extern "C" {
 
 // Helpers (JNI)
 
-fn get_midi_manager<'a>(env: &mut JNIEnv<'a>) -> Result<JObject<'a>, InitError> {
+fn get_midi_manager<'a>(env: &mut Env<'a>) -> Result<JObject<'a>, InitError> {
     // Acquire a local ref for the app Context
     let ctx_local = env
         .new_local_ref(android_context())
         .map_err(|_| InitError)?;
 
     let class_ctx = env
-        .find_class("android/content/Context")
+        .find_class(jni_str!("android/content/Context"))
         .map_err(|_| InitError)?;
     let midi_service_field = env
-        .get_static_field(&class_ctx, "MIDI_SERVICE", "Ljava/lang/String;")
+        .get_static_field(
+            &class_ctx,
+            jni_str!("MIDI_SERVICE"),
+            jni_sig!("Ljava/lang/String;"),
+        )
         .map_err(|_| InitError)?
         .l()
         .map_err(|_| InitError)?;
@@ -92,8 +109,8 @@ fn get_midi_manager<'a>(env: &mut JNIEnv<'a>) -> Result<JObject<'a>, InitError> 
     let mgr = env
         .call_method(
             &ctx_local,
-            "getSystemService",
-            "(Ljava/lang/String;)Ljava/lang/Object;",
+            jni_str!("getSystemService"),
+            jni_sig!("(Ljava/lang/String;)Ljava/lang/Object;"),
             &[JValue::from(&midi_service_field)],
         )
         .map_err(|_| InitError)?
@@ -103,72 +120,78 @@ fn get_midi_manager<'a>(env: &mut JNIEnv<'a>) -> Result<JObject<'a>, InitError> 
     Ok(mgr)
 }
 
-fn java_string(env: &mut JNIEnv<'_>, s: JString<'_>) -> String {
-    env.get_string(&s)
-        .map(|os| os.to_string_lossy().into_owned())
-        .unwrap_or_default()
-}
-
 fn get_devices<'a>(
-    env: &mut JNIEnv<'a>,
+    env: &mut Env<'a>,
     midi_manager: &JObject<'a>,
 ) -> Result<Vec<JObject<'a>>, InitError> {
     let devices_obj = env
         .call_method(
             midi_manager,
-            "getDevices",
-            "()[Landroid/media/midi/MidiDeviceInfo;",
+            jni_str!("getDevices"),
+            jni_sig!("()[Landroid/media/midi/MidiDeviceInfo;"),
             &[],
         )
         .map_err(|_| InitError)?
         .l()
         .map_err(|_| InitError)?;
 
-    let arr: JObjectArray<'_> = devices_obj.into();
-    let len = env.get_array_length(&arr).map_err(|_| InitError)? as i32;
+    let arr = JObjectArray::<JObject<'_>>::cast_local(env, devices_obj).map_err(|_| InitError)?;
+    let len = arr.len(env).map_err(|_| InitError)?;
     let mut out = Vec::with_capacity(len as usize);
     for i in 0..len {
-        let obj = env
-            .get_object_array_element(&arr, i)
-            .map_err(|_| InitError)?;
+        let obj = arr.get_element(env, i).map_err(|_| InitError)?;
         out.push(obj);
     }
     Ok(out)
 }
 
-fn port_label<'a>(env: &mut JNIEnv<'a>, info: &JObject<'a>, port_info: &JObject<'a>) -> String {
+fn port_label<'a>(env: &mut Env<'a>, info: &JObject<'a>, port_info: &JObject<'a>) -> String {
     let dev = (|| -> Result<String, JniError> {
-        let info_cls = env.find_class("android/media/midi/MidiDeviceInfo")?;
+        let info_cls = env.find_class(jni_str!("android/media/midi/MidiDeviceInfo"))?;
         let props = env
-            .call_method(info, "getProperties", "()Landroid/os/Bundle;", &[])?
+            .call_method(
+                info,
+                jni_str!("getProperties"),
+                jni_sig!("()Landroid/os/Bundle;"),
+                &[],
+            )?
             .l()?;
         let key = env
-            .get_static_field(&info_cls, "PROPERTY_NAME", "Ljava/lang/String;")?
+            .get_static_field(
+                &info_cls,
+                jni_str!("PROPERTY_NAME"),
+                jni_sig!("Ljava/lang/String;"),
+            )?
             .l()?;
         let name_obj = env
             .call_method(
                 &props,
-                "getString",
-                "(Ljava/lang/String;)Ljava/lang/String;",
+                jni_str!("getString"),
+                jni_sig!("(Ljava/lang/String;)Ljava/lang/String;"),
                 &[JValue::from(&key)],
             )?
             .l()?;
-        let name: JString<'_> = JString::from(name_obj);
-        Ok(java_string(env, name))
+        let name: JString<'_> = JString::cast_local(env, name_obj)?;
+        Ok(name.to_string())
     })()
     .unwrap_or_else(|_| "MIDI Device".to_owned());
 
     let port_name = (|| -> Result<String, JniError> {
         let name_obj = env
-            .call_method(port_info, "getName", "()Ljava/lang/String;", &[])?
+            .call_method(
+                port_info,
+                jni_str!("getName"),
+                jni_sig!("()Ljava/lang/String;"),
+                &[],
+            )?
             .l()?;
-        let s: JString<'_> = JString::from(name_obj);
-        Ok(java_string(env, s))
+        let s: JString<'_> = JString::cast_local(env, name_obj)?;
+        Ok(s.to_string())
     })()
     .unwrap_or_else(|_| "Port".to_owned());
 
     let port_number = env
-        .call_method(port_info, "getPortNumber", "()I", &[])
+        .call_method(port_info, jni_str!("getPortNumber"), jni_sig!("()I"), &[])
         .and_then(|v| v.i())
         .unwrap_or(0);
 
@@ -176,40 +199,47 @@ fn port_label<'a>(env: &mut JNIEnv<'a>, info: &JObject<'a>, port_info: &JObject<
 }
 
 fn open_midi_device_global<'a>(
-    env: &mut JNIEnv<'a>,
+    env: &mut Env<'a>,
     info: &JObject<'a>,
     midi_manager: &JObject<'a>,
-) -> Result<GlobalRef, InitError> {
+) -> Result<GlobalMidiDevice, InitError> {
     // Prepare a oneshot channel to receive the device object.
-    let (tx, rx) = mpsc::channel::<Option<GlobalRef>>();
+    let (tx, rx) = mpsc::channel::<Option<GlobalMidiDevice>>();
 
     // Build a dynamic proxy for MidiManager.OnDeviceOpenedListener
-    let listener = JniProxy::build(
+    let listener = DynamicProxy::build(
         env,
-        None,
-        ["android/media/midi/MidiManager$OnDeviceOpenedListener"].as_slice(),
+        &LoaderContext::None,
+        &[jni_str!(
+            "android/media/midi/MidiManager$OnDeviceOpenedListener"
+        )],
         move |env, method, args| {
-            if method.get_method_name(env).unwrap_or_default() == "onDeviceOpened" {
+            let method_name = method.get_name(env)?;
+            if &method_name.to_string() == "onDeviceOpened" {
                 // args[0] is MidiDevice or null
-                let dev = if args[0].is_null() {
+                let device = args.get_element(env, 0)?;
+                let dev = if device.is_null() {
                     None
                 } else {
-                    env.new_global_ref(&args[0]).ok()
+                    env.new_global_ref(&device).ok()
                 };
                 let _ = tx.send(dev);
             }
-            JniProxy::void(env)
+            Ok(JObject::null())
         },
     )
     .map_err(|_| InitError)?;
+    let listener_local = env
+        .new_local_ref(listener.as_ref())
+        .map_err(|_| InitError)?;
 
     // Call openDevice(info, listener, null)
     let null_obj = JObject::null();
     env.call_method(
         midi_manager,
-        "openDevice",
-        "(Landroid/media/midi/MidiDeviceInfo;Landroid/media/midi/MidiManager$OnDeviceOpenedListener;Landroid/os/Handler;)V",
-        &[JValue::from(info), JValue::from(&listener), JValue::from(&null_obj)],
+        jni_str!("openDevice"),
+        jni_sig!("(Landroid/media/midi/MidiDeviceInfo;Landroid/media/midi/MidiManager$OnDeviceOpenedListener;Landroid/os/Handler;)V"),
+        &[JValue::from(info), JValue::from(&listener_local), JValue::from(&null_obj)],
     )
     .map_err(|_| InitError)?;
 
@@ -221,27 +251,23 @@ fn open_midi_device_global<'a>(
 }
 
 unsafe fn amidi_from_java(
-    env: &mut JNIEnv<'_>,
-    device_obj: &GlobalRef,
+    env: &mut Env<'_>,
+    device_obj: &GlobalMidiDevice,
 ) -> Result<*mut AMidiDevice, InitError> {
     // To pass to the NDK function
     let local = env
         .new_local_ref(device_obj.as_obj())
         .map_err(|_| InitError)?;
     let mut out: *mut AMidiDevice = std::ptr::null_mut();
-    let status = AMidiDevice_fromJava(
-        env.get_native_interface(),
-        local.into_raw(),
-        &mut out as *mut _,
-    );
+    let status = AMidiDevice_fromJava(env.get_raw(), local.as_raw(), &mut out as *mut _);
     if status != 0 || out.is_null() {
         return Err(InitError);
     }
     Ok(out)
 }
 
-fn close_java_device(env: &mut JNIEnv<'_>, device_obj: &GlobalRef) {
-    let _ = env.call_method(device_obj.as_obj(), "close", "()V", &[]);
+fn close_java_device(env: &mut Env<'_>, device_obj: &GlobalMidiDevice) {
+    let _ = env.call_method(device_obj.as_obj(), jni_str!("close"), jni_sig!("()V"), &[]);
 }
 
 // Public types
@@ -280,29 +306,41 @@ impl MidiInput {
         jni_with_env(|env| -> Result<_, JniError> {
             let mgr = get_midi_manager(env).map_err(|_| JniError::NullPtr("get_midi_manager"))?;
             let devices = get_devices(env, &mgr).map_err(|_| JniError::NullPtr("get_devices"))?;
-            let pi_class = env.find_class("android/media/midi/MidiDeviceInfo$PortInfo")?;
-            let type_output = env.get_static_field(&pi_class, "TYPE_OUTPUT", "I")?.i()?;
+            let pi_class =
+                env.find_class(jni_str!("android/media/midi/MidiDeviceInfo$PortInfo"))?;
+            let type_output = env
+                .get_static_field(&pi_class, jni_str!("TYPE_OUTPUT"), jni_sig!("I"))?
+                .i()?;
 
             let mut result = Vec::new();
             for info in devices {
-                let id = env.call_method(&info, "getId", "()I", &[])?.i()?;
+                let id = env
+                    .call_method(&info, jni_str!("getId"), jni_sig!("()I"), &[])?
+                    .i()?;
                 let ports = env
                     .call_method(
                         &info,
-                        "getPorts",
-                        "()[Landroid/media/midi/MidiDeviceInfo$PortInfo;",
+                        jni_str!("getPorts"),
+                        jni_sig!("()[Landroid/media/midi/MidiDeviceInfo$PortInfo;"),
                         &[],
                     )?
                     .l()?;
-                let arr: JObjectArray<'_> = ports.into();
-                let len = env.get_array_length(&arr)? as i32;
+                let arr: JObjectArray<'_> = JObjectArray::<JObject<'_>>::cast_local(env, ports)?;
+                let len = arr.len(env)?;
 
                 for i in 0..len {
-                    let port_info = env.get_object_array_element(&arr, i)?;
-                    let ptype = env.call_method(&port_info, "getType", "()I", &[])?.i()?;
+                    let port_info = arr.get_element(env, i)?;
+                    let ptype = env
+                        .call_method(&port_info, jni_str!("getType"), jni_sig!("()I"), &[])?
+                        .i()?;
                     if ptype == type_output {
                         let pnum = env
-                            .call_method(&port_info, "getPortNumber", "()I", &[])?
+                            .call_method(
+                                &port_info,
+                                jni_str!("getPortNumber"),
+                                jni_sig!("()I"),
+                                &[],
+                            )?
                             .i()?;
                         let label = port_label(env, &info, &port_info);
                         result.push(crate::common::MidiInputPort {
@@ -346,7 +384,7 @@ impl MidiInput {
             let info = devices
                 .into_iter()
                 .find(|info| {
-                    env.call_method(info, "getId", "()I", &[])
+                    env.call_method(info, jni_str!("getId"), jni_sig!("()I"), &[])
                         .and_then(|v| v.i())
                         .map(|id| id == port.device_id)
                         .unwrap_or(false)
@@ -492,7 +530,7 @@ unsafe impl<T: Send> Send for MidiInputConnection<T> {}
 unsafe impl<T: Send> Sync for MidiInputConnection<T> {}
 
 pub struct MidiInputConnection<T> {
-    java_device: GlobalRef,
+    java_device: GlobalMidiDevice,
     amidi_device: *mut AMidiDevice,
     out_port: *mut AMidiOutputPort,
     stop: Arc<AtomicBool>,
@@ -550,29 +588,41 @@ impl MidiOutput {
         jni_with_env(|env| -> Result<_, JniError> {
             let mgr = get_midi_manager(env).map_err(|_| JniError::NullPtr("get_midi_manager"))?;
             let devices = get_devices(env, &mgr).map_err(|_| JniError::NullPtr("get_devices"))?;
-            let pi_class = env.find_class("android/media/midi/MidiDeviceInfo$PortInfo")?;
-            let type_input = env.get_static_field(&pi_class, "TYPE_INPUT", "I")?.i()?;
+            let pi_class =
+                env.find_class(jni_str!("android/media/midi/MidiDeviceInfo$PortInfo"))?;
+            let type_input = env
+                .get_static_field(&pi_class, jni_str!("TYPE_INPUT"), jni_sig!("I"))?
+                .i()?;
 
             let mut result = Vec::new();
             for info in devices {
-                let id = env.call_method(&info, "getId", "()I", &[])?.i()?;
+                let id = env
+                    .call_method(&info, jni_str!("getId"), jni_sig!("()I"), &[])?
+                    .i()?;
                 let ports = env
                     .call_method(
                         &info,
-                        "getPorts",
-                        "()[Landroid/media/midi/MidiDeviceInfo$PortInfo;",
+                        jni_str!("getPorts"),
+                        jni_sig!("()[Landroid/media/midi/MidiDeviceInfo$PortInfo;"),
                         &[],
                     )?
                     .l()?;
-                let arr: JObjectArray<'_> = ports.into();
-                let len = env.get_array_length(&arr)? as i32;
+                let arr: JObjectArray<'_> = JObjectArray::<JObject<'_>>::cast_local(env, ports)?;
+                let len = arr.len(env)?;
 
                 for i in 0..len {
-                    let port_info = env.get_object_array_element(&arr, i)?;
-                    let ptype = env.call_method(&port_info, "getType", "()I", &[])?.i()?;
+                    let port_info = arr.get_element(env, i)?;
+                    let ptype = env
+                        .call_method(&port_info, jni_str!("getType"), jni_sig!("()I"), &[])?
+                        .i()?;
                     if ptype == type_input {
                         let pnum = env
-                            .call_method(&port_info, "getPortNumber", "()I", &[])?
+                            .call_method(
+                                &port_info,
+                                jni_str!("getPortNumber"),
+                                jni_sig!("()I"),
+                                &[],
+                            )?
                             .i()?;
                         let label = port_label(env, &info, &port_info);
                         result.push(crate::common::MidiOutputPort {
@@ -609,7 +659,7 @@ impl MidiOutput {
             let info = devices
                 .into_iter()
                 .find(|info| {
-                    env.call_method(info, "getId", "()I", &[])
+                    env.call_method(info, jni_str!("getId"), jni_sig!("()I"), &[])
                         .and_then(|v| v.i())
                         .map(|id| id == port.device_id)
                         .unwrap_or(false)
@@ -671,7 +721,7 @@ impl MidiOutput {
 unsafe impl Sync for MidiOutputConnection {}
 
 pub struct MidiOutputConnection {
-    java_device: GlobalRef,
+    java_device: GlobalMidiDevice,
     amidi_device: *mut AMidiDevice,
     in_port: *mut AMidiInputPort,
 }
