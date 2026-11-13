@@ -9,6 +9,14 @@ use errors::*;
 
 use crate::{backend, errors, Ignore, InitError};
 
+/// Selects which native Linux MIDI implementation a `MidiInput`/`MidiOutput`
+/// talks to. Only available when built for Linux with the `jack` feature,
+/// where ALSA and JACK are both compiled in rather than one excluding the
+/// other, since a real system can have ports on both at once (e.g. via
+/// `a2jmidid`).
+#[cfg(all(target_os = "linux", feature = "jack"))]
+pub use backend::Backend;
+
 /// Trait that abstracts over input and output ports.
 pub trait MidiIO {
     /// Type of an input or output port structure.
@@ -63,6 +71,13 @@ impl MidiInput {
     /// Creates a new `MidiInput` object that is required for any MIDI input functionality.
     pub fn new(client_name: &str) -> Result<Self, InitError> {
         MidiInputImpl::new(client_name).map(|imp| MidiInput { imp })
+    }
+
+    /// Like `new`, but picks a specific native backend instead of the
+    /// default. Only available on Linux built with the `jack` feature.
+    #[cfg(all(target_os = "linux", feature = "jack"))]
+    pub fn new_with_backend(client_name: &str, backend: Backend) -> Result<Self, InitError> {
+        MidiInputImpl::new_with_backend(client_name, backend).map(|imp| MidiInput { imp })
     }
 
     /// Set flags to decide what kind of messages should be ignored (i.e., filtered out)
@@ -233,6 +248,13 @@ impl MidiOutput {
     /// Creates a new `MidiOutput` object that is required for any MIDI output functionality.
     pub fn new(client_name: &str) -> Result<Self, InitError> {
         MidiOutputImpl::new(client_name).map(|imp| MidiOutput { imp })
+    }
+
+    /// Like `new`, but picks a specific native backend instead of the
+    /// default. Only available on Linux built with the `jack` feature.
+    #[cfg(all(target_os = "linux", feature = "jack"))]
+    pub fn new_with_backend(client_name: &str, backend: Backend) -> Result<Self, InitError> {
+        MidiOutputImpl::new_with_backend(client_name, backend).map(|imp| MidiOutput { imp })
     }
 
     /// Get a collection of all MIDI output ports that *midir* can connect to.
