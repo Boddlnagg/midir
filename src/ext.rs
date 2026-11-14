@@ -1,6 +1,7 @@
-use crate::{ConnectError, MidiInputConnection, MidiOutputConnection};
+//! This module contains functionality that's only available for
+//! a subset of backends/platforms.
 
-// TODO: maybe move to module `virtual` instead of `os::unix`?
+use crate::{ConnectError, MidiInputConnection, MidiOutputConnection};
 
 /// Trait that is implemented by `MidiInput` on platforms that
 /// support virtual ports (currently every platform but Windows).
