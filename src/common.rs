@@ -159,7 +159,7 @@ impl MidiIO for MidiInput {
 }
 
 #[cfg(unix)]
-impl<T: Send> crate::os::unix::VirtualInput<T> for MidiInput {
+impl<T: Send> crate::ext::VirtualInput<T> for MidiInput {
     fn create_virtual<F>(
         self,
         port_name: &str,
@@ -307,7 +307,7 @@ impl MidiIO for MidiOutput {
 }
 
 #[cfg(unix)]
-impl crate::os::unix::VirtualOutput for MidiOutput {
+impl crate::ext::VirtualOutput for MidiOutput {
     fn create_virtual(
         self,
         port_name: &str,

@@ -13,7 +13,7 @@ mod example {
     use std::thread::sleep;
     use std::time::Duration;
 
-    use midir::os::unix::VirtualInput;
+    use midir::ext::VirtualInput;
     use midir::{Ignore, MidiInput, MidiOutput};
 
     const LARGE_SYSEX_SIZE: usize = 5572; // This is the maximum that worked for me

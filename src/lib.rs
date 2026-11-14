@@ -57,7 +57,18 @@ impl MidiMessage {
     }
 }
 
-pub mod os; // include platform-specific behaviour
+#[deprecated(
+    since = "0.11.2",
+    note = "please use module `ext` instead of `os::unix`"
+)]
+pub mod os {
+    #[cfg(unix)]
+    pub mod unix {
+        pub use crate::ext::VirtualInput;
+        pub use crate::ext::VirtualOutput;
+    }
+}
+pub mod ext; // functionality that's not available on all platforms/backends
 
 mod errors;
 pub use errors::*;
