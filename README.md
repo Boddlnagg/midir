@@ -12,7 +12,7 @@ Cross-platform, realtime MIDI processing in Rust.
 - [x] WinMM (Windows)
 - [x] CoreMIDI (macOS, iOS)
 - [x] WinRT (Windows 8+), enable the `winrt` feature
-- [x] Windows MIDI Services (Windows 11 25H2+, 64-bit), enable the `winmidi2` feature
+- [x] Windows MIDI Services (Windows 11 25H2+, 64-bit apps), enable the `winmidi2` feature
 - [x] Jack (Linux, macOS), enable the `jack` feature
 - [x] Web MIDI (Chrome, Opera, perhaps others browsers)
 - [x] Android (API 29+, NDK AMidi + JNI)
@@ -35,7 +35,8 @@ API docs can be found at [docs.rs](https://docs.rs/crate/midir/). You can find s
 The `winmidi2` feature uses [Windows MIDI Services](https://aka.ms/midi) (`Windows.Devices.Midi2`) instead of WinMM. midir's API stays the same. You see the same MIDI 1.0 ports that WinMM apps see, with the same names and in the same order. The one exception is the Microsoft GS Wavetable Synth, which only WinMM lists, so an output port's position in the list can be one lower than with the WinMM backend. Don't save a port's position to find it again later, with any backend: positions change whenever a device is plugged in or removed. Save the port's id or name instead. Messages from MIDI 2.0 devices are converted to MIDI 1.0, and timestamps are in microseconds, like the other backends.
 
 What it needs:
-- **Windows 11 25H2 or later, 64-bit (x64 or Arm64).** On older versions of Windows, `MidiInput::new` and `MidiOutput::new` return an error.
+- **Windows 11 25H2 or later.** On older versions of Windows, `MidiInput::new` and `MidiOutput::new` return an error.
+- **A 64-bit app (x64 or Arm64).** The Windows MIDI Services API is only available to 64-bit apps, so the `winmidi2` feature doesn't build for 32-bit targets.
 - **Windows MIDI Services in its normal mode.** If the PC is set to Legacy API mode, `MidiInput::new` and `MidiOutput::new` return an error.
 - **The API DLL, until it's part of Windows.** That's planned for 2027. Until then, your app has to ship `Windows.Devices.Midi2.dll` and `Windows.Devices.Midi2.pri` in the same folder as its `.exe`. They're in the `runtimes\win-x64\native` and `runtimes\win-arm64\native` folders of the `Windows.Devices.Midi2` NuGet package on the [Windows MIDI Services releases page](https://github.com/microsoft/MIDI/releases). When Windows has its own copy, Windows uses that one instead of yours, so your app keeps working. Shipping these files is your choice as the app developer, and the release notes list the terms that come with it.
 

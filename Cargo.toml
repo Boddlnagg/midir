@@ -27,7 +27,7 @@ winrt = [
     "windows/Storage_Streams",
     "windows/Win32_System_WinRT",
 ]
-# Windows MIDI Services (Windows.Devices.Midi2). Windows 11 25H2 or later, 64-bit only.
+# Windows MIDI Services (Windows.Devices.Midi2). Windows 11 25H2 or later, 64-bit apps only.
 # See the README for the runtime requirements.
 winmidi2 = [
     "dep:windows-core",

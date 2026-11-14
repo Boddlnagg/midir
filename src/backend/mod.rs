@@ -17,7 +17,7 @@ compile_error!(
         target_arch = "arm64ec"
     ))
 ))]
-compile_error!("The `winmidi2` feature needs 64-bit Windows (x86_64, aarch64 or arm64ec).");
+compile_error!("The `winmidi2` feature needs a 64-bit target (x86_64, aarch64 or arm64ec). The Windows MIDI Services API is only available to 64-bit apps.");
 
 #[cfg(all(
     target_os = "windows",
