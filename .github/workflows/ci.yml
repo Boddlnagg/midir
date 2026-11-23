@@ -273,16 +273,23 @@ jobs:
           Get-Service midisrv | Format-List Name, Status, StartType
           (Get-Item "$env:WINDIR\System32\midisrv.exe").VersionInfo | Format-List FileVersion, ProductVersion
 
-      - name: Build tests
-        run: cargo test --features winmidi2 --no-run
-
-      - name: Put the Windows MIDI Services API next to the test executables
+      - name: Build tests and put the Windows MIDI Services API next to them
         shell: pwsh
         run: |
           $url = "https://github.com/microsoft/MIDI/releases/download/$env:WINMIDI2_SDK_RELEASE/$env:WINMIDI2_SDK_PACKAGE"
           Invoke-WebRequest $url -OutFile sdk.zip
           Expand-Archive sdk.zip -DestinationPath sdk
-          Copy-Item sdk\runtimes\win-arm64\native\Windows.Devices.Midi2.* target\debug\deps\
+          # Ask cargo where the test executables are. The folder depends on the Rust version.
+          $json = cargo test --features winmidi2 --no-run --message-format=json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $folders = $json | ConvertFrom-Json |
+            Where-Object { $_.reason -eq 'compiler-artifact' -and $_.executable } |
+            ForEach-Object { Split-Path $_.executable } | Sort-Object -Unique
+          if (-not $folders) { throw "cargo reported no test executables" }
+          foreach ($folder in $folders) {
+            Copy-Item sdk\runtimes\win-arm64\native\Windows.Devices.Midi2.* $folder
+            Write-Output "Copied the API to $folder"
+          }
 
       - name: Test
         run: cargo test --features winmidi2 -- --nocapture
