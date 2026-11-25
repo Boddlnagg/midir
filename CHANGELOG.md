@@ -2,6 +2,12 @@
 
 All major changes to this project will be documented in this file.
 
+## [0.11.2] 2026-11-25
+- Add a Windows MIDI Services Preview backend (winmidi2 feature) ([#211](https://github.com/Boddlnagg/midir/pull/211) - thanks @Psychlist1972)
+- android: Update jni deps and API calls ([#212](https://github.com/Boddlnagg/midir/pull/212) - thanks @msub2)
+- Deprecate `os::unix`, introduce module `ext` instead ([#214](https://github.com/Boddlnagg/midir/pull/214))
+
+
 ## [0.11.1] 2026-10-10
 - Allow alsa 0.12 (bump upper bound to <0.13) ([#199](https://github.com/Boddlnagg/midir/issues/199) - thanks @gulbrand)
 - fix(android): stop re-delivering the last message when receive() returns 0 ([#200](https://github.com/Boddlnagg/midir/issues/200) - thanks @Guillaume-Fortin)
