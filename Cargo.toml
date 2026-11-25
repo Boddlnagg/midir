@@ -3,7 +3,7 @@ members = [".", "examples/browser"]
 
 [package]
 name = "midir"
-version = "0.11.1"
+version = "0.11.2"
 authors = ["Patrick Reisert"]
 description = "A cross-platform, realtime MIDI processing library, inspired by RtMidi."
 repository = "https://github.com/Boddlnagg/midir"
