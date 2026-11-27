@@ -206,13 +206,21 @@ impl MidiInput {
         self.ignore_flags = flags;
     }
 
+    #[cfg(not(feature = "jack"))]
     pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiInputPort> {
+        self.ports_raw()
+            .into_iter()
+            .map(|imp| crate::common::MidiInputPort { imp })
+            .collect()
+    }
+
+    /// same ports as `ports_internal`, without the `crate::common` wrap, so
+    /// the linux backend-selection enum can wrap them itself.
+    pub(crate) fn ports_raw(&self) -> Vec<MidiInputPort> {
         helpers::get_ports(
             self.seq.as_ref().unwrap(),
             PortCap::READ | PortCap::SUBS_READ,
-            |p| crate::common::MidiInputPort {
-                imp: MidiInputPort { addr: p.addr() },
-            },
+            |p| MidiInputPort { addr: p.addr() },
         )
     }
 
@@ -577,13 +585,21 @@ impl MidiOutput {
         Ok(MidiOutput { seq: Some(seq) })
     }
 
+    #[cfg(not(feature = "jack"))]
     pub(crate) fn ports_internal(&self) -> Vec<crate::common::MidiOutputPort> {
+        self.ports_raw()
+            .into_iter()
+            .map(|imp| crate::common::MidiOutputPort { imp })
+            .collect()
+    }
+
+    /// same ports as `ports_internal`, without the `crate::common` wrap, so
+    /// the linux backend-selection enum can wrap them itself.
+    pub(crate) fn ports_raw(&self) -> Vec<MidiOutputPort> {
         helpers::get_ports(
             self.seq.as_ref().unwrap(),
             PortCap::WRITE | PortCap::SUBS_WRITE,
-            |p| crate::common::MidiOutputPort {
-                imp: MidiOutputPort { addr: p.addr() },
-            },
+            |p| MidiOutputPort { addr: p.addr() },
         )
     }
 
